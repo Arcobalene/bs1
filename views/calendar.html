@@ -61,6 +61,10 @@
       <p><strong>Время:</strong> <span id="modal-time"></span></p>
       <p><strong>Комментарий:</strong></p>
       <p id="modal-comment"></p>
+      <div style="display: flex; gap: 8px; margin-top: 16px;">
+        <button type="button" class="btn-primary" id="edit-booking-btn">Редактировать</button>
+        <button type="button" class="btn-secondary" id="delete-booking-btn" style="background: #ef4444; color: white;">Удалить</button>
+      </div>
     </div>
     <div class="modal-body" id="modal-body-form" style="display: none;">
       <form id="new-booking-form">
@@ -98,7 +102,7 @@
         </div>
         <div id="new-booking-alert" style="display: none; margin-top: 12px;"></div>
         <div style="display: flex; gap: 8px; margin-top: 16px;">
-          <button type="submit" class="btn-primary">Создать запись</button>
+          <button type="submit" class="btn-primary" id="booking-form-submit">Создать запись</button>
           <button type="button" class="btn-secondary" id="cancel-booking-form">Отмена</button>
         </div>
       </form>
@@ -171,6 +175,17 @@
         if (bookings.length > 0) {
           console.log('Пример записи:', bookings[0]);
         }
+        
+        // Проверяем, есть ли в URL параметр bookingId
+        const urlParams = new URLSearchParams(window.location.search);
+        const bookingIdParam = urlParams.get('bookingId');
+        if (bookingIdParam) {
+          const bookingId = parseInt(bookingIdParam);
+          // Удаляем параметр из URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+          // Открываем запись
+          openBookingById(bookingId);
+        }
       } else {
         console.error('Ошибка загрузки записей:', bookingsResult);
       }
@@ -193,6 +208,11 @@
       console.error('Ошибка загрузки данных:', error);
       window.location.href = '/login';
     }
+  }
+  
+  // Обертка для loadData, чтобы она возвращала Promise
+  function loadDataPromise() {
+    return loadData();
   }
 
   function renderMasterFilter() {
@@ -311,11 +331,15 @@
     }
   }
 
+  let currentEditingBookingId = null; // ID записи, которую редактируем
+
   function openBookingModal(index) {
     const modal = document.getElementById('booking-modal');
     if (!modal) return;
     const booking = bookings[index];
     if (!booking) return;
+
+    currentEditingBookingId = booking.id; // Сохраняем ID для редактирования
 
     document.getElementById('modal-client-name').textContent = booking.name || "—";
     document.getElementById('modal-client-phone').textContent = booking.phone || "—";
@@ -329,7 +353,92 @@
     }
     document.getElementById('modal-comment').textContent = booking.comment || "Нет комментария";
 
+    // Показываем модальное окно просмотра, скрываем форму
+    document.getElementById('modal-body-view').style.display = 'block';
+    document.getElementById('modal-body-form').style.display = 'none';
+    document.getElementById('modal-title').textContent = 'Запись клиента';
+    
     modal.classList.remove("hidden");
+  }
+  
+  function openEditBookingForm(bookingId) {
+    const booking = bookings.find(b => b.id === bookingId);
+    if (!booking) return;
+
+    currentEditingBookingId = bookingId;
+
+    document.getElementById('modal-title').textContent = 'Редактировать запись';
+    document.getElementById('modal-body-view').style.display = 'none';
+    document.getElementById('modal-body-form').style.display = 'block';
+
+    // Заполняем форму данными записи
+    document.getElementById('new-booking-name').value = booking.name || '';
+    document.getElementById('new-booking-phone').value = booking.phone || '';
+    document.getElementById('new-booking-date').value = booking.date || '';
+    document.getElementById('new-booking-time').value = booking.time || '';
+    document.getElementById('new-booking-comment').value = booking.comment || '';
+
+    // Заполняем услуги
+    const serviceSelect = document.getElementById('new-booking-service');
+    serviceSelect.innerHTML = '<option value="">Выберите услугу</option>';
+    services.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.name;
+      opt.textContent = `${s.name} (${s.price.toLocaleString('ru-RU')} сум, ${s.duration} мин)`;
+      opt.selected = s.name === booking.service;
+      serviceSelect.appendChild(opt);
+    });
+
+    // Заполняем мастеров
+    const masterSelect = document.getElementById('new-booking-master');
+    masterSelect.innerHTML = '<option value="">Любой мастер</option>';
+    masters.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.name;
+      opt.textContent = m.name;
+      opt.selected = m.name === booking.master;
+      masterSelect.appendChild(opt);
+    });
+
+    // Меняем текст кнопки
+    const submitBtn = document.getElementById('booking-form-submit');
+    if (submitBtn) {
+      submitBtn.textContent = 'Сохранить изменения';
+    }
+  }
+  
+  // Функция для открытия записи по ID
+  function openBookingById(bookingId) {
+    const index = bookings.findIndex(b => b.id === bookingId);
+    if (index !== -1) {
+      // Переключаемся на неделю с этой записью
+      const booking = bookings[index];
+      if (booking.date) {
+        const bookingDate = new Date(booking.date);
+        currentWeekStart = getWeekStart(bookingDate);
+        renderCalendar();
+      }
+      // Открываем модальное окно
+      setTimeout(() => {
+        openBookingModal(index);
+      }, 100);
+    } else {
+      // Если запись не найдена, перезагружаем данные
+      loadDataPromise().then(() => {
+        const newIndex = bookings.findIndex(b => b.id === bookingId);
+        if (newIndex !== -1) {
+          const booking = bookings[newIndex];
+          if (booking.date) {
+            const bookingDate = new Date(booking.date);
+            currentWeekStart = getWeekStart(bookingDate);
+            renderCalendar();
+          }
+          setTimeout(() => {
+            openBookingModal(newIndex);
+          }, 100);
+        }
+      });
+    }
   }
 
   function closeBookingModal() {
@@ -341,6 +450,12 @@
       document.getElementById('modal-body-form').style.display = 'none';
       document.getElementById('new-booking-form').reset();
       document.getElementById('new-booking-alert').style.display = 'none';
+      currentEditingBookingId = null;
+      // Возвращаем текст кнопки
+      const submitBtn = document.getElementById('booking-form-submit');
+      if (submitBtn) {
+        submitBtn.textContent = 'Создать запись';
+      }
     }
   }
 
@@ -348,9 +463,14 @@
     const modal = document.getElementById('booking-modal');
     if (!modal || !currentUser) return;
     
+    currentEditingBookingId = null; // Сбрасываем ID редактирования
+    
     document.getElementById('modal-title').textContent = 'Создать новую запись';
     document.getElementById('modal-body-view').style.display = 'none';
     document.getElementById('modal-body-form').style.display = 'block';
+    
+    // Сбрасываем форму
+    document.getElementById('new-booking-form').reset();
     
     // Заполняем дату и время
     document.getElementById('new-booking-date').value = date;
@@ -375,6 +495,12 @@
       opt.textContent = m.name;
       masterSelect.appendChild(opt);
     });
+    
+    // Меняем текст кнопки
+    const submitBtn = document.getElementById('booking-form-submit');
+    if (submitBtn) {
+      submitBtn.textContent = 'Создать запись';
+    }
     
     modal.classList.remove("hidden");
   }
@@ -424,7 +550,7 @@
     window.location.href = '/login';
   });
 
-  // Обработчик формы создания записи
+  // Обработчик формы создания/редактирования записи
   document.getElementById('new-booking-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const alert = document.getElementById('new-booking-alert');
@@ -467,18 +593,34 @@
       formData.endTime = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
     }
     
+    const isEditing = currentEditingBookingId !== null;
+    
     try {
-      const response = await fetch('/api/bookings', {
-        method: 'POST',
+      const url = isEditing ? `/api/bookings/${currentEditingBookingId}` : '/api/bookings';
+      const method = isEditing ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method: method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
       
       const result = await response.json();
       if (result.success) {
-        alert.textContent = 'Запись успешно создана!';
+        alert.textContent = isEditing ? 'Запись успешно обновлена!' : 'Запись успешно создана!';
         alert.className = 'alert alert-success';
         alert.style.display = 'block';
+        
+        // Показываем push-уведомление
+        const date = new Date(formData.date);
+        const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        const bookingId = isEditing ? currentEditingBookingId : (result.booking?.id || null);
+        showNotification(
+          isEditing ? 'Запись обновлена!' : 'Запись создана!',
+          `${formData.name} - ${formData.service} на ${dateStr} в ${formData.time}`,
+          'success',
+          bookingId
+        );
         
         // Обновляем данные и календарь
         setTimeout(async () => {
@@ -486,20 +628,65 @@
           const bookingsResult = await bookingsRes.json();
           if (bookingsResult.success) {
             bookings = bookingsResult.bookings;
+            lastBookingCount = bookings.length;
             renderCalendar();
           }
           closeBookingModal();
         }, 1000);
       } else {
-        alert.textContent = result.message || 'Ошибка при создании записи';
+        alert.textContent = result.message || (isEditing ? 'Ошибка при обновлении записи' : 'Ошибка при создании записи');
         alert.className = 'alert alert-error';
         alert.style.display = 'block';
       }
     } catch (error) {
-      console.error('Ошибка создания записи:', error);
-      alert.textContent = 'Ошибка при создании записи. Попробуйте позже.';
+      console.error(`Ошибка ${isEditing ? 'обновления' : 'создания'} записи:`, error);
+      alert.textContent = `Ошибка при ${isEditing ? 'обновлении' : 'создании'} записи. Попробуйте позже.`;
       alert.className = 'alert alert-error';
       alert.style.display = 'block';
+    }
+  });
+  
+  // Обработчик кнопки "Редактировать"
+  document.getElementById('edit-booking-btn')?.addEventListener('click', () => {
+    if (currentEditingBookingId) {
+      openEditBookingForm(currentEditingBookingId);
+    }
+  });
+  
+  // Обработчик кнопки "Удалить"
+  document.getElementById('delete-booking-btn')?.addEventListener('click', async () => {
+    if (!currentEditingBookingId) return;
+    
+    if (!confirm('Вы уверены, что хотите удалить эту запись?')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/bookings/${currentEditingBookingId}`, {
+        method: 'DELETE'
+      });
+      
+      const result = await response.json();
+      if (result.success) {
+        showNotification('Запись удалена', 'Запись успешно удалена из календаря', 'info');
+        
+        // Обновляем данные и календарь
+        setTimeout(async () => {
+          const bookingsRes = await fetch('/api/bookings');
+          const bookingsResult = await bookingsRes.json();
+          if (bookingsResult.success) {
+            bookings = bookingsResult.bookings;
+            lastBookingCount = bookings.length;
+            renderCalendar();
+          }
+          closeBookingModal();
+        }, 500);
+      } else {
+        alert('Ошибка при удалении записи: ' + (result.message || 'Неизвестная ошибка'));
+      }
+    } catch (error) {
+      console.error('Ошибка удаления записи:', error);
+      alert('Ошибка при удалении записи. Попробуйте позже.');
     }
   });
 
@@ -507,6 +694,283 @@
 
   // Загружаем данные при загрузке страницы
   loadData();
+</script>
+
+<!-- Контейнер для push-уведомлений -->
+<div class="notification-container" id="notification-container"></div>
+
+<!-- Иконка уведомлений -->
+<div class="notifications-icon" id="notifications-icon">
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25-2.5 7-2.5 7h15s-2.5-1.75-2.5-7c0-3.87-3.13-7-7-7zm0 2c2.76 0 5 2.24 5 5 0 2.88 2.88 4.5 2.88 4.5H4.12S7 11.88 7 9c0-2.76 2.24-5 5-5zm-1 15h2v2h-2v-2z"/>
+  </svg>
+  <div class="notifications-badge hidden" id="notifications-badge">0</div>
+</div>
+
+<!-- Панель уведомлений -->
+<div class="notifications-panel" id="notifications-panel">
+  <div class="notifications-panel-header">
+    <div class="notifications-panel-title">Уведомления</div>
+    <button class="notifications-panel-close" id="notifications-panel-close">×</button>
+  </div>
+  <div class="notifications-panel-body" id="notifications-panel-body">
+    <div class="notifications-panel-empty">Нет уведомлений</div>
+  </div>
+  <div class="notifications-panel-footer">
+    <button class="notifications-clear-all" id="notifications-clear-all">Очистить все</button>
+  </div>
+</div>
+
+<script>
+  // Хранилище уведомлений
+  let notificationsList = JSON.parse(localStorage.getItem('notifications') || '[]');
+  
+  // Функция для сохранения уведомлений в localStorage
+  function saveNotifications() {
+    localStorage.setItem('notifications', JSON.stringify(notificationsList));
+    updateNotificationsPanel();
+    updateNotificationsBadge();
+  }
+  
+  // Функция для добавления уведомления в список
+  function addNotificationToList(title, message, type = 'success', bookingId = null) {
+    const notification = {
+      id: Date.now(),
+      title,
+      message,
+      type,
+      time: new Date().toISOString(),
+      read: false,
+      bookingId: bookingId // ID записи для перехода
+    };
+    
+    notificationsList.unshift(notification); // Добавляем в начало
+    // Ограничиваем количество уведомлений (последние 50)
+    if (notificationsList.length > 50) {
+      notificationsList = notificationsList.slice(0, 50);
+    }
+    
+    saveNotifications();
+  }
+  
+  // Функция для обновления счетчика уведомлений
+  function updateNotificationsBadge() {
+    const badge = document.getElementById('notifications-badge');
+    if (!badge) return;
+    
+    const unreadCount = notificationsList.filter(n => !n.read).length;
+    if (unreadCount > 0) {
+      badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  }
+  
+  // Функция для обновления панели уведомлений
+  function updateNotificationsPanel() {
+    const panelBody = document.getElementById('notifications-panel-body');
+    if (!panelBody) return;
+    
+    if (notificationsList.length === 0) {
+      panelBody.innerHTML = '<div class="notifications-panel-empty">Нет уведомлений</div>';
+      return;
+    }
+    
+    const icons = {
+      success: '✓',
+      error: '✕',
+      warning: '⚠',
+      info: 'ℹ'
+    };
+    
+    const iconColors = {
+      success: '#10b981',
+      error: '#ef4444',
+      warning: '#f59e0b',
+      info: '#3b82f6'
+    };
+    
+    panelBody.innerHTML = notificationsList.map(notif => {
+      const date = new Date(notif.time);
+      const timeStr = date.toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      return `
+        <div class="notification-item ${notif.read ? '' : 'unread'}" data-id="${notif.id}">
+          <div class="notification-item-icon" style="color: ${iconColors[notif.type] || iconColors.success}">
+            ${icons[notif.type] || icons.success}
+          </div>
+          <div class="notification-item-content">
+            <div class="notification-item-title">${notif.title}</div>
+            <div class="notification-item-message">${notif.message}</div>
+            <div class="notification-item-time">${timeStr}</div>
+          </div>
+          <button class="notification-item-close" onclick="removeNotification(${notif.id})">×</button>
+        </div>
+      `;
+    }).join('');
+    
+    // Добавляем обработчики клика для отметки как прочитанное и перехода
+    panelBody.querySelectorAll('.notification-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        if (e.target.classList.contains('notification-item-close')) return;
+        const notifId = parseInt(item.dataset.id);
+        const notification = notificationsList.find(n => n.id === notifId);
+        markAsRead(notifId);
+        
+        // Если есть bookingId, открываем запись в календаре
+        if (notification && notification.bookingId) {
+          openBookingById(notification.bookingId);
+        }
+      });
+    });
+  }
+  
+  // Функция для отметки уведомления как прочитанного
+  function markAsRead(id) {
+    const notification = notificationsList.find(n => n.id === id);
+    if (notification && !notification.read) {
+      notification.read = true;
+      saveNotifications();
+    }
+  }
+  
+  // Функция для удаления уведомления
+  function removeNotification(id) {
+    notificationsList = notificationsList.filter(n => n.id !== id);
+    saveNotifications();
+  }
+  
+  // Функция для показа push-уведомлений
+  function showNotification(title, message, type = 'success', bookingId = null) {
+    // Добавляем в список
+    addNotificationToList(title, message, type, bookingId);
+    
+    // Показываем временное уведомление
+    const container = document.getElementById('notification-container');
+    if (!container) return;
+    
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    
+    const icons = {
+      success: '✓',
+      error: '✕',
+      warning: '⚠',
+      info: 'ℹ'
+    };
+    
+    notification.innerHTML = `
+      <div class="notification-icon">${icons[type] || icons.success}</div>
+      <div class="notification-content">
+        <div class="notification-title">${title}</div>
+        <div class="notification-message">${message}</div>
+      </div>
+      <button class="notification-close" onclick="this.parentElement.remove()">×</button>
+    `;
+    
+    container.appendChild(notification);
+    
+    // Автоматически скрываем через 5 секунд
+    setTimeout(() => {
+      notification.classList.add('hiding');
+      setTimeout(() => {
+        if (notification.parentElement) {
+          notification.remove();
+        }
+      }, 300);
+    }, 5000);
+  }
+  
+  // Обработчики для панели уведомлений
+  document.getElementById('notifications-icon')?.addEventListener('click', () => {
+    const panel = document.getElementById('notifications-panel');
+    if (panel) {
+      panel.classList.toggle('open');
+      if (panel.classList.contains('open')) {
+        // Отмечаем все как прочитанные при открытии
+        notificationsList.forEach(n => n.read = true);
+        saveNotifications();
+      }
+    }
+  });
+  
+  document.getElementById('notifications-panel-close')?.addEventListener('click', () => {
+    const panel = document.getElementById('notifications-panel');
+    if (panel) {
+      panel.classList.remove('open');
+    }
+  });
+  
+  document.getElementById('notifications-clear-all')?.addEventListener('click', () => {
+    if (confirm('Удалить все уведомления?')) {
+      notificationsList = [];
+      saveNotifications();
+    }
+  });
+  
+  // Закрытие панели при клике вне её
+  document.addEventListener('click', (e) => {
+    const panel = document.getElementById('notifications-panel');
+    const icon = document.getElementById('notifications-icon');
+    if (panel && icon && !panel.contains(e.target) && !icon.contains(e.target)) {
+      panel.classList.remove('open');
+    }
+  });
+  
+  // Инициализация при загрузке страницы
+  updateNotificationsPanel();
+  updateNotificationsBadge();
+  
+  // Проверка новых записей каждые 30 секунд
+  let lastBookingCount = 0;
+  let lastBookingCheck = Date.now();
+  
+  async function checkNewBookings() {
+    try {
+      const bookingsRes = await fetch('/api/bookings');
+      const bookingsResult = await bookingsRes.json();
+      
+      if (bookingsResult.success) {
+        const currentCount = bookingsResult.bookings.length;
+        
+        // Если количество записей увеличилось и прошло больше 5 секунд с последней проверки
+        if (currentCount > lastBookingCount && lastBookingCount > 0 && (Date.now() - lastBookingCheck) > 5000) {
+          const newBookings = bookingsResult.bookings.slice(0, currentCount - lastBookingCount);
+          
+          newBookings.forEach(booking => {
+            const date = new Date(booking.date);
+            const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+            showNotification(
+              'Новая запись!',
+              `${booking.name} - ${booking.service} на ${dateStr} в ${booking.time}`,
+              'info',
+              booking.id // Передаем ID записи
+            );
+          });
+        }
+        
+        lastBookingCount = currentCount;
+        lastBookingCheck = Date.now();
+        bookings = bookingsResult.bookings;
+        renderCalendar();
+      }
+    } catch (error) {
+      console.error('Ошибка проверки новых записей:', error);
+    }
+  }
+  
+  // Инициализируем счетчик после загрузки данных
+  setTimeout(() => {
+    lastBookingCount = bookings.length;
+    // Проверяем новые записи каждые 30 секунд
+    setInterval(checkNewBookings, 30000);
+  }, 2000);
 </script>
 </body>
 </html>

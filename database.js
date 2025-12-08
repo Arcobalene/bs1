@@ -381,6 +381,73 @@ const bookings = {
     return result.rows[0].id;
   },
 
+  getById: async (id) => {
+    if (DB_TYPE !== 'postgres') {
+      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
+    }
+    const result = await pool.query('SELECT * FROM bookings WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+
+  update: async (id, bookingData) => {
+    if (DB_TYPE !== 'postgres') {
+      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
+    }
+    const { name, phone, service, master, date, time, endTime, comment } = bookingData;
+    
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (name !== undefined) {
+      updates.push(`name = $${paramIndex++}`);
+      values.push(name.trim());
+    }
+    if (phone !== undefined) {
+      updates.push(`phone = $${paramIndex++}`);
+      values.push(phone.trim());
+    }
+    if (service !== undefined) {
+      updates.push(`service = $${paramIndex++}`);
+      values.push(service.trim());
+    }
+    if (master !== undefined) {
+      updates.push(`master = $${paramIndex++}`);
+      values.push(master ? master.trim() : '');
+    }
+    if (date !== undefined) {
+      updates.push(`date = $${paramIndex++}`);
+      values.push(date.trim());
+    }
+    if (time !== undefined) {
+      updates.push(`time = $${paramIndex++}`);
+      values.push(time.trim());
+    }
+    if (endTime !== undefined) {
+      updates.push(`end_time = $${paramIndex++}`);
+      values.push(endTime ? endTime.trim() : null);
+    }
+    if (comment !== undefined) {
+      updates.push(`comment = $${paramIndex++}`);
+      values.push(comment ? comment.trim() : '');
+    }
+
+    if (updates.length === 0) {
+      return; // Нет изменений
+    }
+
+    values.push(id);
+    const sql = `UPDATE bookings SET ${updates.join(', ')} WHERE id = $${paramIndex}`;
+    await pool.query(sql, values);
+  },
+
+  delete: async (id) => {
+    if (DB_TYPE !== 'postgres') {
+      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
+    }
+    await pool.query('DELETE FROM bookings WHERE id = $1', [id]);
+  },
+
   deleteByUserId: async (userId) => {
     if (DB_TYPE !== 'postgres') {
       throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');

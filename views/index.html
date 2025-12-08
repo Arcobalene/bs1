@@ -169,6 +169,28 @@
         renderServicesAndMasters();
       }
 
+      // Загружаем актуальные записи из базы для заполнения busyIntervals
+      try {
+        const bookingsRes = await fetch(`/api/bookings/${userId}`);
+        const bookingsData = await bookingsRes.json();
+        if (bookingsData.success && bookingsData.bookings) {
+          // Очищаем старые данные
+          busyIntervals = {};
+          // Заполняем busyIntervals актуальными данными из базы
+          bookingsData.bookings.forEach(booking => {
+            if (booking.date && booking.time) {
+              if (!busyIntervals[booking.date]) {
+                busyIntervals[booking.date] = [];
+              }
+              const endTime = booking.endTime || getEndTime(booking.time, 60); // По умолчанию 1 час
+              busyIntervals[booking.date].push([booking.time, endTime]);
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки записей:', error);
+      }
+
       if (salonData.success && salonData.salon) {
         const salon = salonData.salon;
         // Обновляем заголовок
@@ -373,7 +395,7 @@
     durationHint.textContent = `Длительность услуги: ${duration} мин. Будете свободны примерно в ${endTime}.`;
   }
 
-  function generateSlots() {
+  async function generateSlots() {
     const serviceSelect = document.getElementById("service");
     const dateInput = document.getElementById("date");
     const timeSelect = document.getElementById("time-slot");
@@ -415,14 +437,38 @@
       return;
     }
 
+    // Загружаем актуальные записи из базы данных для выбранной даты
+    let busy = [];
+    if (userId) {
+      try {
+        const bookingsRes = await fetch(`/api/bookings/${userId}?date=${date}`);
+        const bookingsResult = await bookingsRes.json();
+        if (bookingsResult.success && bookingsResult.bookings) {
+          busy = bookingsResult.bookings.map(booking => {
+            const start = timeToMinutes(booking.time);
+            const end = booking.endTime ? timeToMinutes(booking.endTime) : (start + 60);
+            return [start, end].filter(v => v !== null);
+          }).filter(interval => interval.length === 2);
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки записей:', error);
+        // Используем локальные данные в случае ошибки
+        busy = (busyIntervals[date] || []).map(([from, to]) => [
+          timeToMinutes(from),
+          timeToMinutes(to)
+        ]).filter(interval => interval.every(v => v !== null));
+      }
+    } else {
+      // Если userId нет, используем локальные данные
+      busy = (busyIntervals[date] || []).map(([from, to]) => [
+        timeToMinutes(from),
+        timeToMinutes(to)
+      ]).filter(interval => interval.every(v => v !== null));
+    }
+
     const startOfDay = 10 * 60;
     const endOfDay = 20 * 60;
     const step = 30;
-
-    const busy = (busyIntervals[date] || []).map(([from, to]) => [
-      timeToMinutes(from),
-      timeToMinutes(to)
-    ]);
 
     const freeSlots = [];
 
@@ -508,6 +554,36 @@
         }
       }
 
+      // Проверяем доступность времени в базе данных перед отправкой
+      try {
+        const availabilityCheck = await fetch('/api/bookings/check-availability', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: data.userId,
+            date: data.date,
+            time: data.time,
+            endTime: data.endTime,
+            master: data.master
+          })
+        });
+
+        const availabilityResult = await availabilityCheck.json();
+        if (!availabilityResult.available) {
+          if (errorAlert) {
+            errorAlert.textContent = availabilityResult.message || 'Это время уже занято. Пожалуйста, выберите другое время.';
+            errorAlert.style.display = 'block';
+            errorAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            // Обновляем список слотов, чтобы показать актуальные данные
+            generateSlots();
+          }
+          return;
+        }
+      } catch (error) {
+        console.error('Ошибка проверки доступности:', error);
+        // Продолжаем создание записи, если проверка не удалась
+      }
+
       try {
         const response = await fetch('/api/bookings', {
           method: 'POST',
@@ -519,11 +595,13 @@
         if (result.success) {
           if (successAlert) successAlert.style.display = "block";
           form.reset();
-          generateSlots();
           
           // Обновляем занятые интервалы
           if (!busyIntervals[data.date]) busyIntervals[data.date] = [];
           busyIntervals[data.date].push([data.time, data.endTime]);
+          
+          // Перезагружаем слоты с актуальными данными из базы
+          await generateSlots();
           
           // Прокрутка к успешному сообщению
           if (successAlert) {

@@ -644,6 +644,289 @@
   // Загружаем данные при загрузке страницы
   loadUserData();
 </script>
+
+<!-- Контейнер для push-уведомлений -->
+<div class="notification-container" id="notification-container"></div>
+
+<!-- Иконка уведомлений -->
+<div class="notifications-icon" id="notifications-icon">
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25-2.5 7-2.5 7h15s-2.5-1.75-2.5-7c0-3.87-3.13-7-7-7zm0 2c2.76 0 5 2.24 5 5 0 2.88 2.88 4.5 2.88 4.5H4.12S7 11.88 7 9c0-2.76 2.24-5 5-5zm-1 15h2v2h-2v-2z"/>
+  </svg>
+  <div class="notifications-badge hidden" id="notifications-badge">0</div>
+</div>
+
+<!-- Панель уведомлений -->
+<div class="notifications-panel" id="notifications-panel">
+  <div class="notifications-panel-header">
+    <div class="notifications-panel-title">Уведомления</div>
+    <button class="notifications-panel-close" id="notifications-panel-close">×</button>
+  </div>
+  <div class="notifications-panel-body" id="notifications-panel-body">
+    <div class="notifications-panel-empty">Нет уведомлений</div>
+  </div>
+  <div class="notifications-panel-footer">
+    <button class="notifications-clear-all" id="notifications-clear-all">Очистить все</button>
+  </div>
+</div>
+
+<script>
+  // Хранилище уведомлений
+  let notificationsList = JSON.parse(localStorage.getItem('notifications') || '[]');
+  
+  // Функция для сохранения уведомлений в localStorage
+  function saveNotifications() {
+    localStorage.setItem('notifications', JSON.stringify(notificationsList));
+    updateNotificationsPanel();
+    updateNotificationsBadge();
+  }
+  
+  // Функция для добавления уведомления в список
+  function addNotificationToList(title, message, type = 'success', bookingId = null) {
+    const notification = {
+      id: Date.now(),
+      title,
+      message,
+      type,
+      time: new Date().toISOString(),
+      read: false,
+      bookingId: bookingId // ID записи для перехода
+    };
+    
+    notificationsList.unshift(notification); // Добавляем в начало
+    // Ограничиваем количество уведомлений (последние 50)
+    if (notificationsList.length > 50) {
+      notificationsList = notificationsList.slice(0, 50);
+    }
+    
+    saveNotifications();
+  }
+  
+  // Функция для обновления счетчика уведомлений
+  function updateNotificationsBadge() {
+    const badge = document.getElementById('notifications-badge');
+    if (!badge) return;
+    
+    const unreadCount = notificationsList.filter(n => !n.read).length;
+    if (unreadCount > 0) {
+      badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  }
+  
+  // Функция для обновления панели уведомлений
+  function updateNotificationsPanel() {
+    const panelBody = document.getElementById('notifications-panel-body');
+    if (!panelBody) return;
+    
+    if (notificationsList.length === 0) {
+      panelBody.innerHTML = '<div class="notifications-panel-empty">Нет уведомлений</div>';
+      return;
+    }
+    
+    const icons = {
+      success: '✓',
+      error: '✕',
+      warning: '⚠',
+      info: 'ℹ'
+    };
+    
+    const iconColors = {
+      success: '#10b981',
+      error: '#ef4444',
+      warning: '#f59e0b',
+      info: '#3b82f6'
+    };
+    
+    panelBody.innerHTML = notificationsList.map(notif => {
+      const date = new Date(notif.time);
+      const timeStr = date.toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      return `
+        <div class="notification-item ${notif.read ? '' : 'unread'}" data-id="${notif.id}">
+          <div class="notification-item-icon" style="color: ${iconColors[notif.type] || iconColors.success}">
+            ${icons[notif.type] || icons.success}
+          </div>
+          <div class="notification-item-content">
+            <div class="notification-item-title">${notif.title}</div>
+            <div class="notification-item-message">${notif.message}</div>
+            <div class="notification-item-time">${timeStr}</div>
+          </div>
+          <button class="notification-item-close" onclick="removeNotification(${notif.id})">×</button>
+        </div>
+      `;
+    }).join('');
+    
+    // Добавляем обработчики клика для отметки как прочитанное и перехода
+    panelBody.querySelectorAll('.notification-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        if (e.target.classList.contains('notification-item-close')) return;
+        const notifId = parseInt(item.dataset.id);
+        const notification = notificationsList.find(n => n.id === notifId);
+        markAsRead(notifId);
+        
+        // Если есть bookingId, переходим на календарь
+        if (notification && notification.bookingId) {
+          window.location.href = `/calendar?bookingId=${notification.bookingId}`;
+        }
+      });
+    });
+  }
+  
+  // Функция для отметки уведомления как прочитанного
+  function markAsRead(id) {
+    const notification = notificationsList.find(n => n.id === id);
+    if (notification && !notification.read) {
+      notification.read = true;
+      saveNotifications();
+    }
+  }
+  
+  // Функция для удаления уведомления
+  function removeNotification(id) {
+    notificationsList = notificationsList.filter(n => n.id !== id);
+    saveNotifications();
+  }
+  
+  // Функция для показа push-уведомлений
+  function showNotification(title, message, type = 'success', bookingId = null) {
+    // Добавляем в список
+    addNotificationToList(title, message, type, bookingId);
+    
+    // Показываем временное уведомление
+    const container = document.getElementById('notification-container');
+    if (!container) return;
+    
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    
+    const icons = {
+      success: '✓',
+      error: '✕',
+      warning: '⚠',
+      info: 'ℹ'
+    };
+    
+    notification.innerHTML = `
+      <div class="notification-icon">${icons[type] || icons.success}</div>
+      <div class="notification-content">
+        <div class="notification-title">${title}</div>
+        <div class="notification-message">${message}</div>
+      </div>
+      <button class="notification-close" onclick="this.parentElement.remove()">×</button>
+    `;
+    
+    container.appendChild(notification);
+    
+    // Автоматически скрываем через 5 секунд
+    setTimeout(() => {
+      notification.classList.add('hiding');
+      setTimeout(() => {
+        if (notification.parentElement) {
+          notification.remove();
+        }
+      }, 300);
+    }, 5000);
+  }
+  
+  // Обработчики для панели уведомлений
+  document.getElementById('notifications-icon')?.addEventListener('click', () => {
+    const panel = document.getElementById('notifications-panel');
+    if (panel) {
+      panel.classList.toggle('open');
+      if (panel.classList.contains('open')) {
+        // Отмечаем все как прочитанные при открытии
+        notificationsList.forEach(n => n.read = true);
+        saveNotifications();
+      }
+    }
+  });
+  
+  document.getElementById('notifications-panel-close')?.addEventListener('click', () => {
+    const panel = document.getElementById('notifications-panel');
+    if (panel) {
+      panel.classList.remove('open');
+    }
+  });
+  
+  document.getElementById('notifications-clear-all')?.addEventListener('click', () => {
+    if (confirm('Удалить все уведомления?')) {
+      notificationsList = [];
+      saveNotifications();
+    }
+  });
+  
+  // Закрытие панели при клике вне её
+  document.addEventListener('click', (e) => {
+    const panel = document.getElementById('notifications-panel');
+    const icon = document.getElementById('notifications-icon');
+    if (panel && icon && !panel.contains(e.target) && !icon.contains(e.target)) {
+      panel.classList.remove('open');
+    }
+  });
+  
+  // Инициализация при загрузке страницы
+  updateNotificationsPanel();
+  updateNotificationsBadge();
+  
+  // Проверка новых записей каждые 30 секунд
+  let lastBookingCount = 0;
+  let lastBookingCheck = Date.now();
+  
+  async function checkNewBookings() {
+    try {
+      const bookingsRes = await fetch('/api/bookings');
+      const bookingsResult = await bookingsRes.json();
+      
+      if (bookingsResult.success) {
+        const currentCount = bookingsResult.bookings.length;
+        
+        // Если количество записей увеличилось и прошло больше 5 секунд с последней проверки
+        if (currentCount > lastBookingCount && lastBookingCount > 0 && (Date.now() - lastBookingCheck) > 5000) {
+          const newBookings = bookingsResult.bookings.slice(0, currentCount - lastBookingCount);
+          
+          newBookings.forEach(booking => {
+            const date = new Date(booking.date);
+            const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+            showNotification(
+              'Новая запись!',
+              `${booking.name} - ${booking.service} на ${dateStr} в ${booking.time}`,
+              'info',
+              booking.id // Передаем ID записи
+            );
+          });
+        }
+        
+        lastBookingCount = currentCount;
+        lastBookingCheck = Date.now();
+      }
+    } catch (error) {
+      console.error('Ошибка проверки новых записей:', error);
+    }
+  }
+  
+  // Инициализируем счетчик после загрузки данных
+  setTimeout(async () => {
+    try {
+      const bookingsRes = await fetch('/api/bookings');
+      const bookingsResult = await bookingsRes.json();
+      if (bookingsResult.success) {
+        lastBookingCount = bookingsResult.bookings.length;
+        // Проверяем новые записи каждые 30 секунд
+        setInterval(checkNewBookings, 30000);
+      }
+    } catch (error) {
+      console.error('Ошибка инициализации проверки записей:', error);
+    }
+  }, 2000);
+</script>
 </body>
 </html>
 
