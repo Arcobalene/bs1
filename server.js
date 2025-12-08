@@ -16,13 +16,15 @@ app.use(express.static('public'));
 // Настройка сессий
 app.use(session({
   secret: SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
+  resave: true, // Сохранять сессию при каждом запросе
+  saveUninitialized: false, // Не сохранять пустые сессии
+  name: 'beauty.studio.sid', // Явное имя cookie
   cookie: { 
-    secure: process.env.NODE_ENV === 'production',
+    secure: false, // В Docker без HTTPS должно быть false
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 часа
-    sameSite: 'lax'
+    sameSite: 'lax', // Защита от CSRF
+    path: '/' // Cookie доступна для всех путей
   }
 }));
 
@@ -30,7 +32,21 @@ app.use(session({
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/login') || req.path.startsWith('/admin')) {
     console.log(`[${req.method} ${req.path}] Session ID: ${req.sessionID}, userId: ${req.session.userId}`);
+    console.log(`Cookie заголовок в запросе: ${req.headers.cookie || 'нет'}`);
   }
+  next();
+});
+
+// Middleware для логирования Set-Cookie после сохранения сессии
+app.use((req, res, next) => {
+  const originalEnd = res.end;
+  res.end = function(...args) {
+    if (req.path.startsWith('/api/login') && res.statusCode === 200) {
+      const setCookieHeader = res.getHeader('Set-Cookie');
+      console.log(`Set-Cookie заголовок в ответе: ${setCookieHeader ? (Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader) : 'не установлен'}`);
+    }
+    originalEnd.apply(res, args);
+  };
   next();
 });
 
@@ -287,7 +303,20 @@ app.post('/api/login', async (req, res) => {
     console.log(`Успешный вход: ${trimmedUsername}, ID: ${user.id}`);
     req.session.userId = user.id;
     req.session.originalUserId = req.session.originalUserId || user.id; // Для impersonation
-    console.log(`Сессия установлена: userId=${req.session.userId}, originalUserId=${req.session.originalUserId}`);
+    console.log(`Сессия установлена: userId=${req.session.userId}, originalUserId=${req.session.originalUserId}, Session ID: ${req.sessionID}`);
+    
+    // Явно сохраняем сессию перед отправкой ответа
+    await new Promise((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) {
+          console.error('Ошибка сохранения сессии:', err);
+          return reject(err);
+        }
+        console.log(`Сессия сохранена успешно. Session ID: ${req.sessionID}`);
+        resolve();
+      });
+    });
+    
     res.json({ success: true, message: 'Вход выполнен' });
   } catch (error) {
     console.error('Ошибка входа:', error);
