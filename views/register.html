@@ -70,8 +70,20 @@
       password: formData.get('password')
     };
 
+    if (data.username.length < 3 || data.username.length > 30) {
+      errorAlert.textContent = 'Логин должен быть от 3 до 30 символов';
+      errorAlert.style.display = 'block';
+      return;
+    }
+
     if (data.password.length < 6) {
       errorAlert.textContent = 'Пароль должен содержать минимум 6 символов';
+      errorAlert.style.display = 'block';
+      return;
+    }
+
+    if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+      errorAlert.textContent = 'Некорректный формат email';
       errorAlert.style.display = 'block';
       return;
     }

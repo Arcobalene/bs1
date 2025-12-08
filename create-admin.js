@@ -1,74 +1,60 @@
 const bcrypt = require('bcrypt');
-const fs = require('fs');
-const path = require('path');
-
-const DATA_DIR = path.join(__dirname, 'data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const { users: dbUsers, services, masters } = require('./database');
 
 async function createAdmin() {
-  // Создаем папку data если её нет
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR);
-  }
-
-  let users = [];
-  if (fs.existsSync(USERS_FILE)) {
-    try {
-      users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-    } catch (e) {
-      console.log('Ошибка чтения файла, создаем новый');
+  try {
+    // Проверяем, есть ли уже пользователь admin
+    const existingAdmin = await dbUsers.getByUsername('admin');
+    
+    if (existingAdmin) {
+      console.log('Пользователь admin уже существует');
+      console.log('Удаляем старый аккаунт...');
+      await dbUsers.delete(existingAdmin.id);
     }
-  }
 
-  // Проверяем, есть ли уже пользователь admin
-  const existingAdmin = users.find(u => u.username === 'admin');
-  
-  if (existingAdmin) {
-    console.log('Пользователь admin уже существует');
-    console.log('Удаляем старый аккаунт...');
-    users = users.filter(u => u.username !== 'admin');
-  }
-
-  // Создаем новый демо-аккаунт
-  console.log('Создание демо-аккаунта...');
-  const hashedPassword = await bcrypt.hash('admin123', 10);
-  const demoUser = {
-    id: users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1,
-    username: 'admin',
-    email: 'admin@beautystudio.local',
-    password: hashedPassword,
-    role: 'admin',
-    isActive: true,
-    services: [
-      { id: 1, name: "Стрижка простая", price: 180000, duration: 60 },
-      { id: 2, name: "Стрижка + укладка", price: 260000, duration: 120 },
-      { id: 3, name: "Маникюр классический", price: 160000, duration: 90 },
-      { id: 4, name: "Маникюр + покрытие гель-лак", price: 220000, duration: 120 },
-      { id: 5, name: "Педикюр", price: 250000, duration: 120 }
-    ],
-      masters: [
-        { id: 1, name: "Алина", role: "маникюр, педикюр" },
-        { id: 2, name: "Диана", role: "маникюр, дизайн" },
-        { id: 3, name: "София", role: "парикмахер-стилист" }
-      ],
+    // Создаем новый демо-аккаунт
+    console.log('Создание демо-аккаунта...');
+    const hashedPassword = await bcrypt.hash('admin123', 10);
+    const userId = await dbUsers.create({
+      username: 'admin',
+      email: 'admin@beautystudio.local',
+      password: hashedPassword,
+      role: 'admin',
+      isActive: true,
       salonName: 'Beauty Studio',
       salonAddress: '',
       salonLat: null,
-      salonLng: null,
-      createdAt: new Date().toISOString()
-    };
+      salonLng: null
+    });
 
-  users.push(demoUser);
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+    // Добавляем услуги
+    await services.setForUser(userId, [
+      { name: "Стрижка простая", price: 180000, duration: 60 },
+      { name: "Стрижка + укладка", price: 260000, duration: 120 },
+      { name: "Маникюр классический", price: 160000, duration: 90 },
+      { name: "Маникюр + покрытие гель-лак", price: 220000, duration: 120 },
+      { name: "Педикюр", price: 250000, duration: 120 }
+    ]);
 
-  console.log('');
-  console.log('========================================');
-  console.log('ДЕМО-АККАУНТ СОЗДАН УСПЕШНО!');
-  console.log('========================================');
-  console.log('Логин: admin');
-  console.log('Пароль: admin123');
-  console.log('========================================');
-  console.log('');
+    // Добавляем мастеров
+    await masters.setForUser(userId, [
+      { name: "Алина", role: "маникюр, педикюр" },
+      { name: "Диана", role: "маникюр, дизайн" },
+      { name: "София", role: "парикмахер-стилист" }
+    ]);
+
+    console.log('');
+    console.log('========================================');
+    console.log('ДЕМО-АККАУНТ СОЗДАН УСПЕШНО!');
+    console.log('========================================');
+    console.log('Логин: admin');
+    console.log('Пароль: admin123');
+    console.log('========================================');
+    console.log('');
+  } catch (error) {
+    console.error('Ошибка создания админа:', error);
+    throw error;
+  }
 }
 
 createAdmin().catch(err => {

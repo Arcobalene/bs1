@@ -1,20 +1,36 @@
-version: '3.8'
-
 services:
   beauty-studio:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: beauty-studio
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
     volumes:
       # Именованный том для базы данных SQLite (персистентное хранилище)
       # Данные сохраняются между перезапусками контейнера
       - beauty-studio-data:/app/data
     restart: unless-stopped
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-production}
+      - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
+      - PORT=3000
     networks:
       - beauty-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.beauty-studio.description=Beauty Studio Booking System"
+      - "com.beauty-studio.version=1.0.0"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   # Именованный том для данных SQLite

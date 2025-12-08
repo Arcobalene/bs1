@@ -1,46 +1,66 @@
-version: '3.8'
-
-# Альтернативный вариант с PostgreSQL вместо SQLite
-# Использование: docker-compose -f docker-compose.postgres.yml up -d
-
 services:
   beauty-studio:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: beauty-studio
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
     volumes:
       - ./views:/app/views
       - ./public:/app/public
     restart: unless-stopped
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-production}
+      - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
+      - PORT=3000
       - DB_TYPE=postgres
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_NAME=beauty_studio
-      - DB_USER=beauty_user
-      - DB_PASSWORD=beauty_password
+      - DB_NAME=${DB_NAME:-beauty_studio}
+      - DB_USER=${DB_USER:-beauty_user}
+      - DB_PASSWORD=${DB_PASSWORD:-beauty_password}
     networks:
       - beauty-network
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.beauty-studio.description=Beauty Studio Booking System"
+      - "com.beauty-studio.version=1.0.0"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   db:
     image: postgres:15-alpine
+    container_name: beauty-studio-db
     environment:
-      POSTGRES_DB: beauty_studio
-      POSTGRES_USER: beauty_user
-      POSTGRES_PASSWORD: beauty_password
+      POSTGRES_DB: ${DB_NAME:-beauty_studio}
+      POSTGRES_USER: ${DB_USER:-beauty_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-beauty_password}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - beauty-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U beauty_user"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-beauty_user} -d ${DB_NAME:-beauty_studio}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    labels:
+      - "com.beauty-studio.description=PostgreSQL Database"
+      - "com.beauty-studio.version=15"
 
 volumes:
   postgres-data:

@@ -525,16 +525,24 @@
           // Обновляем занятые интервалы
           if (!busyIntervals[data.date]) busyIntervals[data.date] = [];
           busyIntervals[data.date].push([data.time, data.endTime]);
+          
+          // Прокрутка к успешному сообщению
+          if (successAlert) {
+            successAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
         } else {
           if (errorAlert) {
             errorAlert.textContent = result.message || "Ошибка при отправке заявки";
             errorAlert.style.display = "block";
+            errorAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           }
         }
       } catch (error) {
+        console.error('Ошибка отправки заявки:', error);
         if (errorAlert) {
           errorAlert.textContent = "Ошибка при отправке заявки. Попробуйте позже.";
           errorAlert.style.display = "block";
+          errorAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
       }
     });

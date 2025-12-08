@@ -258,7 +258,7 @@
   const serviceSubmitBtn = document.getElementById('admin-service-submit');
   const servicesList = document.getElementById('admin-services-list');
 
-  serviceForm.addEventListener('submit', async (e) => {
+    serviceForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = serviceName.value.trim();
     const priceRaw = servicePrice.value.trim();
@@ -266,6 +266,11 @@
 
     if (!name || !priceRaw || !durationRaw) {
       alert('Заполните все поля');
+      return;
+    }
+
+    if (name.length > 100) {
+      alert('Название услуги слишком длинное (максимум 100 символов)');
       return;
     }
 
@@ -277,6 +282,14 @@
     }
     if (price <= 0 || duration <= 0) {
       alert('Стоимость и длительность должны быть положительными числами');
+      return;
+    }
+    if (price > 10000000) {
+      alert('Стоимость слишком высокая (максимум 10 000 000)');
+      return;
+    }
+    if (duration > 1440) {
+      alert('Длительность слишком большая (максимум 1440 минут = 24 часа)');
       return;
     }
 
@@ -347,13 +360,18 @@
   const masterSubmitBtn = document.getElementById('admin-master-submit');
   const mastersList = document.getElementById('admin-masters-list');
 
-  masterForm.addEventListener('submit', async (e) => {
+    masterForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = masterName.value.trim();
     const role = masterRole.value.trim();
 
     if (!name) {
       alert('Введите имя мастера');
+      return;
+    }
+
+    if (name.length > 50) {
+      alert('Имя мастера слишком длинное (максимум 50 символов)');
       return;
     }
 
@@ -413,27 +431,37 @@
 
   async function saveServices() {
     try {
-      await fetch('/api/services', {
+      const response = await fetch('/api/services', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ services })
       });
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.message || 'Ошибка сохранения');
+      }
     } catch (error) {
       console.error('Ошибка сохранения услуг:', error);
-      alert('Ошибка сохранения услуг');
+      alert('Ошибка сохранения услуг: ' + (error.message || 'Неизвестная ошибка'));
+      throw error;
     }
   }
 
   async function saveMasters() {
     try {
-      await fetch('/api/masters', {
+      const response = await fetch('/api/masters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ masters })
       });
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.message || 'Ошибка сохранения');
+      }
     } catch (error) {
       console.error('Ошибка сохранения мастеров:', error);
-      alert('Ошибка сохранения мастеров');
+      alert('Ошибка сохранения мастеров: ' + (error.message || 'Неизвестная ошибка'));
+      throw error;
     }
   }
 
