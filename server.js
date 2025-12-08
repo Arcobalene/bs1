@@ -16,27 +16,20 @@ app.use(express.static('public'));
 // Настройка сессий
 app.use(session({
   secret: SESSION_SECRET,
-  resave: true, // Сохранять сессию даже если она не изменилась
+  resave: false,
   saveUninitialized: false,
-  name: 'beauty.studio.sid', // Имя cookie
   cookie: { 
-    secure: false, // В Docker без HTTPS должно быть false
+    secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 часа
-    sameSite: false, // Отключено для локальной разработки
-    path: '/'
+    sameSite: 'lax'
   }
 }));
 
 // Логирование сессий для отладки
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/login') || req.path.startsWith('/admin') || req.path.startsWith('/api/user')) {
+  if (req.path.startsWith('/api/login') || req.path.startsWith('/admin')) {
     console.log(`[${req.method} ${req.path}] Session ID: ${req.sessionID}, userId: ${req.session.userId}`);
-    if (req.headers.cookie) {
-      console.log(`Cookies в запросе: ${req.headers.cookie.substring(0, 50)}...`);
-    } else {
-      console.log('Cookies в запросе отсутствуют');
-    }
   }
   next();
 });
@@ -252,15 +245,7 @@ app.post('/api/register', async (req, res) => {
 
     req.session.userId = userId;
     req.session.originalUserId = userId;
-    
-    // Явно сохраняем сессию
-    req.session.save((err) => {
-      if (err) {
-        console.error('Ошибка сохранения сессии при регистрации:', err);
-        return res.status(500).json({ success: false, message: 'Ошибка сохранения сессии' });
-      }
-      res.status(201).json({ success: true, message: 'Регистрация успешна' });
-    });
+    res.status(201).json({ success: true, message: 'Регистрация успешна' });
   } catch (error) {
     console.error('Ошибка регистрации:', error);
     res.status(500).json({ success: false, message: 'Ошибка сервера при регистрации' });
@@ -303,28 +288,7 @@ app.post('/api/login', async (req, res) => {
     req.session.userId = user.id;
     req.session.originalUserId = req.session.originalUserId || user.id; // Для impersonation
     console.log(`Сессия установлена: userId=${req.session.userId}, originalUserId=${req.session.originalUserId}`);
-    
-    // Явно сохраняем сессию перед отправкой ответа
-    req.session.save((err) => {
-      if (err) {
-        console.error('Ошибка сохранения сессии:', err);
-        return res.status(500).json({ success: false, message: 'Ошибка сохранения сессии' });
-      }
-      console.log('Сессия сохранена успешно, Session ID:', req.sessionID);
-      console.log('Cookie будет установлен:', req.session.cookie);
-      
-      // Логируем заголовки ответа после отправки
-      res.on('finish', () => {
-        const setCookieHeader = res.getHeader('Set-Cookie');
-        if (setCookieHeader) {
-          console.log('Set-Cookie заголовок установлен:', Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader);
-        } else {
-          console.error('ВНИМАНИЕ: Set-Cookie заголовок НЕ установлен!');
-        }
-      });
-      
-      res.json({ success: true, message: 'Вход выполнен' });
-    });
+    res.json({ success: true, message: 'Вход выполнен' });
   } catch (error) {
     console.error('Ошибка входа:', error);
     console.error('Stack:', error.stack);
