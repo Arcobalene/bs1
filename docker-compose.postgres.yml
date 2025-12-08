@@ -1,0 +1,52 @@
+version: '3.8'
+
+# Альтернативный вариант с PostgreSQL вместо SQLite
+# Использование: docker-compose -f docker-compose.postgres.yml up -d
+
+services:
+  beauty-studio:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./views:/app/views
+      - ./public:/app/public
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DB_TYPE=postgres
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=beauty_studio
+      - DB_USER=beauty_user
+      - DB_PASSWORD=beauty_password
+    networks:
+      - beauty-network
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: beauty_studio
+      POSTGRES_USER: beauty_user
+      POSTGRES_PASSWORD: beauty_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - beauty-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beauty_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  beauty-network:
+    driver: bridge
+

@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Beauty Studio — Онлайн запись</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header>
+  <h1 id="salon-name-header">Beauty Studio</h1>
+  <p id="salon-description">Современный салон красоты в центре города. Запишитесь онлайн за пару кликов.</p>
+  <div class="nav-links">
+    <a href="/">Главная</a>
+    <a href="/login">Вход для владельцев</a>
+  </div>
+</header>
+
+<div class="container">
+  <div class="grid">
+    <!-- Левая колонка: услуги и мастера -->
+    <div class="card">
+      <h2>Услуги</h2>
+      <p class="description">Выберите услугу, а затем оформите запись в удобное время.</p>
+      <div class="services-list" id="services-list"></div>
+      <div class="divider"></div>
+      <h2>Мастера</h2>
+      <div class="masters-list" id="masters-list"></div>
+      <p class="note">
+        После отправки заявки администратор свяжется с вами в мессенджере или по телефону для подтверждения времени.
+      </p>
+    </div>
+
+    <!-- Правая колонка: форма записи -->
+    <div class="card">
+      <h2>Онлайн запись</h2>
+      <p class="description">Заполните форму, мы подтвердим запись в ближайшее время.</p>
+
+      <form id="booking-form">
+        <div>
+          <label for="client-name">Имя *</label>
+          <input id="client-name" type="text" name="name" placeholder="Как к вам обращаться?" required />
+        </div>
+
+        <div>
+          <label for="client-phone">Телефон *</label>
+          <input id="client-phone" type="tel" name="phone" placeholder="+998XX XXX XX XX" required />
+        </div>
+
+        <div>
+          <label for="service">Услуга *</label>
+          <select id="service" name="service" required>
+            <option value="">Выберите услугу</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="master">Мастер</label>
+          <select id="master" name="master">
+            <option value="">Любой свободный мастер</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <div>
+            <label for="date">Дата *</label>
+            <input id="date" type="date" name="date" required />
+          </div>
+          <div>
+            <label for="time-slot">Время *</label>
+            <select id="time-slot" name="time" required>
+              <option value="">Сначала выберите услугу и дату</option>
+            </select>
+            <p id="duration-hint" class="note"></p>
+            <p id="slot-hint" class="note"></p>
+          </div>
+        </div>
+
+        <div>
+          <label for="comment">Комментарий</label>
+          <textarea id="comment" name="comment" placeholder="Например: хочу дизайн в нюдовых оттенках."></textarea>
+        </div>
+
+        <button type="submit" class="btn-primary">Отправить заявку</button>
+
+        <div id="alert-success" class="alert alert-success">
+          Спасибо! Заявка отправлена. Мы свяжемся с вами для подтверждения записи.
+        </div>
+        <div id="alert-error" class="alert alert-error">
+          Пожалуйста, заполните все обязательные поля корректно.
+        </div>
+
+        <p class="note">
+          Нажимая кнопку, вы соглашаетесь с обработкой персональных данных.
+        </p>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="salon-map-section" style="display: none; margin-top: 24px;">
+  <div class="container">
+    <div class="card">
+      <h2>Как нас найти</h2>
+      <div id="salon-map" style="width: 100%; height: 300px; border-radius: 10px; margin-top: 8px;"></div>
+      <p id="salon-address-text" style="margin-top: 12px; color: #6b7280; font-size: 0.9rem;"></p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  © 2025 Beauty Studio. Все права защищены.
+</footer>
+
+<script src="https://api-maps.yandex.ru/2.1/?apikey=YOUR_API_KEY&lang=ru_RU" type="text/javascript"></script>
+<script src="/app.js"></script>
+<script>
+  // Получаем userId из URL параметров
+  const urlParams = new URLSearchParams(window.location.search);
+  let userId = urlParams.get('userId');
+
+  let services = [];
+  let masters = [];
+  let serviceDurations = {};
+  const busyIntervals = {};
+
+  // Загрузка услуг и мастеров
+  async function loadData() {
+    if (!userId) {
+      // Если userId не указан, показываем сообщение
+      const servicesListEl = document.getElementById("services-list");
+      const mastersListEl = document.getElementById("masters-list");
+      const form = document.getElementById("booking-form");
+      
+      if (servicesListEl) {
+        servicesListEl.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 20px;">Пожалуйста, используйте ссылку от салона для записи.</p>';
+      }
+      if (mastersListEl) {
+        mastersListEl.innerHTML = '';
+      }
+      if (form) {
+        form.style.display = 'none';
+        const card = form.closest('.card');
+        if (card) {
+          card.innerHTML = '<h2>Онлайн запись</h2><p class="description">Для записи используйте персональную ссылку от вашего салона.</p>';
+        }
+      }
+      return;
+    }
+
+    try {
+      const [servicesRes, mastersRes, salonRes] = await Promise.all([
+        fetch(`/api/services/${userId}`),
+        fetch(`/api/masters/${userId}`),
+        fetch(`/api/salon/${userId}`)
+      ]);
+
+      const servicesData = await servicesRes.json();
+      const mastersData = await mastersRes.json();
+      const salonData = await salonRes.json();
+
+      if (servicesData.success) {
+        services = servicesData.services;
+        rebuildServiceDurations();
+        renderServicesAndMasters();
+      }
+
+      if (mastersData.success) {
+        masters = mastersData.masters;
+        renderServicesAndMasters();
+      }
+
+      if (salonData.success && salonData.salon) {
+        const salon = salonData.salon;
+        // Обновляем заголовок
+        const headerTitle = document.getElementById('salon-name-header');
+        const headerDesc = document.getElementById('salon-description');
+        if (headerTitle) headerTitle.textContent = salon.name || 'Beauty Studio';
+        if (headerDesc && salon.address) {
+          headerDesc.textContent = salon.address;
+        }
+
+        // Показываем карту, если есть координаты
+        if (salon.lat && salon.lng) {
+          initSalonMap(salon);
+        } else if (salon.address) {
+          // Показываем только адрес, если координат нет
+          const addressText = document.getElementById('salon-address-text');
+          const mapSection = document.getElementById('salon-map-section');
+          if (addressText) addressText.textContent = `📍 ${salon.address}`;
+          if (mapSection) mapSection.style.display = 'block';
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки данных:', error);
+    }
+  }
+
+  function initSalonMap(salon) {
+    if (typeof ymaps === 'undefined') {
+      console.error('Яндекс карты не загружены');
+      return;
+    }
+
+    ymaps.ready(() => {
+      const map = new ymaps.Map('salon-map', {
+        center: [salon.lat, salon.lng],
+        zoom: 15,
+        controls: ['zoomControl', 'fullscreenControl']
+      });
+
+      const placemark = new ymaps.Placemark([salon.lat, salon.lng], {
+        balloonContent: salon.address || salon.name || 'Салон'
+      }, {
+        preset: 'islands#redDotIcon'
+      });
+
+      map.geoObjects.add(placemark);
+
+      // Показываем секцию с картой
+      const mapSection = document.getElementById('salon-map-section');
+      const addressText = document.getElementById('salon-address-text');
+      if (mapSection) mapSection.style.display = 'block';
+      if (addressText && salon.address) {
+        addressText.textContent = `📍 ${salon.address}`;
+      }
+    });
+  }
+
+  function rebuildServiceDurations() {
+    serviceDurations = {};
+    services.forEach((s) => {
+      serviceDurations[s.name] = s.duration;
+    });
+  }
+
+  function renderServicesAndMasters() {
+    const servicesListEl = document.getElementById("services-list");
+    const mastersListEl = document.getElementById("masters-list");
+    const serviceSelect = document.getElementById("service");
+    const masterSelect = document.getElementById("master");
+
+    if (servicesListEl) {
+      servicesListEl.innerHTML = "";
+      services.forEach((s) => {
+        const row = document.createElement("div");
+        row.className = "service-item";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = s.name;
+        const priceSpan = document.createElement("span");
+        priceSpan.className = "price";
+        priceSpan.textContent = `${s.price.toLocaleString("ru-RU")} сум · ${Math.round((s.duration / 60) * 10) / 10} ч`;
+        row.appendChild(nameSpan);
+        row.appendChild(priceSpan);
+        servicesListEl.appendChild(row);
+      });
+    }
+
+    if (serviceSelect) {
+      const currentValue = serviceSelect.value;
+      serviceSelect.innerHTML = "";
+      const baseOpt = document.createElement("option");
+      baseOpt.value = "";
+      baseOpt.textContent = "Выберите услугу";
+      serviceSelect.appendChild(baseOpt);
+      services.forEach((s) => {
+        const opt = document.createElement("option");
+        opt.value = s.name;
+        opt.textContent = s.name;
+        serviceSelect.appendChild(opt);
+      });
+      if (currentValue && serviceDurations[currentValue]) {
+        serviceSelect.value = currentValue;
+      }
+    }
+
+    if (mastersListEl) {
+      mastersListEl.innerHTML = "";
+      masters.forEach((m) => {
+        const row = document.createElement("div");
+        row.className = "master-item";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = m.name;
+        const roleSpan = document.createElement("span");
+        roleSpan.className = "role";
+        roleSpan.textContent = m.role;
+        row.appendChild(nameSpan);
+        row.appendChild(roleSpan);
+        mastersListEl.appendChild(row);
+      });
+    }
+
+    if (masterSelect) {
+      const currentMaster = masterSelect.value;
+      masterSelect.innerHTML = "";
+      const anyOpt = document.createElement("option");
+      anyOpt.value = "";
+      anyOpt.textContent = "Любой свободный мастер";
+      masterSelect.appendChild(anyOpt);
+      masters.forEach((m) => {
+        const opt = document.createElement("option");
+        opt.value = m.name;
+        opt.textContent = m.name;
+        masterSelect.appendChild(opt);
+      });
+      masterSelect.value = currentMaster || "";
+    }
+
+    generateSlots();
+  }
+
+  // Установка минимальной даты
+  (function setMinDate() {
+    const dateInput = document.getElementById("date");
+    if (dateInput) {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
+      dateInput.min = `${yyyy}-${mm}-${dd}`;
+    }
+  })();
+
+  // Функции времени (из app.js)
+  function timeToMinutes(t) {
+    if (!t) return null;
+    const parts = t.split(":");
+    if (parts.length !== 2) return null;
+    const h = Number(parts[0]);
+    const m = Number(parts[1]);
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+    return h * 60 + m;
+  }
+
+  function minutesToTime(total) {
+    const h = Math.floor(total / 60);
+    const m = total % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }
+
+  function getEndTime(startTime, durationMinutes) {
+    const start = timeToMinutes(startTime);
+    if (start === null) return "";
+    const end = start + durationMinutes;
+    return minutesToTime(end);
+  }
+
+  function updateDurationHint() {
+    const durationHint = document.getElementById("duration-hint");
+    const serviceSelect = document.getElementById("service");
+    const timeSelect = document.getElementById("time-slot");
+    if (!durationHint || !serviceSelect) return;
+
+    const service = serviceSelect.value;
+    const duration = serviceDurations[service];
+    const time = timeSelect ? timeSelect.value : "";
+
+    if (!service || !duration) {
+      durationHint.textContent = "";
+      return;
+    }
+
+    if (!time) {
+      durationHint.textContent = `Длительность услуги: ${duration} мин.`;
+      return;
+    }
+
+    const endTime = getEndTime(time, duration);
+    if (!endTime) {
+      durationHint.textContent = `Длительность услуги: ${duration} мин.`;
+      return;
+    }
+
+    durationHint.textContent = `Длительность услуги: ${duration} мин. Будете свободны примерно в ${endTime}.`;
+  }
+
+  function generateSlots() {
+    const serviceSelect = document.getElementById("service");
+    const dateInput = document.getElementById("date");
+    const timeSelect = document.getElementById("time-slot");
+    const slotHint = document.getElementById("slot-hint");
+    const durationHint = document.getElementById("duration-hint");
+
+    if (timeSelect) {
+      timeSelect.innerHTML = "";
+      timeSelect.disabled = false;
+    }
+    if (slotHint) slotHint.textContent = "";
+    if (durationHint) durationHint.textContent = "";
+
+    const baseOption = document.createElement("option");
+
+    if (!serviceSelect || !dateInput) return;
+
+    const service = serviceSelect.value;
+    const date = dateInput.value;
+
+    if (!service || !date) {
+      baseOption.value = "";
+      baseOption.textContent = "Сначала выберите услугу и дату";
+      if (timeSelect) {
+        timeSelect.appendChild(baseOption);
+        timeSelect.disabled = true;
+      }
+      return;
+    }
+
+    const duration = serviceDurations[service];
+    if (!duration) {
+      baseOption.value = "";
+      baseOption.textContent = "Сначала выберите услугу";
+      if (timeSelect) {
+        timeSelect.appendChild(baseOption);
+        timeSelect.disabled = true;
+      }
+      return;
+    }
+
+    const startOfDay = 10 * 60;
+    const endOfDay = 20 * 60;
+    const step = 30;
+
+    const busy = (busyIntervals[date] || []).map(([from, to]) => [
+      timeToMinutes(from),
+      timeToMinutes(to)
+    ]);
+
+    const freeSlots = [];
+
+    for (let start = startOfDay; start + duration <= endOfDay; start += step) {
+      const end = start + duration;
+      const overlaps = busy.some(([bStart, bEnd]) => start < bEnd && end > bStart);
+      if (!overlaps) freeSlots.push({ start, end });
+    }
+
+    if (!freeSlots.length) {
+      baseOption.value = "";
+      baseOption.textContent = "Нет свободных окон на этот день";
+      if (timeSelect) {
+        timeSelect.appendChild(baseOption);
+        timeSelect.disabled = true;
+      }
+      if (slotHint) slotHint.textContent = "На выбранную дату нет свободного времени. Попробуйте другой день или услугу.";
+      return;
+    }
+
+    if (timeSelect) {
+      const defaultOption = document.createElement("option");
+      defaultOption.value = "";
+      defaultOption.textContent = "Выберите время";
+      timeSelect.appendChild(defaultOption);
+
+      freeSlots.forEach((slot) => {
+        const opt = document.createElement("option");
+        const startStr = minutesToTime(slot.start);
+        const endStr = minutesToTime(slot.end);
+        opt.value = startStr;
+        opt.textContent = `${startStr} – ${endStr}`;
+        timeSelect.appendChild(opt);
+      });
+    }
+
+    if (slotHint) slotHint.textContent = "Доступные свободные окна на выбранную дату.";
+    if (durationHint) durationHint.textContent = `Длительность услуги: ${duration} мин.`;
+  }
+
+  // Обработка формы
+  const form = document.getElementById("booking-form");
+  const successAlert = document.getElementById("alert-success");
+  const errorAlert = document.getElementById("alert-error");
+
+  if (form) {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (successAlert) successAlert.style.display = "none";
+      if (errorAlert) errorAlert.style.display = "none";
+
+      const formData = new FormData(form);
+      const data = {
+        userId: parseInt(userId),
+        name: (formData.get("name") || "").trim(),
+        phone: (formData.get("phone") || "").trim(),
+        service: formData.get("service"),
+        master: formData.get("master"),
+        date: formData.get("date"),
+        time: formData.get("time"),
+        comment: (formData.get("comment") || "").trim()
+      };
+
+      if (!data.name || !data.phone || !data.service || !data.date || !data.time) {
+        if (errorAlert) errorAlert.style.display = "block";
+        return;
+      }
+
+      const phoneDigits = data.phone.replace(/\D/g, "");
+      if (phoneDigits.length < 9) {
+        if (errorAlert) {
+          errorAlert.textContent = "Пожалуйста, введите корректный номер телефона (минимум 9 цифр).";
+          errorAlert.style.display = "block";
+        }
+        return;
+      }
+
+      const duration = serviceDurations[data.service];
+      if (duration) {
+        const endTime = getEndTime(data.time, duration);
+        if (endTime) {
+          data.endTime = endTime;
+        }
+      }
+
+      try {
+        const response = await fetch('/api/bookings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          if (successAlert) successAlert.style.display = "block";
+          form.reset();
+          generateSlots();
+          
+          // Обновляем занятые интервалы
+          if (!busyIntervals[data.date]) busyIntervals[data.date] = [];
+          busyIntervals[data.date].push([data.time, data.endTime]);
+        } else {
+          if (errorAlert) {
+            errorAlert.textContent = result.message || "Ошибка при отправке заявки";
+            errorAlert.style.display = "block";
+          }
+        }
+      } catch (error) {
+        if (errorAlert) {
+          errorAlert.textContent = "Ошибка при отправке заявки. Попробуйте позже.";
+          errorAlert.style.display = "block";
+        }
+      }
+    });
+  }
+
+  // Слушатели событий
+  const serviceSelect = document.getElementById("service");
+  const dateInput = document.getElementById("date");
+  const timeSelect = document.getElementById("time-slot");
+
+  if (serviceSelect) serviceSelect.addEventListener("change", generateSlots);
+  if (dateInput) dateInput.addEventListener("change", generateSlots);
+  if (timeSelect) timeSelect.addEventListener("change", updateDurationHint);
+
+  // Загружаем данные при загрузке страницы
+  loadData();
+</script>
+</body>
+</html>
+

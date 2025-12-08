@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Админ-панель — Beauty Studio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header>
+  <h1>Beauty Studio</h1>
+  <p>Панель управления салоном</p>
+  <div class="nav-links">
+    <a href="/">Главная</a>
+    <a href="/calendar">Календарь</a>
+    <a href="/users" id="users-link">Пользователи</a>
+    <a href="#" id="logout-link">Выход</a>
+  </div>
+</header>
+
+<div class="container">
+  <div id="impersonation-banner" class="card" style="background: #fef3c7; border: 2px solid #fbbf24; margin-bottom: 16px; display: none;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <strong>⚠️ Вы вошли под пользователем: <span id="impersonated-user"></span></strong>
+        <p style="margin: 4px 0 0 0; font-size: 0.85rem;">Оригинальный аккаунт: <span id="original-user"></span></p>
+      </div>
+      <button id="restore-account" class="btn-secondary" style="margin: 0;">Вернуться к своему аккаунту</button>
+    </div>
+  </div>
+
+  <div class="user-info">
+    <h3 id="user-name">Загрузка...</h3>
+    <p id="user-email"></p>
+    <p class="note">Ваша ссылка для записи: <strong id="booking-link"></strong></p>
+  </div>
+
+  <div class="card">
+    <h2>Информация о салоне</h2>
+    <p class="description">Настройте название салона и укажите местоположение на карте.</p>
+
+    <form id="salon-form">
+      <div>
+        <label for="salon-name">Название салона</label>
+        <input type="text" id="salon-name" placeholder="Например: Beauty Studio" />
+      </div>
+
+      <div>
+        <label for="salon-address">Адрес салона</label>
+        <input type="text" id="salon-address" placeholder="Например: ул. Пушкина, д. 10" />
+        <p class="note">Адрес будет отображаться на карте и в информации о салоне</p>
+      </div>
+
+      <div>
+        <label>Местоположение на карте</label>
+        <div id="map" style="width: 100%; height: 400px; border-radius: 10px; margin-top: 8px;"></div>
+        <p class="note">Кликните на карте, чтобы указать местоположение салона</p>
+        <input type="hidden" id="salon-lat" />
+        <input type="hidden" id="salon-lng" />
+      </div>
+
+      <button type="submit" class="btn-primary">Сохранить информацию о салоне</button>
+      <div id="salon-alert" class="alert" style="display: none;"></div>
+    </form>
+  </div>
+
+  <div class="card" style="margin-top: 24px;">
+    <h2>Управление услугами</h2>
+    <p class="description">Добавляйте, редактируйте и удаляйте услуги вашего салона.</p>
+
+    <form id="admin-service-form">
+      <div>
+        <label for="admin-service-name">Название услуги</label>
+        <input type="text" id="admin-service-name" placeholder="Например: Ботокс волос" />
+      </div>
+      <div class="form-row">
+        <div>
+          <label for="admin-service-price">Стоимость, сум</label>
+          <input type="text" id="admin-service-price" placeholder="Например: 350000" />
+        </div>
+        <div>
+          <label for="admin-service-duration">Длительность, минут</label>
+          <input type="text" id="admin-service-duration" placeholder="Например: 90" />
+        </div>
+      </div>
+      <button type="submit" class="btn-primary" id="admin-service-submit">Сохранить услугу</button>
+    </form>
+
+    <h4 style="font-size:0.9rem; margin-top:16px;">Текущие услуги</h4>
+    <div id="admin-services-list" class="admin-list"></div>
+  </div>
+
+  <div class="card" style="margin-top: 24px;">
+    <h2>Управление мастерами</h2>
+    <p class="description">Добавляйте, редактируйте и удаляйте мастеров вашего салона.</p>
+
+    <form id="admin-master-form">
+      <div>
+        <label for="admin-master-name">Имя мастера</label>
+        <input type="text" id="admin-master-name" placeholder="Например: Лейла" />
+      </div>
+      <div>
+        <label for="admin-master-role">Специализация</label>
+        <input type="text" id="admin-master-role" placeholder="Например: бровист" />
+      </div>
+      <button type="submit" class="btn-primary" id="admin-master-submit">Сохранить мастера</button>
+    </form>
+
+    <h4 style="font-size:0.9rem; margin-top:16px;">Текущие мастера</h4>
+    <div id="admin-masters-list" class="admin-list"></div>
+  </div>
+</div>
+
+<footer>
+  © 2025 Beauty Studio. Все права защищены.
+</footer>
+
+<script src="https://api-maps.yandex.ru/2.1/?apikey=YOUR_API_KEY&lang=ru_RU" type="text/javascript"></script>
+<script>
+  let currentUser = null;
+  let services = [];
+  let masters = [];
+  let editingServiceId = null;
+  let editingMasterId = null;
+
+  // Проверка авторизации и загрузка данных
+  async function loadUserData() {
+    try {
+      const response = await fetch('/api/user');
+      const result = await response.json();
+      
+      if (!result.success) {
+        window.location.href = '/login';
+        return;
+      }
+
+      currentUser = result.user;
+      services = currentUser.services || [];
+      masters = currentUser.masters || [];
+
+      // Проверяем, вошли ли мы под другим пользователем
+      if (currentUser.isImpersonating) {
+        const banner = document.getElementById('impersonation-banner');
+        if (banner) {
+          banner.style.display = 'block';
+          document.getElementById('impersonated-user').textContent = currentUser.username;
+          document.getElementById('original-user').textContent = currentUser.originalUsername;
+        }
+      }
+
+      document.getElementById('user-name').textContent = `Добро пожаловать, ${currentUser.username}!`;
+      document.getElementById('user-email').textContent = currentUser.email || 'Email не указан';
+      document.getElementById('booking-link').textContent = `${window.location.origin}/?userId=${currentUser.id}`;
+      
+      // Показываем ссылку на управление пользователями только для админов
+      const usersLink = document.getElementById('users-link');
+      const isAdmin = currentUser.role === 'admin' || currentUser.username === 'admin';
+      if (usersLink && isAdmin) {
+        usersLink.style.display = 'inline-block';
+      } else if (usersLink) {
+        usersLink.style.display = 'none';
+      }
+      
+      // Загружаем информацию о салоне
+      loadSalonInfo();
+      
+      renderServices();
+      renderMasters();
+    } catch (error) {
+      console.error('Ошибка загрузки данных:', error);
+      window.location.href = '/login';
+    }
+  }
+
+  function renderServices() {
+    const list = document.getElementById('admin-services-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+    services.forEach((s) => {
+      const row = document.createElement('div');
+      row.className = 'admin-list-item';
+      
+      const main = document.createElement('div');
+      main.className = 'admin-list-main';
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = s.name;
+      const metaSpan = document.createElement('span');
+      metaSpan.textContent = `${s.price.toLocaleString('ru-RU')} сум · ${s.duration} мин`;
+      main.appendChild(nameSpan);
+      main.appendChild(metaSpan);
+
+      const actions = document.createElement('div');
+      actions.className = 'admin-list-actions';
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.textContent = 'Редактировать';
+      editBtn.dataset.action = 'edit';
+      editBtn.dataset.id = String(s.id);
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.textContent = 'Удалить';
+      deleteBtn.dataset.action = 'delete';
+      deleteBtn.dataset.id = String(s.id);
+      actions.appendChild(editBtn);
+      actions.appendChild(deleteBtn);
+
+      row.appendChild(main);
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
+  }
+
+  function renderMasters() {
+    const list = document.getElementById('admin-masters-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+    masters.forEach((m) => {
+      const row = document.createElement('div');
+      row.className = 'admin-list-item';
+      
+      const main = document.createElement('div');
+      main.className = 'admin-list-main';
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = m.name;
+      const roleSpan = document.createElement('span');
+      roleSpan.textContent = m.role || 'без специализации';
+      main.appendChild(nameSpan);
+      main.appendChild(roleSpan);
+
+      const actions = document.createElement('div');
+      actions.className = 'admin-list-actions';
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.textContent = 'Редактировать';
+      editBtn.dataset.action = 'edit';
+      editBtn.dataset.id = String(m.id);
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.textContent = 'Удалить';
+      deleteBtn.dataset.action = 'delete';
+      deleteBtn.dataset.id = String(m.id);
+      actions.appendChild(editBtn);
+      actions.appendChild(deleteBtn);
+
+      row.appendChild(main);
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
+  }
+
+  // Обработка услуг
+  const serviceForm = document.getElementById('admin-service-form');
+  const serviceName = document.getElementById('admin-service-name');
+  const servicePrice = document.getElementById('admin-service-price');
+  const serviceDuration = document.getElementById('admin-service-duration');
+  const serviceSubmitBtn = document.getElementById('admin-service-submit');
+  const servicesList = document.getElementById('admin-services-list');
+
+  serviceForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = serviceName.value.trim();
+    const priceRaw = servicePrice.value.trim();
+    const durationRaw = serviceDuration.value.trim();
+
+    if (!name || !priceRaw || !durationRaw) {
+      alert('Заполните все поля');
+      return;
+    }
+
+    const price = Number(priceRaw.replace(/\s+/g, ''));
+    const duration = Number(durationRaw.replace(/\s+/g, ''));
+    if (Number.isNaN(price) || Number.isNaN(duration)) {
+      alert('Стоимость и длительность должны быть числами');
+      return;
+    }
+    if (price <= 0 || duration <= 0) {
+      alert('Стоимость и длительность должны быть положительными числами');
+      return;
+    }
+
+    if (editingServiceId !== null) {
+      const svc = services.find(s => s.id === editingServiceId);
+      if (svc) {
+        svc.name = name;
+        svc.price = price;
+        svc.duration = duration;
+      }
+      editingServiceId = null;
+      serviceSubmitBtn.textContent = 'Сохранить услугу';
+    } else {
+      const existing = services.find(s => s.name === name);
+      if (existing) {
+        existing.price = price;
+        existing.duration = duration;
+      } else {
+        services.push({
+          id: services.length > 0 ? Math.max(...services.map(s => s.id)) + 1 : 1,
+          name,
+          price,
+          duration
+        });
+      }
+    }
+
+    await saveServices();
+    serviceName.value = '';
+    servicePrice.value = '';
+    serviceDuration.value = '';
+    renderServices();
+  });
+
+  servicesList.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const id = Number(btn.dataset.id);
+    const action = btn.dataset.action;
+    const service = services.find(s => s.id === id);
+    if (!service) return;
+
+    if (action === 'edit') {
+      serviceName.value = service.name;
+      servicePrice.value = String(service.price);
+      serviceDuration.value = String(service.duration);
+      editingServiceId = service.id;
+      serviceSubmitBtn.textContent = 'Обновить услугу';
+    } else if (action === 'delete') {
+      if (!confirm(`Удалить услугу "${service.name}"?`)) return;
+      services = services.filter(s => s.id !== id);
+      if (editingServiceId === id) {
+        editingServiceId = null;
+        serviceName.value = '';
+        servicePrice.value = '';
+        serviceDuration.value = '';
+        serviceSubmitBtn.textContent = 'Сохранить услугу';
+      }
+      saveServices();
+      renderServices();
+    }
+  });
+
+  // Обработка мастеров
+  const masterForm = document.getElementById('admin-master-form');
+  const masterName = document.getElementById('admin-master-name');
+  const masterRole = document.getElementById('admin-master-role');
+  const masterSubmitBtn = document.getElementById('admin-master-submit');
+  const mastersList = document.getElementById('admin-masters-list');
+
+  masterForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = masterName.value.trim();
+    const role = masterRole.value.trim();
+
+    if (!name) {
+      alert('Введите имя мастера');
+      return;
+    }
+
+    if (editingMasterId !== null) {
+      const m = masters.find(mm => mm.id === editingMasterId);
+      if (m) {
+        m.name = name;
+        m.role = role || m.role;
+      }
+      editingMasterId = null;
+      masterSubmitBtn.textContent = 'Сохранить мастера';
+    } else {
+      const existing = masters.find(m => m.name === name);
+      if (existing) {
+        existing.role = role || existing.role;
+      } else {
+        masters.push({
+          id: masters.length > 0 ? Math.max(...masters.map(m => m.id)) + 1 : 1,
+          name,
+          role
+        });
+      }
+    }
+
+    await saveMasters();
+    masterName.value = '';
+    masterRole.value = '';
+    renderMasters();
+  });
+
+  mastersList.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const id = Number(btn.dataset.id);
+    const action = btn.dataset.action;
+    const master = masters.find(m => m.id === id);
+    if (!master) return;
+
+    if (action === 'edit') {
+      masterName.value = master.name;
+      masterRole.value = master.role || '';
+      editingMasterId = master.id;
+      masterSubmitBtn.textContent = 'Обновить мастера';
+    } else if (action === 'delete') {
+      if (!confirm(`Удалить мастера "${master.name}"?`)) return;
+      masters = masters.filter(m => m.id !== id);
+      if (editingMasterId === id) {
+        editingMasterId = null;
+        masterName.value = '';
+        masterRole.value = '';
+        masterSubmitBtn.textContent = 'Сохранить мастера';
+      }
+      saveMasters();
+      renderMasters();
+    }
+  });
+
+  async function saveServices() {
+    try {
+      await fetch('/api/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ services })
+      });
+    } catch (error) {
+      console.error('Ошибка сохранения услуг:', error);
+      alert('Ошибка сохранения услуг');
+    }
+  }
+
+  async function saveMasters() {
+    try {
+      await fetch('/api/masters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ masters })
+      });
+    } catch (error) {
+      console.error('Ошибка сохранения мастеров:', error);
+      alert('Ошибка сохранения мастеров');
+    }
+  }
+
+  // Выход
+  document.getElementById('logout-link').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await fetch('/api/logout', { method: 'POST' });
+    window.location.href = '/login';
+  });
+
+  // Возврат к своему аккаунту
+  const restoreBtn = document.getElementById('restore-account');
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/users/restore', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          alert('Возврат к своему аккаунту выполнен');
+          window.location.reload();
+        } else {
+          alert(result.message || 'Ошибка');
+        }
+      } catch (error) {
+        console.error('Ошибка:', error);
+        alert('Ошибка при возврате к своему аккаунту');
+      }
+    });
+  }
+
+  // Управление информацией о салоне
+  let map = null;
+  let placemark = null;
+
+  function initMap() {
+    if (typeof ymaps === 'undefined') {
+      console.error('Яндекс карты не загружены. Убедитесь, что API ключ указан правильно.');
+      const mapEl = document.getElementById('map');
+      if (mapEl) {
+        mapEl.innerHTML = '<p style="padding: 20px; text-align: center; color: #6b7280;">Для отображения карты необходим API ключ Яндекс.Карт. Укажите его в настройках.</p>';
+      }
+      return;
+    }
+
+    ymaps.ready(() => {
+      const lat = currentUser.salonLat || 41.3111; // Ташкент по умолчанию
+      const lng = currentUser.salonLng || 69.2797;
+
+      map = new ymaps.Map('map', {
+        center: [lat, lng],
+        zoom: 15,
+        controls: ['zoomControl', 'fullscreenControl']
+      });
+
+      // Добавляем метку, если координаты есть
+      if (currentUser.salonLat && currentUser.salonLng) {
+        placemark = new ymaps.Placemark([currentUser.salonLat, currentUser.salonLng], {
+          balloonContent: currentUser.salonAddress || currentUser.salonName || 'Салон'
+        }, {
+          preset: 'islands#redDotIcon'
+        });
+        map.geoObjects.add(placemark);
+      }
+
+      // Обработчик клика по карте
+      map.events.add('click', (e) => {
+        const coords = e.get('coords');
+        document.getElementById('salon-lat').value = coords[0];
+        document.getElementById('salon-lng').value = coords[1];
+
+        // Удаляем старую метку
+        if (placemark) {
+          map.geoObjects.remove(placemark);
+        }
+
+        // Добавляем новую метку
+        placemark = new ymaps.Placemark(coords, {
+          balloonContent: currentUser.salonAddress || currentUser.salonName || 'Салон'
+        }, {
+          preset: 'islands#redDotIcon'
+        });
+        map.geoObjects.add(placemark);
+      });
+    });
+  }
+
+  function loadSalonInfo() {
+    const salonName = document.getElementById('salon-name');
+    const salonAddress = document.getElementById('salon-address');
+    const salonLat = document.getElementById('salon-lat');
+    const salonLng = document.getElementById('salon-lng');
+
+    if (salonName) salonName.value = currentUser.salonName || '';
+    if (salonAddress) salonAddress.value = currentUser.salonAddress || '';
+    if (salonLat) salonLat.value = currentUser.salonLat || '';
+    if (salonLng) salonLng.value = currentUser.salonLng || '';
+
+    // Инициализируем карту после загрузки данных
+    setTimeout(initMap, 100);
+  }
+
+  const salonForm = document.getElementById('salon-form');
+  const salonAlert = document.getElementById('salon-alert');
+
+  if (salonForm) {
+    salonForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (salonAlert) salonAlert.style.display = 'none';
+
+      const salonName = document.getElementById('salon-name').value.trim();
+      const salonAddress = document.getElementById('salon-address').value.trim();
+      const salonLat = document.getElementById('salon-lat').value;
+      const salonLng = document.getElementById('salon-lng').value;
+
+      try {
+        const response = await fetch('/api/salon', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            salonName,
+            salonAddress,
+            salonLat: salonLat ? parseFloat(salonLat) : null,
+            salonLng: salonLng ? parseFloat(salonLng) : null
+          })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          if (salonAlert) {
+            salonAlert.className = 'alert alert-success';
+            salonAlert.textContent = 'Информация о салоне сохранена!';
+            salonAlert.style.display = 'block';
+          }
+          
+          // Обновляем данные пользователя
+          currentUser.salonName = salonName;
+          currentUser.salonAddress = salonAddress;
+          currentUser.salonLat = salonLat ? parseFloat(salonLat) : null;
+          currentUser.salonLng = salonLng ? parseFloat(salonLng) : null;
+
+          // Обновляем метку на карте
+          if (map && placemark && salonLat && salonLng) {
+            map.geoObjects.remove(placemark);
+            placemark = new ymaps.Placemark([parseFloat(salonLat), parseFloat(salonLng)], {
+              balloonContent: salonAddress || salonName || 'Салон'
+            }, {
+              preset: 'islands#redDotIcon'
+            });
+            map.geoObjects.add(placemark);
+            map.setCenter([parseFloat(salonLat), parseFloat(salonLng)]);
+          }
+        } else {
+          if (salonAlert) {
+            salonAlert.className = 'alert alert-error';
+            salonAlert.textContent = result.message || 'Ошибка сохранения';
+            salonAlert.style.display = 'block';
+          }
+        }
+      } catch (error) {
+        console.error('Ошибка:', error);
+        if (salonAlert) {
+          salonAlert.className = 'alert alert-error';
+          salonAlert.textContent = 'Ошибка сохранения информации о салоне';
+          salonAlert.style.display = 'block';
+        }
+      }
+    });
+  }
+
+  // Загружаем данные при загрузке страницы
+  loadUserData();
+</script>
+</body>
+</html>
+

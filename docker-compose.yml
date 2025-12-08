@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  beauty-studio:
+    build: .
+    container_name: beauty-studio
+    ports:
+      - "3000:3000"
+    volumes:
+      # Именованный том для базы данных SQLite (персистентное хранилище)
+      # Данные сохраняются между перезапусками контейнера
+      - beauty-studio-data:/app/data
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    networks:
+      - beauty-network
+
+volumes:
+  # Именованный том для данных SQLite
+  # Преимущества: изоляция, персистентность, удобное управление
+  beauty-studio-data:
+    driver: local
+
+networks:
+  beauty-network:
+    driver: bridge
+

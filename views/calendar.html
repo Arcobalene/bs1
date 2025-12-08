@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Календарь — Beauty Studio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header>
+  <h1>Beauty Studio</h1>
+  <p>Календарь записей</p>
+  <div class="nav-links">
+    <a href="/">Главная</a>
+    <a href="/admin">Админ-панель</a>
+    <a href="#" id="logout-link">Выход</a>
+  </div>
+</header>
+
+<div class="container">
+  <div class="card admin-calendar-card">
+    <h2>Календарь записей</h2>
+    <p class="description">Недельный вид расписания по часам. Можно перелистывать недели и фильтровать по мастеру.</p>
+
+    <div class="form-row" style="margin-bottom: 8px;">
+      <div>
+        <label for="calendar-master-filter">Календарь мастера</label>
+        <select id="calendar-master-filter">
+          <option value="">Общий календарь (все мастера)</option>
+        </select>
+        <p class="note">Выберите конкретного мастера, чтобы посмотреть его личное расписание.</p>
+      </div>
+      <div>
+        <label>Неделя</label>
+        <div class="week-controls">
+          <button type="button" id="prev-week">‹ Предыдущая неделя</button>
+          <div id="week-label"></div>
+          <button type="button" id="next-week">Следующая неделя ›</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="calendar-grid" class="calendar-grid"></div>
+  </div>
+</div>
+
+<div id="booking-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Запись клиента</div>
+      <button type="button" id="modal-close" class="modal-close">×</button>
+    </div>
+    <div class="modal-body">
+      <p><strong>Клиент:</strong> <span id="modal-client-name"></span></p>
+      <p><strong>Телефон:</strong> <span id="modal-client-phone"></span></p>
+      <p>
+        <span class="badge badge-service" id="modal-service"></span>
+        <span class="badge badge-master" id="modal-master"></span>
+      </p>
+      <p><strong>Дата:</strong> <span id="modal-date"></span></p>
+      <p><strong>Время:</strong> <span id="modal-time"></span></p>
+      <p><strong>Комментарий:</strong></p>
+      <p id="modal-comment"></p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  © 2025 Beauty Studio. Все права защищены.
+</footer>
+
+<script>
+  let bookings = [];
+  let masters = [];
+  let currentWeekStart = null;
+  const WEEK_DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+  function getWeekStart(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = (day === 0 ? -6 : 1) - day;
+    d.setDate(d.getDate() + diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  function timeToMinutes(t) {
+    if (!t) return null;
+    const parts = t.split(":");
+    if (parts.length !== 2) return null;
+    const h = Number(parts[0]);
+    const m = Number(parts[1]);
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+    return h * 60 + m;
+  }
+
+  function dateToISO(dateObj) {
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const d = String(dateObj.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  async function loadData() {
+    try {
+      // Проверка авторизации
+      const userRes = await fetch('/api/user');
+      const userResult = await userRes.json();
+      if (!userResult.success) {
+        window.location.href = '/login';
+        return;
+      }
+
+      // Загрузка записей
+      const bookingsRes = await fetch('/api/bookings');
+      const bookingsResult = await bookingsRes.json();
+      if (bookingsResult.success) {
+        bookings = bookingsResult.bookings;
+      }
+
+      // Загрузка мастеров
+      masters = userResult.user.masters || [];
+      renderMasterFilter();
+      renderCalendar();
+    } catch (error) {
+      console.error('Ошибка загрузки данных:', error);
+      window.location.href = '/login';
+    }
+  }
+
+  function renderMasterFilter() {
+    const filter = document.getElementById('calendar-master-filter');
+    if (!filter) return;
+
+    const currentValue = filter.value;
+    filter.innerHTML = '';
+    const allOpt = document.createElement('option');
+    allOpt.value = '';
+    allOpt.textContent = 'Общий календарь (все мастера)';
+    filter.appendChild(allOpt);
+    masters.forEach((m) => {
+      const opt = document.createElement('option');
+      opt.value = m.name;
+      opt.textContent = m.name;
+      filter.appendChild(opt);
+    });
+    filter.value = currentValue || '';
+  }
+
+  function renderCalendar() {
+    const grid = document.getElementById('calendar-grid');
+    if (!grid) return;
+
+    if (!currentWeekStart) {
+      currentWeekStart = getWeekStart(new Date());
+    }
+
+    const startHour = 10;
+    const endHour = 20;
+
+    const weekDates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(currentWeekStart);
+      d.setDate(d.getDate() + i);
+      weekDates.push(d);
+    }
+
+    const weekLabel = document.getElementById('week-label');
+    if (weekLabel) {
+      const fmt = (d) => {
+        const dd = String(d.getDate()).padStart(2, "0");
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        return `${dd}.${mm}`;
+      };
+      weekLabel.textContent = `${fmt(weekDates[0])} – ${fmt(weekDates[6])}`;
+    }
+
+    grid.style.gridTemplateColumns = "80px repeat(7, 1fr)";
+    grid.innerHTML = "";
+
+    const emptyHeader = document.createElement("div");
+    emptyHeader.className = "cal-cell cal-header cal-corner";
+    grid.appendChild(emptyHeader);
+
+    weekDates.forEach((d, idx) => {
+      const cell = document.createElement("div");
+      cell.className = "cal-cell cal-header cal-day-header";
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      cell.textContent = `${WEEK_DAYS[idx]} ${dd}.${mm}`;
+      grid.appendChild(cell);
+    });
+
+    const selectedMaster = document.getElementById('calendar-master-filter')?.value || "";
+
+    for (let hour = startHour; hour < endHour; hour++) {
+      const hourCell = document.createElement("div");
+      hourCell.className = "cal-cell cal-hour-label";
+      hourCell.textContent = `${String(hour).padStart(2, "0")}:00`;
+      grid.appendChild(hourCell);
+
+      weekDates.forEach((d) => {
+        const cell = document.createElement("div");
+        cell.className = "cal-cell cal-slot";
+        const iso = dateToISO(d);
+
+        const bookingsForCell = bookings.filter((b) => {
+          if (b.date !== iso) return false;
+          if (selectedMaster && b.master !== selectedMaster) return false;
+          const startM = timeToMinutes(b.time);
+          const endM = timeToMinutes(b.endTime);
+          const cellStart = hour * 60;
+          const cellEnd = (hour + 1) * 60;
+          return startM < cellEnd && endM > cellStart;
+        });
+
+        if (bookingsForCell.length) {
+          cell.classList.add("cal-slot-busy");
+          const b = bookingsForCell[0];
+          const parts = [];
+          if (b.time && b.endTime) parts.push(`${b.time}-${b.endTime}`);
+          if (b.service) parts.push(b.service);
+          if (b.master) parts.push(b.master);
+          cell.textContent = parts.join(" · ");
+          const bookingIndex = bookings.indexOf(b);
+          if (bookingIndex !== -1) {
+            cell.dataset.bookingIndex = String(bookingIndex);
+            cell.style.cursor = "pointer";
+          }
+        }
+
+        grid.appendChild(cell);
+      });
+    }
+  }
+
+  function openBookingModal(index) {
+    const modal = document.getElementById('booking-modal');
+    if (!modal) return;
+    const booking = bookings[index];
+    if (!booking) return;
+
+    document.getElementById('modal-client-name').textContent = booking.name || "—";
+    document.getElementById('modal-client-phone').textContent = booking.phone || "—";
+    document.getElementById('modal-service').textContent = booking.service || "—";
+    document.getElementById('modal-master').textContent = booking.master || "Любой мастер";
+    document.getElementById('modal-date').textContent = booking.date || "—";
+    if (booking.time && booking.endTime) {
+      document.getElementById('modal-time').textContent = `${booking.time}–${booking.endTime}`;
+    } else {
+      document.getElementById('modal-time').textContent = booking.time || "—";
+    }
+    document.getElementById('modal-comment').textContent = booking.comment || "Нет комментария";
+
+    modal.classList.remove("hidden");
+  }
+
+  function closeBookingModal() {
+    const modal = document.getElementById('booking-modal');
+    if (modal) modal.classList.add("hidden");
+  }
+
+  // Слушатели событий
+  document.getElementById('prev-week')?.addEventListener('click', () => {
+    currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+    renderCalendar();
+  });
+
+  document.getElementById('next-week')?.addEventListener('click', () => {
+    currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+    renderCalendar();
+  });
+
+  document.getElementById('calendar-master-filter')?.addEventListener('change', renderCalendar);
+
+  document.getElementById('calendar-grid')?.addEventListener('click', (e) => {
+    const target = e.target.closest(".cal-slot-busy");
+    if (!target) return;
+    const idx = target.dataset.bookingIndex;
+    if (idx === undefined) return;
+    openBookingModal(Number(idx));
+  });
+
+  document.getElementById('modal-close')?.addEventListener('click', closeBookingModal);
+  document.getElementById('booking-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'booking-modal') closeBookingModal();
+  });
+
+  document.getElementById('logout-link')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    await fetch('/api/logout', { method: 'POST' });
+    window.location.href = '/login';
+  });
+
+  // Загружаем данные при загрузке страницы
+  loadData();
+</script>
+</body>
+</html>
+

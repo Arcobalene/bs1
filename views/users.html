@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Управление пользователями — Beauty Studio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header>
+  <h1>Beauty Studio</h1>
+  <p>Управление пользователями</p>
+  <div class="nav-links">
+    <a href="/admin">Админ-панель</a>
+    <a href="/calendar">Календарь</a>
+    <a href="#" id="logout-link">Выход</a>
+  </div>
+</header>
+
+<div class="container">
+  <div id="impersonation-banner" class="card" style="background: #fef3c7; border: 2px solid #fbbf24; margin-bottom: 16px; display: none;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <strong>⚠️ Вы вошли под пользователем: <span id="impersonated-user"></span></strong>
+        <p style="margin: 4px 0 0 0; font-size: 0.85rem;">Оригинальный аккаунт: <span id="original-user"></span></p>
+      </div>
+      <button id="restore-account" class="btn-secondary" style="margin: 0;">Вернуться к своему аккаунту</button>
+    </div>
+  </div>
+
+  <div class="user-info">
+    <h3 id="user-name">Загрузка...</h3>
+    <p id="user-email"></p>
+  </div>
+
+  <div class="card">
+    <h2>Список пользователей</h2>
+    <p class="description">Управление пользователями системы: блокировка, вход под пользователем, удаление.</p>
+
+    <div id="users-list" style="margin-top: 16px;">
+      <p style="text-align: center; color: #6b7280;">Загрузка...</p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  © 2025 Beauty Studio. Все права защищены.
+</footer>
+
+<script>
+  let currentUser = null;
+  let users = [];
+
+  // Проверка авторизации и загрузка данных
+  async function loadUserData() {
+    try {
+      const response = await fetch('/api/user');
+      const result = await response.json();
+      
+      if (!result.success) {
+        window.location.href = '/login';
+        return;
+      }
+
+      currentUser = result.user;
+      
+      // Проверяем, вошли ли мы под другим пользователем
+      if (currentUser.isImpersonating) {
+        document.getElementById('impersonation-banner').style.display = 'block';
+        document.getElementById('impersonated-user').textContent = currentUser.username;
+        document.getElementById('original-user').textContent = currentUser.originalUsername;
+      }
+
+      document.getElementById('user-name').textContent = `Добро пожаловать, ${currentUser.username}!`;
+      document.getElementById('user-email').textContent = currentUser.email || 'Email не указан';
+      
+      // Проверяем права администратора (включая обратную совместимость)
+      const isAdmin = currentUser.role === 'admin' || currentUser.username === 'admin';
+      if (!isAdmin) {
+        alert('Доступ запрещен. Требуются права администратора.');
+        window.location.href = '/admin';
+        return;
+      }
+
+      loadUsers();
+    } catch (error) {
+      console.error('Ошибка загрузки данных:', error);
+      window.location.href = '/login';
+    }
+  }
+
+  async function loadUsers() {
+    try {
+      const response = await fetch('/api/users');
+      const result = await response.json();
+      
+      if (result.success) {
+        users = result.users;
+        renderUsers();
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки пользователей:', error);
+      alert('Ошибка загрузки пользователей');
+    }
+  }
+
+  function renderUsers() {
+    const list = document.getElementById('users-list');
+    if (!list) return;
+
+    if (users.length === 0) {
+      list.innerHTML = '<p style="text-align: center; color: #6b7280;">Пользователи не найдены</p>';
+      return;
+    }
+
+    list.innerHTML = '';
+    users.forEach((user) => {
+      const row = document.createElement('div');
+      row.className = 'admin-list-item';
+      row.style.padding = '12px';
+      row.style.marginBottom = '8px';
+      row.style.border = '1px solid #e5e7eb';
+      row.style.borderRadius = '8px';
+      
+      const main = document.createElement('div');
+      main.className = 'admin-list-main';
+      main.style.flex = '1';
+      
+      const nameRow = document.createElement('div');
+      nameRow.style.display = 'flex';
+      nameRow.style.alignItems = 'center';
+      nameRow.style.gap = '8px';
+      nameRow.style.marginBottom = '4px';
+      
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = user.username;
+      nameSpan.style.fontWeight = '600';
+      nameSpan.style.fontSize = '1rem';
+      
+      if (user.role === 'admin') {
+        const badge = document.createElement('span');
+        badge.textContent = 'Админ';
+        badge.style.background = '#fef3c7';
+        badge.style.color = '#92400e';
+        badge.style.padding = '2px 8px';
+        badge.style.borderRadius = '999px';
+        badge.style.fontSize = '0.75rem';
+        nameRow.appendChild(badge);
+      }
+      
+      if (user.isActive === false) {
+        const badge = document.createElement('span');
+        badge.textContent = 'Заблокирован';
+        badge.style.background = '#fee2e2';
+        badge.style.color = '#b91c1c';
+        badge.style.padding = '2px 8px';
+        badge.style.borderRadius = '999px';
+        badge.style.fontSize = '0.75rem';
+        nameRow.appendChild(badge);
+      }
+      
+      nameRow.appendChild(nameSpan);
+      main.appendChild(nameRow);
+      
+      const metaSpan = document.createElement('span');
+      metaSpan.style.fontSize = '0.85rem';
+      metaSpan.style.color = '#6b7280';
+      metaSpan.innerHTML = `
+        ${user.email || 'Email не указан'} • 
+        Услуг: ${user.servicesCount} • 
+        Мастеров: ${user.mastersCount} • 
+        Создан: ${new Date(user.createdAt).toLocaleDateString('ru-RU')}
+      `;
+      main.appendChild(metaSpan);
+      
+      const actions = document.createElement('div');
+      actions.className = 'admin-list-actions';
+      actions.style.display = 'flex';
+      actions.style.gap = '8px';
+      actions.style.flexDirection = 'column';
+      
+      // Кнопка входа под пользователем
+      if (user.id !== currentUser.id && user.isActive !== false) {
+        const impersonateBtn = document.createElement('button');
+        impersonateBtn.type = 'button';
+        impersonateBtn.textContent = 'Войти под пользователем';
+        impersonateBtn.className = 'btn-secondary';
+        impersonateBtn.style.fontSize = '0.85rem';
+        impersonateBtn.style.padding = '6px 12px';
+        impersonateBtn.onclick = () => impersonateUser(user.id, user.username);
+        actions.appendChild(impersonateBtn);
+      }
+      
+      // Кнопка блокировки/разблокировки
+      if (user.id !== currentUser.id && user.role !== 'admin') {
+        const toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.textContent = user.isActive ? 'Заблокировать' : 'Разблокировать';
+        toggleBtn.className = user.isActive ? 'btn-secondary' : 'btn-primary';
+        toggleBtn.style.fontSize = '0.85rem';
+        toggleBtn.style.padding = '6px 12px';
+        toggleBtn.onclick = () => toggleUser(user.id, user.isActive);
+        actions.appendChild(toggleBtn);
+      }
+      
+      // Кнопка удаления
+      if (user.id !== currentUser.id && user.role !== 'admin') {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = 'Удалить';
+        deleteBtn.style.background = '#fee2e2';
+        deleteBtn.style.color = '#b91c1c';
+        deleteBtn.style.border = '1px solid #fecaca';
+        deleteBtn.style.fontSize = '0.85rem';
+        deleteBtn.style.padding = '6px 12px';
+        deleteBtn.style.borderRadius = '999px';
+        deleteBtn.onclick = () => deleteUser(user.id, user.username);
+        actions.appendChild(deleteBtn);
+      }
+      
+      row.appendChild(main);
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
+  }
+
+  async function toggleUser(userId, currentStatus) {
+    if (!confirm(`Вы уверены, что хотите ${currentStatus ? 'заблокировать' : 'разблокировать'} этого пользователя?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/users/${userId}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        loadUsers();
+      } else {
+        alert(result.message || 'Ошибка');
+      }
+    } catch (error) {
+      console.error('Ошибка:', error);
+      alert('Ошибка при изменении статуса пользователя');
+    }
+  }
+
+  async function impersonateUser(userId, username) {
+    if (!confirm(`Войти под пользователем "${username}"? Вы сможете вернуться к своему аккаунту.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/users/${userId}/impersonate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert(result.message);
+        window.location.href = '/admin';
+      } else {
+        alert(result.message || 'Ошибка');
+      }
+    } catch (error) {
+      console.error('Ошибка:', error);
+      alert('Ошибка при входе под пользователем');
+    }
+  }
+
+  async function deleteUser(userId, username) {
+    if (!confirm(`ВНИМАНИЕ! Вы уверены, что хотите удалить пользователя "${username}"?\n\nЭто действие удалит:\n- Аккаунт пользователя\n- Все его записи\n\nДействие необратимо!`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'DELETE'
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert('Пользователь удален');
+        loadUsers();
+      } else {
+        alert(result.message || 'Ошибка');
+      }
+    } catch (error) {
+      console.error('Ошибка:', error);
+      alert('Ошибка при удалении пользователя');
+    }
+  }
+
+  async function restoreAccount() {
+    try {
+      const response = await fetch('/api/users/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert('Возврат к своему аккаунту выполнен');
+        window.location.reload();
+      } else {
+        alert(result.message || 'Ошибка');
+      }
+    } catch (error) {
+      console.error('Ошибка:', error);
+      alert('Ошибка при возврате к своему аккаунту');
+    }
+  }
+
+  // Выход
+  document.getElementById('logout-link').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await fetch('/api/logout', { method: 'POST' });
+    window.location.href = '/login';
+  });
+
+  // Возврат к своему аккаунту
+  document.getElementById('restore-account').addEventListener('click', restoreAccount);
+
+  // Загружаем данные при загрузке страницы
+  loadUserData();
+</script>
+</body>
+</html>
+
