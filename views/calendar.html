@@ -13,6 +13,7 @@
   <div class="nav-links">
     <a href="/" id="salon-page-link">Страница салона</a>
     <a href="/admin">Админ-панель</a>
+    <a href="/clients">Клиенты</a>
     <a href="#" id="logout-link">Выход</a>
   </div>
 </header>
@@ -40,6 +41,13 @@
       </div>
     </div>
 
+    <div style="margin-bottom: 16px; display: flex; justify-content: flex-end;">
+      <button type="button" id="create-booking-btn" class="btn-primary" style="display: flex; align-items: center; gap: 8px;">
+        <span>➕</span>
+        <span>Создать запись</span>
+      </button>
+    </div>
+
     <div id="calendar-grid" class="calendar-grid"></div>
   </div>
 </div>
@@ -51,6 +59,19 @@
       <button type="button" id="modal-close" class="modal-close">×</button>
     </div>
     <div class="modal-body" id="modal-body-view">
+      <!-- Навигация между записями в одном временном слоте -->
+      <div id="modal-bookings-navigation" style="display: none; margin-bottom: 16px; padding: 12px; background: #f3f4f6; border-radius: 8px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <div style="font-weight: 600; color: #374151;">Записи в это время:</div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button type="button" id="modal-prev-booking" class="btn-secondary" style="padding: 4px 12px; font-size: 0.9rem;">← Предыдущая</button>
+            <span id="modal-booking-counter" style="font-size: 0.9rem; color: #6b7280;">1 / 1</span>
+            <button type="button" id="modal-next-booking" class="btn-secondary" style="padding: 4px 12px; font-size: 0.9rem;">Следующая →</button>
+          </div>
+        </div>
+        <div id="modal-other-bookings-list" style="display: grid; gap: 8px; max-height: 200px; overflow-y: auto;"></div>
+      </div>
+      
       <p><strong>Клиент:</strong> <span id="modal-client-name"></span></p>
       <p><strong>Телефон:</strong> <span id="modal-client-phone"></span></p>
       <p>
@@ -90,11 +111,15 @@
         </div>
         <div>
           <label for="new-booking-date">Дата *</label>
-          <input type="date" id="new-booking-date" required />
+          <input type="date" id="new-booking-date" required min="" />
         </div>
         <div>
           <label for="new-booking-time">Время *</label>
-          <input type="time" id="new-booking-time" required />
+          <select id="new-booking-time" required>
+            <option value="">Сначала выберите услугу и дату</option>
+          </select>
+          <p id="new-booking-duration-hint" class="note"></p>
+          <p id="new-booking-slot-hint" class="note"></p>
         </div>
         <div>
           <label for="new-booking-comment">Комментарий</label>
@@ -141,6 +166,12 @@
     return h * 60 + m;
   }
 
+  function minutesToTime(total) {
+    const h = Math.floor(total / 60);
+    const m = total % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }
+
   function dateToISO(dateObj) {
     const y = dateObj.getFullYear();
     const m = String(dateObj.getMonth() + 1).padStart(2, "0");
@@ -185,6 +216,30 @@
           window.history.replaceState({}, document.title, window.location.pathname);
           // Открываем запись
           openBookingById(bookingId);
+        }
+
+        // Проверяем, есть ли в URL параметр clientPhone для фильтрации
+        const clientPhoneParam = urlParams.get('clientPhone');
+        if (clientPhoneParam) {
+          // Фильтруем записи по телефону клиента
+          const filteredBookings = bookings.filter(b => b.phone === clientPhoneParam);
+          if (filteredBookings.length > 0) {
+            // Переключаемся на неделю с первой записью клиента
+            const firstBooking = filteredBookings[0];
+            if (firstBooking.date) {
+              const bookingDate = new Date(firstBooking.date);
+              currentWeekStart = getWeekStart(bookingDate);
+            }
+            // Показываем уведомление о фильтрации
+            showNotification(
+              'Фильтр по клиенту',
+              `Показаны записи клиента: ${filteredBookings[0].name} (${filteredBookings.length} записей)`,
+              'info'
+            );
+            // Удаляем параметр из URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+          renderCalendar();
         }
       } else {
         console.error('Ошибка загрузки записей:', bookingsResult);
@@ -291,8 +346,10 @@
         cell.className = "cal-cell cal-slot";
         const iso = dateToISO(d);
 
+        // Фильтруем записи для этой ячейки
         const bookingsForCell = bookings.filter((b) => {
           if (b.date !== iso) return false;
+          // Если выбран мастер, показываем только его записи
           if (selectedMaster && b.master !== selectedMaster) return false;
           const startM = timeToMinutes(b.time);
           if (startM === null) return false;
@@ -306,16 +363,50 @@
 
         if (bookingsForCell.length) {
           cell.classList.add("cal-slot-busy");
-          const b = bookingsForCell[0];
-          const parts = [];
-          if (b.time && b.endTime) parts.push(`${b.time}-${b.endTime}`);
-          if (b.service) parts.push(b.service);
-          if (b.master) parts.push(b.master);
-          cell.textContent = parts.join(" · ");
-          const bookingIndex = bookings.indexOf(b);
-          if (bookingIndex !== -1) {
-            cell.dataset.bookingIndex = String(bookingIndex);
-            cell.style.cursor = "pointer";
+          
+          // Если записей несколько, показываем их все (разные мастера могут работать одновременно)
+          if (bookingsForCell.length === 1) {
+            // Одна запись - показываем как обычно
+            const b = bookingsForCell[0];
+            const parts = [];
+            if (b.service) parts.push(b.service);
+            if (b.master && b.master.trim()) {
+              parts.push(`👤 ${b.master}`);
+            } else {
+              parts.push('👤 Без мастера');
+            }
+            if (b.name) parts.push(b.name);
+            cell.textContent = parts.join(" · ");
+            cell.title = `${b.time}${b.endTime ? '-' + b.endTime : ''} · ${b.service}${b.master ? ' · ' + b.master : ''} · ${b.name}`;
+            const bookingIndex = bookings.indexOf(b);
+            if (bookingIndex !== -1) {
+              cell.dataset.bookingIndex = String(bookingIndex);
+              cell.style.cursor = "pointer";
+            }
+          } else {
+            // Несколько записей - показываем количество и список мастеров
+            const mastersList = [...new Set(bookingsForCell.map(b => b.master || 'Без мастера'))];
+            const parts = [];
+            parts.push(`${bookingsForCell.length} записей`);
+            if (mastersList.length <= 3) {
+              parts.push(`👤 ${mastersList.join(', ')}`);
+            } else {
+              parts.push(`👤 ${mastersList.slice(0, 2).join(', ')} +${mastersList.length - 2}`);
+            }
+            cell.textContent = parts.join(" · ");
+            cell.title = bookingsForCell.map(b => 
+              `${b.time}${b.endTime ? '-' + b.endTime : ''} · ${b.master || 'Без мастера'}: ${b.name} - ${b.service}`
+            ).join('\n');
+            // При клике открываем первую запись
+            const b = bookingsForCell[0];
+            const bookingIndex = bookings.indexOf(b);
+            if (bookingIndex !== -1) {
+              cell.dataset.bookingIndex = String(bookingIndex);
+              cell.style.cursor = "pointer";
+            }
+            // Добавляем индикатор множественных записей
+            cell.dataset.multipleBookings = "true";
+            cell.style.fontSize = "0.85em";
           }
         } else {
           // Свободный слот - можно создать запись
@@ -332,6 +423,8 @@
   }
 
   let currentEditingBookingId = null; // ID записи, которую редактируем
+  let currentBookingIndex = 0; // Индекс текущей записи в списке записей одного временного слота
+  let sameTimeBookings = []; // Массив записей в одном временном слоте
 
   function openBookingModal(index) {
     const modal = document.getElementById('booking-modal');
@@ -341,6 +434,44 @@
 
     currentEditingBookingId = booking.id; // Сохраняем ID для редактирования
 
+    // Находим все записи в том же временном слоте (та же дата и пересекающееся время)
+    const bookingStart = timeToMinutes(booking.time);
+    const bookingEnd = booking.endTime ? timeToMinutes(booking.endTime) : (bookingStart + 60);
+    
+    sameTimeBookings = bookings.filter(b => {
+      if (b.date !== booking.date) return false;
+      const bStart = timeToMinutes(b.time);
+      const bEnd = b.endTime ? timeToMinutes(b.endTime) : (bStart + 60);
+      if (bStart === null || bEnd === null || bookingStart === null || bookingEnd === null) return false;
+      // Проверяем пересечение временных интервалов
+      return (bStart < bookingEnd && bEnd > bookingStart);
+    });
+
+    // Находим индекс текущей записи в списке
+    currentBookingIndex = sameTimeBookings.findIndex(b => b.id === booking.id);
+    if (currentBookingIndex === -1) currentBookingIndex = 0;
+
+    // Показываем навигацию, если записей больше одной
+    const navSection = document.getElementById('modal-bookings-navigation');
+    if (sameTimeBookings.length > 1) {
+      navSection.style.display = 'block';
+      updateBookingsNavigation();
+      renderOtherBookingsList();
+    } else {
+      navSection.style.display = 'none';
+    }
+
+    displayBooking(booking);
+
+    // Показываем модальное окно просмотра, скрываем форму
+    document.getElementById('modal-body-view').style.display = 'block';
+    document.getElementById('modal-body-form').style.display = 'none';
+    document.getElementById('modal-title').textContent = 'Запись клиента';
+    
+    modal.classList.remove("hidden");
+  }
+
+  function displayBooking(booking) {
     document.getElementById('modal-client-name').textContent = booking.name || "—";
     document.getElementById('modal-client-phone').textContent = booking.phone || "—";
     document.getElementById('modal-service').textContent = booking.service || "—";
@@ -352,13 +483,78 @@
       document.getElementById('modal-time').textContent = booking.time || "—";
     }
     document.getElementById('modal-comment').textContent = booking.comment || "Нет комментария";
-
-    // Показываем модальное окно просмотра, скрываем форму
-    document.getElementById('modal-body-view').style.display = 'block';
-    document.getElementById('modal-body-form').style.display = 'none';
-    document.getElementById('modal-title').textContent = 'Запись клиента';
     
-    modal.classList.remove("hidden");
+    currentEditingBookingId = booking.id;
+  }
+
+  function updateBookingsNavigation() {
+    const counter = document.getElementById('modal-booking-counter');
+    const prevBtn = document.getElementById('modal-prev-booking');
+    const nextBtn = document.getElementById('modal-next-booking');
+    
+    if (counter) {
+      counter.textContent = `${currentBookingIndex + 1} / ${sameTimeBookings.length}`;
+    }
+    
+    if (prevBtn) {
+      prevBtn.disabled = currentBookingIndex === 0;
+      prevBtn.style.opacity = currentBookingIndex === 0 ? '0.5' : '1';
+      prevBtn.style.cursor = currentBookingIndex === 0 ? 'not-allowed' : 'pointer';
+    }
+    
+    if (nextBtn) {
+      nextBtn.disabled = currentBookingIndex === sameTimeBookings.length - 1;
+      nextBtn.style.opacity = currentBookingIndex === sameTimeBookings.length - 1 ? '0.5' : '1';
+      nextBtn.style.cursor = currentBookingIndex === sameTimeBookings.length - 1 ? 'not-allowed' : 'pointer';
+    }
+  }
+
+  function renderOtherBookingsList() {
+    const listContainer = document.getElementById('modal-other-bookings-list');
+    if (!listContainer) return;
+
+    listContainer.innerHTML = sameTimeBookings.map((b, idx) => {
+      const isActive = idx === currentBookingIndex;
+      return `
+        <div class="booking-list-item" data-index="${idx}" style="
+          padding: 10px;
+          background: ${isActive ? '#e0e7ff' : '#ffffff'};
+          border: 2px solid ${isActive ? '#6366f1' : '#e5e7eb'};
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.2s;
+        ">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 600; color: #1f2937;">${b.name || '—'}</div>
+              <div style="font-size: 0.85rem; color: #6b7280; margin-top: 4px;">
+                ${b.service || '—'} ${b.master ? '· 👤 ' + b.master : ''}
+              </div>
+            </div>
+            <div style="font-size: 0.85rem; color: #6b7280;">
+              ${b.time}${b.endTime ? '-' + b.endTime : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Добавляем обработчики клика
+    listContainer.querySelectorAll('.booking-list-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const idx = parseInt(item.dataset.index);
+        if (idx !== currentBookingIndex && idx >= 0 && idx < sameTimeBookings.length) {
+          currentBookingIndex = idx;
+          const booking = sameTimeBookings[idx];
+          const bookingIndex = bookings.findIndex(b => b.id === booking.id);
+          if (bookingIndex !== -1) {
+            displayBooking(booking);
+            updateBookingsNavigation();
+            renderOtherBookingsList();
+          }
+        }
+      });
+    });
   }
   
   function openEditBookingForm(bookingId) {
@@ -374,8 +570,12 @@
     // Заполняем форму данными записи
     document.getElementById('new-booking-name').value = booking.name || '';
     document.getElementById('new-booking-phone').value = booking.phone || '';
-    document.getElementById('new-booking-date').value = booking.date || '';
-    document.getElementById('new-booking-time').value = booking.time || '';
+    const dateInput = document.getElementById('new-booking-date');
+    // Устанавливаем минимальную дату (сегодня) даже при редактировании
+    const today = new Date();
+    const todayStr = dateToISO(today);
+    dateInput.setAttribute('min', todayStr);
+    dateInput.value = booking.date || '';
     document.getElementById('new-booking-comment').value = booking.comment || '';
 
     // Заполняем услуги
@@ -398,6 +598,27 @@
       opt.textContent = m.name;
       opt.selected = m.name === booking.master;
       masterSelect.appendChild(opt);
+    });
+
+    // Генерируем слоты времени и предвыбираем текущее время записи
+    generateNewBookingSlots().then(() => {
+      const timeSelect = document.getElementById('new-booking-time');
+      if (timeSelect && booking.time) {
+        // Ищем слот, который соответствует времени записи
+        const bookingTime = booking.time.substring(0, 5); // Обрезаем до HH:MM
+        const options = Array.from(timeSelect.options);
+        const matchingOption = options.find(opt => opt.value === bookingTime);
+        if (matchingOption) {
+          timeSelect.value = bookingTime;
+        } else {
+          // Если точного совпадения нет, добавляем текущее время как опцию
+          const customOption = document.createElement('option');
+          customOption.value = bookingTime;
+          customOption.textContent = `${bookingTime}${booking.endTime ? ' – ' + booking.endTime.substring(0, 5) : ''} (текущее время)`;
+          timeSelect.appendChild(customOption);
+          timeSelect.value = bookingTime;
+        }
+      }
     });
 
     // Меняем текст кнопки
@@ -441,6 +662,120 @@
     }
   }
 
+  async function generateNewBookingSlots() {
+    const serviceSelect = document.getElementById('new-booking-service');
+    const dateInput = document.getElementById('new-booking-date');
+    const timeSelect = document.getElementById('new-booking-time');
+    const masterSelect = document.getElementById('new-booking-master');
+    const slotHint = document.getElementById('new-booking-slot-hint');
+    const durationHint = document.getElementById('new-booking-duration-hint');
+
+    if (timeSelect) {
+      timeSelect.innerHTML = '';
+      timeSelect.disabled = false;
+    }
+    if (slotHint) slotHint.textContent = '';
+    if (durationHint) durationHint.textContent = '';
+
+    if (!serviceSelect || !dateInput) return;
+
+    const service = serviceSelect.value;
+    const date = dateInput.value;
+    const selectedMaster = masterSelect ? masterSelect.value : '';
+
+    if (!service || !date) {
+      const baseOption = document.createElement('option');
+      baseOption.value = '';
+      baseOption.textContent = 'Сначала выберите услугу и дату';
+      if (timeSelect) {
+        timeSelect.appendChild(baseOption);
+        timeSelect.disabled = true;
+      }
+      return;
+    }
+
+    // Находим длительность услуги
+    const selectedService = services.find(s => s.name === service);
+    if (!selectedService || !selectedService.duration) {
+      const baseOption = document.createElement('option');
+      baseOption.value = '';
+      baseOption.textContent = 'Сначала выберите услугу';
+      if (timeSelect) {
+        timeSelect.appendChild(baseOption);
+        timeSelect.disabled = true;
+      }
+      return;
+    }
+
+    const duration = selectedService.duration;
+
+    // Загружаем занятые интервалы для выбранной даты и мастера
+    let busy = [];
+    try {
+      const bookingsRes = await fetch(`/api/bookings/${currentUser.id}?date=${date}`);
+      const bookingsResult = await bookingsRes.json();
+      if (bookingsResult.success && bookingsResult.bookings) {
+        // Фильтруем записи по мастеру
+        const filteredBookings = selectedMaster && selectedMaster.trim() !== ''
+          ? bookingsResult.bookings.filter(booking => {
+              return booking.master === selectedMaster || !booking.master || booking.master.trim() === '';
+            })
+          : bookingsResult.bookings;
+        
+        busy = filteredBookings.map(booking => {
+          const start = timeToMinutes(booking.time);
+          const end = booking.endTime ? timeToMinutes(booking.endTime) : (start + 60);
+          return [start, end].filter(v => v !== null);
+        }).filter(interval => interval.length === 2);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки записей:', error);
+    }
+
+    const startOfDay = 10 * 60;
+    const endOfDay = 20 * 60;
+    const step = 30;
+
+    const freeSlots = [];
+
+    for (let start = startOfDay; start + duration <= endOfDay; start += step) {
+      const end = start + duration;
+      const overlaps = busy.some(([bStart, bEnd]) => start < bEnd && end > bStart);
+      if (!overlaps) freeSlots.push({ start, end });
+    }
+
+    if (!freeSlots.length) {
+      const baseOption = document.createElement('option');
+      baseOption.value = '';
+      baseOption.textContent = 'Нет свободных окон на этот день';
+      if (timeSelect) {
+        timeSelect.appendChild(baseOption);
+        timeSelect.disabled = true;
+      }
+      if (slotHint) slotHint.textContent = 'На выбранную дату нет свободного времени. Попробуйте другой день или услугу.';
+      return;
+    }
+
+    if (timeSelect) {
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = 'Выберите время';
+      timeSelect.appendChild(defaultOption);
+
+      freeSlots.forEach((slot) => {
+        const opt = document.createElement('option');
+        const startStr = minutesToTime(slot.start);
+        const endStr = minutesToTime(slot.end);
+        opt.value = startStr;
+        opt.textContent = `${startStr} – ${endStr}`;
+        timeSelect.appendChild(opt);
+      });
+    }
+
+    if (slotHint) slotHint.textContent = 'Доступные свободные окна на выбранную дату.';
+    if (durationHint) durationHint.textContent = `Длительность услуги: ${duration} мин.`;
+  }
+
   function closeBookingModal() {
     const modal = document.getElementById('booking-modal');
     if (modal) {
@@ -459,7 +794,7 @@
     }
   }
 
-  function openNewBookingForm(date, hour) {
+  function openNewBookingForm(date = null, hour = null) {
     const modal = document.getElementById('booking-modal');
     if (!modal || !currentUser) return;
     
@@ -471,10 +806,21 @@
     
     // Сбрасываем форму
     document.getElementById('new-booking-form').reset();
+    document.getElementById('new-booking-alert').style.display = 'none';
     
-    // Заполняем дату и время
-    document.getElementById('new-booking-date').value = date;
-    document.getElementById('new-booking-time').value = `${String(hour).padStart(2, '0')}:00`;
+    // Заполняем дату
+    const dateInput = document.getElementById('new-booking-date');
+    // Устанавливаем минимальную дату (сегодня)
+    const today = new Date();
+    const todayStr = dateToISO(today);
+    dateInput.setAttribute('min', todayStr);
+    
+    if (date) {
+      dateInput.value = date;
+    } else {
+      // Если дата не указана, устанавливаем сегодняшнюю дату
+      dateInput.value = todayStr;
+    }
     
     // Заполняем услуги
     const serviceSelect = document.getElementById('new-booking-service');
@@ -496,11 +842,20 @@
       masterSelect.appendChild(opt);
     });
     
+    // Если выбран фильтр мастера в календаре, устанавливаем его в форме
+    const selectedMasterFilter = document.getElementById('calendar-master-filter')?.value;
+    if (selectedMasterFilter && selectedMasterFilter.trim() !== '') {
+      masterSelect.value = selectedMasterFilter;
+    }
+    
     // Меняем текст кнопки
     const submitBtn = document.getElementById('booking-form-submit');
     if (submitBtn) {
       submitBtn.textContent = 'Создать запись';
     }
+    
+    // Генерируем слоты времени (если уже выбрана услуга)
+    generateNewBookingSlots();
     
     modal.classList.remove("hidden");
   }
@@ -518,6 +873,11 @@
 
   document.getElementById('calendar-master-filter')?.addEventListener('change', renderCalendar);
 
+  // Кнопка создания новой записи
+  document.getElementById('create-booking-btn')?.addEventListener('click', () => {
+    openNewBookingForm();
+  });
+
   document.getElementById('calendar-grid')?.addEventListener('click', (e) => {
     const target = e.target.closest(".cal-slot");
     if (!target) return;
@@ -528,6 +888,8 @@
       if (idx !== undefined) {
         openBookingModal(Number(idx));
       }
+      // Если есть несколько записей, можно показать список (пока открываем первую)
+      // TODO: можно добавить модальное окно со списком всех записей в этом слоте
     }
     // Если это свободный слот - открываем форму создания записи
     else if (target.classList.contains("cal-slot-free")) {
@@ -544,11 +906,37 @@
     if (e.target.id === 'booking-modal') closeBookingModal();
   });
 
+  // Навигация между записями в одном временном слоте
+  document.getElementById('modal-prev-booking')?.addEventListener('click', () => {
+    if (currentBookingIndex > 0) {
+      currentBookingIndex--;
+      const booking = sameTimeBookings[currentBookingIndex];
+      displayBooking(booking);
+      updateBookingsNavigation();
+      renderOtherBookingsList();
+    }
+  });
+
+  document.getElementById('modal-next-booking')?.addEventListener('click', () => {
+    if (currentBookingIndex < sameTimeBookings.length - 1) {
+      currentBookingIndex++;
+      const booking = sameTimeBookings[currentBookingIndex];
+      displayBooking(booking);
+      updateBookingsNavigation();
+      renderOtherBookingsList();
+    }
+  });
+
   document.getElementById('logout-link')?.addEventListener('click', async (e) => {
     e.preventDefault();
     await fetch('/api/logout', { method: 'POST' });
     window.location.href = '/login';
   });
+
+  // Обработчики для генерации слотов времени в форме создания записи
+  document.getElementById('new-booking-service')?.addEventListener('change', generateNewBookingSlots);
+  document.getElementById('new-booking-date')?.addEventListener('change', generateNewBookingSlots);
+  document.getElementById('new-booking-master')?.addEventListener('change', generateNewBookingSlots);
 
   // Обработчик формы создания/редактирования записи
   document.getElementById('new-booking-form')?.addEventListener('submit', async (e) => {
@@ -801,7 +1189,7 @@
       });
       
       return `
-        <div class="notification-item ${notif.read ? '' : 'unread'}" data-id="${notif.id}">
+        <div class="notification-item ${notif.read ? '' : 'unread'}" data-id="${notif.id}" data-booking-id="${notif.bookingId || ''}">
           <div class="notification-item-icon" style="color: ${iconColors[notif.type] || iconColors.success}">
             ${icons[notif.type] || icons.success}
           </div>
@@ -928,7 +1316,7 @@
   updateNotificationsBadge();
   
   // Проверка новых записей каждые 30 секунд
-  let lastBookingCount = 0;
+  let knownBookingIds = new Set(); // Множество ID записей, которые мы уже видели
   let lastBookingCheck = Date.now();
   
   async function checkNewBookings() {
@@ -936,13 +1324,22 @@
       const bookingsRes = await fetch('/api/bookings');
       const bookingsResult = await bookingsRes.json();
       
-      if (bookingsResult.success) {
-        const currentCount = bookingsResult.bookings.length;
+      if (bookingsResult.success && bookingsResult.bookings) {
+        const currentBookings = bookingsResult.bookings;
         
-        // Если количество записей увеличилось и прошло больше 5 секунд с последней проверки
-        if (currentCount > lastBookingCount && lastBookingCount > 0 && (Date.now() - lastBookingCheck) > 5000) {
-          const newBookings = bookingsResult.bookings.slice(0, currentCount - lastBookingCount);
-          
+        // Находим новые записи (те, которых нет в knownBookingIds)
+        const newBookings = currentBookings.filter(booking => {
+          const bookingId = String(booking.id);
+          if (!knownBookingIds.has(bookingId)) {
+            knownBookingIds.add(bookingId);
+            return true;
+          }
+          return false;
+        });
+        
+        // Показываем уведомления только для действительно новых записей
+        // и только если прошло больше 2 секунд с последней проверки (чтобы не показывать при первой загрузке)
+        if (newBookings.length > 0 && (Date.now() - lastBookingCheck) > 2000) {
           newBookings.forEach(booking => {
             const date = new Date(booking.date);
             const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
@@ -955,9 +1352,8 @@
           });
         }
         
-        lastBookingCount = currentCount;
         lastBookingCheck = Date.now();
-        bookings = bookingsResult.bookings;
+        bookings = currentBookings;
         renderCalendar();
       }
     } catch (error) {
@@ -965,9 +1361,12 @@
     }
   }
   
-  // Инициализируем счетчик после загрузки данных
+  // Инициализируем список известных записей после загрузки данных
   setTimeout(() => {
-    lastBookingCount = bookings.length;
+    // Сохраняем ID всех текущих записей как уже известные
+    bookings.forEach(booking => {
+      knownBookingIds.add(String(booking.id));
+    });
     // Проверяем новые записи каждые 30 секунд
     setInterval(checkNewBookings, 30000);
   }, 2000);

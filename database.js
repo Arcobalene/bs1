@@ -4,6 +4,16 @@ const { Pool } = require('pg');
 const DB_TYPE = process.env.DB_TYPE || 'sqlite';
 let pool = null;
 
+// Helper функция для проверки инициализации pool
+function requirePool() {
+  if (DB_TYPE !== 'postgres') {
+    throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
+  }
+  if (!pool) {
+    throw new Error('Pool PostgreSQL не инициализирован');
+  }
+}
+
 // Инициализация подключения к PostgreSQL
 if (DB_TYPE === 'postgres') {
   console.log('Инициализация подключения к PostgreSQL...');
@@ -28,14 +38,7 @@ if (DB_TYPE === 'postgres') {
     process.exit(-1);
   });
   
-  // Проверка подключения
-  pool.query('SELECT NOW()')
-    .then(() => {
-      console.log('Подключение к PostgreSQL установлено');
-    })
-    .catch((err) => {
-      console.error('Ошибка подключения к PostgreSQL:', err);
-    });
+  // Проверка подключения будет выполнена в initDatabase()
 }
 
 // Инициализация БД (создание таблиц)
@@ -131,33 +134,25 @@ async function initDatabase() {
 // Функции для работы с пользователями
 const users = {
   getAll: async () => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     const result = await pool.query('SELECT * FROM users');
     return result.rows;
   },
 
   getById: async (id) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     return result.rows[0] || null;
   },
 
   getByUsername: async (username) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
     return result.rows[0] || null;
   },
 
   create: async (userData) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     const { username, email, password, role, isActive, salonName, salonAddress, salonLat, salonLng } = userData;
     
     // Валидация
@@ -187,9 +182,7 @@ const users = {
   },
 
   update: async (id, userData) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     const updates = [];
     const values = [];
     let paramIndex = 1;
@@ -231,9 +224,7 @@ const users = {
   },
 
   delete: async (id) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     await pool.query('DELETE FROM users WHERE id = $1', [id]);
   }
 };
@@ -241,17 +232,13 @@ const users = {
 // Функции для работы с услугами
 const services = {
   getByUserId: async (userId) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     const result = await pool.query('SELECT * FROM services WHERE user_id = $1 ORDER BY id', [userId]);
     return result.rows;
   },
 
   setForUser: async (userId, servicesList) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     if (!Array.isArray(servicesList)) {
       throw new Error('servicesList должен быть массивом');
     }
@@ -295,17 +282,13 @@ const services = {
 // Функции для работы с мастерами
 const masters = {
   getByUserId: async (userId) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     const result = await pool.query('SELECT * FROM masters WHERE user_id = $1 ORDER BY id', [userId]);
     return result.rows;
   },
 
   setForUser: async (userId, mastersList) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     if (!Array.isArray(mastersList)) {
       throw new Error('mastersList должен быть массивом');
     }
@@ -343,25 +326,25 @@ const masters = {
 // Функции для работы с записями
 const bookings = {
   getAll: async () => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     const result = await pool.query('SELECT * FROM bookings ORDER BY created_at DESC');
     return result.rows;
   },
 
   getByUserId: async (userId) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     const result = await pool.query('SELECT * FROM bookings WHERE user_id = $1 ORDER BY date, time', [userId]);
     return result.rows;
   },
 
+  getByUserIdAndDate: async (userId, date) => {
+    requirePool();
+    const result = await pool.query('SELECT * FROM bookings WHERE user_id = $1 AND date = $2 ORDER BY time', [userId, date]);
+    return result.rows;
+  },
+
   create: async (bookingData) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     const { userId, name, phone, service, master, date, time, endTime, comment } = bookingData;
     const result = await pool.query(`
       INSERT INTO bookings (user_id, name, phone, service, master, date, time, end_time, comment)
@@ -382,17 +365,13 @@ const bookings = {
   },
 
   getById: async (id) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     const result = await pool.query('SELECT * FROM bookings WHERE id = $1', [id]);
     return result.rows[0] || null;
   },
 
   update: async (id, bookingData) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     const { name, phone, service, master, date, time, endTime, comment } = bookingData;
     
     const updates = [];
@@ -442,16 +421,12 @@ const bookings = {
   },
 
   delete: async (id) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     await pool.query('DELETE FROM bookings WHERE id = $1', [id]);
   },
 
   deleteByUserId: async (userId) => {
-    if (DB_TYPE !== 'postgres') {
-      throw new Error('PostgreSQL не настроен. Установите DB_TYPE=postgres');
-    }
+    requirePool();
     await pool.query('DELETE FROM bookings WHERE user_id = $1', [userId]);
   }
 };

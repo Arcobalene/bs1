@@ -13,6 +13,7 @@
   <div class="nav-links">
     <a href="/" id="salon-page-link">Страница салона</a>
     <a href="/calendar">Календарь</a>
+    <a href="/clients">Клиенты</a>
     <a href="/users" id="users-link">Пользователи</a>
     <a href="#" id="logout-link">Выход</a>
   </div>
@@ -750,7 +751,7 @@
       });
       
       return `
-        <div class="notification-item ${notif.read ? '' : 'unread'}" data-id="${notif.id}">
+        <div class="notification-item ${notif.read ? '' : 'unread'}" data-id="${notif.id}" data-booking-id="${notif.bookingId || ''}">
           <div class="notification-item-icon" style="color: ${iconColors[notif.type] || iconColors.success}">
             ${icons[notif.type] || icons.success}
           </div>
@@ -877,7 +878,7 @@
   updateNotificationsBadge();
   
   // Проверка новых записей каждые 30 секунд
-  let lastBookingCount = 0;
+  let knownBookingIds = new Set(); // Множество ID записей, которые мы уже видели
   let lastBookingCheck = Date.now();
   
   async function checkNewBookings() {
@@ -885,13 +886,22 @@
       const bookingsRes = await fetch('/api/bookings');
       const bookingsResult = await bookingsRes.json();
       
-      if (bookingsResult.success) {
-        const currentCount = bookingsResult.bookings.length;
+      if (bookingsResult.success && bookingsResult.bookings) {
+        const currentBookings = bookingsResult.bookings;
         
-        // Если количество записей увеличилось и прошло больше 5 секунд с последней проверки
-        if (currentCount > lastBookingCount && lastBookingCount > 0 && (Date.now() - lastBookingCheck) > 5000) {
-          const newBookings = bookingsResult.bookings.slice(0, currentCount - lastBookingCount);
-          
+        // Находим новые записи (те, которых нет в knownBookingIds)
+        const newBookings = currentBookings.filter(booking => {
+          const bookingId = String(booking.id);
+          if (!knownBookingIds.has(bookingId)) {
+            knownBookingIds.add(bookingId);
+            return true;
+          }
+          return false;
+        });
+        
+        // Показываем уведомления только для действительно новых записей
+        // и только если прошло больше 2 секунд с последней проверки (чтобы не показывать при первой загрузке)
+        if (newBookings.length > 0 && (Date.now() - lastBookingCheck) > 2000) {
           newBookings.forEach(booking => {
             const date = new Date(booking.date);
             const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
@@ -904,7 +914,6 @@
           });
         }
         
-        lastBookingCount = currentCount;
         lastBookingCheck = Date.now();
       }
     } catch (error) {
@@ -912,13 +921,16 @@
     }
   }
   
-  // Инициализируем счетчик после загрузки данных
+  // Инициализируем список известных записей после загрузки данных
   setTimeout(async () => {
     try {
       const bookingsRes = await fetch('/api/bookings');
       const bookingsResult = await bookingsRes.json();
-      if (bookingsResult.success) {
-        lastBookingCount = bookingsResult.bookings.length;
+      if (bookingsResult.success && bookingsResult.bookings) {
+        // Сохраняем ID всех текущих записей как уже известные
+        bookingsResult.bookings.forEach(booking => {
+          knownBookingIds.add(String(booking.id));
+        });
         // Проверяем новые записи каждые 30 секунд
         setInterval(checkNewBookings, 30000);
       }

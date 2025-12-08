@@ -63,7 +63,7 @@
         <div class="form-row">
           <div>
             <label for="date">Дата *</label>
-            <input id="date" type="date" name="date" required />
+            <input id="date" type="date" name="date" required min="" />
           </div>
           <div>
             <label for="time-slot">Время *</label>
@@ -123,8 +123,21 @@
   let serviceDurations = {};
   const busyIntervals = {};
 
+  // Установка минимальной даты (сегодня)
+  function setMinDate() {
+    const dateInput = document.getElementById('date');
+    if (dateInput) {
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+      dateInput.setAttribute('min', todayStr);
+    }
+  }
+
   // Загрузка услуг и мастеров
   async function loadData() {
+    // Устанавливаем минимальную дату
+    setMinDate();
+    
     if (!userId) {
       // Если userId не указан, показываем сообщение
       const servicesListEl = document.getElementById("services-list");
@@ -437,6 +450,10 @@
       return;
     }
 
+    // Получаем выбранного мастера
+    const masterSelect = document.getElementById("master");
+    const selectedMaster = masterSelect ? masterSelect.value : '';
+
     // Загружаем актуальные записи из базы данных для выбранной даты
     let busy = [];
     if (userId) {
@@ -444,7 +461,16 @@
         const bookingsRes = await fetch(`/api/bookings/${userId}?date=${date}`);
         const bookingsResult = await bookingsRes.json();
         if (bookingsResult.success && bookingsResult.bookings) {
-          busy = bookingsResult.bookings.map(booking => {
+          // Фильтруем записи по мастеру: если выбран мастер, показываем только его записи
+          // Если мастер не выбран, показываем все записи (для "Любой мастер")
+          const filteredBookings = selectedMaster && selectedMaster.trim() !== ''
+            ? bookingsResult.bookings.filter(booking => {
+                // Учитываем записи выбранного мастера или записи без мастера (если мастер не указан)
+                return booking.master === selectedMaster || !booking.master || booking.master.trim() === '';
+              })
+            : bookingsResult.bookings;
+          
+          busy = filteredBookings.map(booking => {
             const start = timeToMinutes(booking.time);
             const end = booking.endTime ? timeToMinutes(booking.endTime) : (start + 60);
             return [start, end].filter(v => v !== null);
@@ -632,6 +658,8 @@
 
   if (serviceSelect) serviceSelect.addEventListener("change", generateSlots);
   if (dateInput) dateInput.addEventListener("change", generateSlots);
+  const masterSelect = document.getElementById("master");
+  if (masterSelect) masterSelect.addEventListener("change", generateSlots);
   if (timeSelect) timeSelect.addEventListener("change", updateDurationHint);
 
   // Загружаем данные при загрузке страницы

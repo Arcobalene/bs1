@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Клиенты — Beauty Studio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header>
+  <h1>Beauty Studio</h1>
+  <p>База клиентов</p>
+  <div class="nav-links">
+    <a href="/" id="salon-page-link">Страница салона</a>
+    <a href="/admin">Админ-панель</a>
+    <a href="/calendar">Календарь</a>
+    <a href="/users" id="users-link" style="display: none;">Пользователи</a>
+    <a href="#" id="logout-link">Выход</a>
+  </div>
+</header>
+
+<div class="container">
+  <div id="impersonation-banner" class="card" style="background: #fef3c7; border: 2px solid #fbbf24; margin-bottom: 16px; display: none;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <strong>⚠️ Вы вошли под пользователем: <span id="impersonated-user"></span></strong>
+        <p style="margin: 4px 0 0 0; font-size: 0.85rem;">Оригинальный аккаунт: <span id="original-user"></span></p>
+      </div>
+      <button id="restore-account" class="btn-secondary" style="margin: 0;">Вернуться к своему аккаунту</button>
+    </div>
+  </div>
+
+  <div class="user-info">
+    <h3 id="user-name">Загрузка...</h3>
+    <p id="user-email"></p>
+  </div>
+
+  <div class="card">
+    <h2>База клиентов</h2>
+    <p class="description">Список всех клиентов, которые делали записи в вашем салоне.</p>
+
+    <div style="margin-bottom: 16px;">
+      <input type="text" id="clients-search" placeholder="Поиск по имени или телефону..." style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1rem;" />
+    </div>
+
+    <div id="clients-stats" style="margin-bottom: 16px; padding: 12px; background: #f3f4f6; border-radius: 8px;">
+      <strong>Всего клиентов: <span id="total-clients">0</span></strong>
+    </div>
+
+    <div id="clients-list" style="margin-top: 16px;">
+      <p style="text-align: center; color: #6b7280;">Загрузка...</p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  © 2025 Beauty Studio. Все права защищены.
+</footer>
+
+<script>
+  let currentUser = null;
+  let allClients = [];
+  let filteredClients = [];
+
+  async function loadData() {
+    try {
+      const userRes = await fetch('/api/user');
+      const userResult = await userRes.json();
+      if (!userResult.success) {
+        window.location.href = '/login';
+        return;
+      }
+
+      currentUser = userResult.user;
+      
+      document.getElementById('user-name').textContent = `Добро пожаловать, ${currentUser.username}!`;
+      document.getElementById('user-email').textContent = currentUser.email || 'Email не указан';
+      
+      // Обновляем ссылку "Страница салона" в навигации
+      const salonPageLink = document.getElementById('salon-page-link');
+      if (salonPageLink) {
+        salonPageLink.href = `/?userId=${currentUser.id}`;
+      }
+      
+      // Показываем ссылку на управление пользователями только для админов
+      const usersLink = document.getElementById('users-link');
+      const isAdmin = currentUser.role === 'admin' || currentUser.username === 'admin';
+      if (usersLink && isAdmin) {
+        usersLink.style.display = 'inline-block';
+      } else if (usersLink) {
+        usersLink.style.display = 'none';
+      }
+
+      // Проверяем impersonation
+      if (currentUser.isImpersonating) {
+        document.getElementById('impersonation-banner').style.display = 'block';
+        document.getElementById('impersonated-user').textContent = currentUser.username;
+        document.getElementById('original-user').textContent = currentUser.originalUsername || 'admin';
+      }
+
+      await loadClients();
+    } catch (error) {
+      console.error('Ошибка загрузки данных:', error);
+      window.location.href = '/login';
+    }
+  }
+
+  async function loadClients() {
+    try {
+      const response = await fetch('/api/clients');
+      const result = await response.json();
+      
+      if (result.success) {
+        allClients = result.clients;
+        filteredClients = allClients;
+        renderClients();
+        updateStats();
+      } else {
+        document.getElementById('clients-list').innerHTML = '<p style="text-align: center; color: #ef4444;">Ошибка загрузки клиентов</p>';
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки клиентов:', error);
+      document.getElementById('clients-list').innerHTML = '<p style="text-align: center; color: #ef4444;">Ошибка загрузки клиентов</p>';
+    }
+  }
+
+  function updateStats() {
+    document.getElementById('total-clients').textContent = filteredClients.length;
+  }
+
+  function renderClients() {
+    const list = document.getElementById('clients-list');
+    if (!list) return;
+
+    if (filteredClients.length === 0) {
+      list.innerHTML = '<p style="text-align: center; color: #6b7280;">Клиенты не найдены</p>';
+      return;
+    }
+
+    list.innerHTML = filteredClients.map(client => {
+      const lastBooking = client.lastBooking;
+      const lastBookingDate = lastBooking ? new Date(lastBooking.date).toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      }) : '—';
+      const lastBookingTime = lastBooking ? lastBooking.time : '—';
+
+      return `
+        <div class="client-card" style="
+          padding: 16px;
+          background: #ffffff;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          margin-bottom: 12px;
+          transition: box-shadow 0.2s;
+        " onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow='none'">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <div style="
+                  width: 48px;
+                  height: 48px;
+                  border-radius: 50%;
+                  background: linear-gradient(135deg, #f973b6, #a855f7);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  color: white;
+                  font-weight: 600;
+                  font-size: 1.2rem;
+                  flex-shrink: 0;
+                ">${client.name.charAt(0).toUpperCase()}</div>
+                <div>
+                  <div style="font-weight: 600; font-size: 1.1rem; color: #1f2937; margin-bottom: 4px;">${client.name}</div>
+                  <div style="color: #6b7280; font-size: 0.9rem;">📞 ${client.phone}</div>
+                </div>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+                <div>
+                  <div style="font-size: 0.85rem; color: #6b7280; margin-bottom: 4px;">Всего записей</div>
+                  <div style="font-weight: 600; color: #1f2937; font-size: 1.1rem;">${client.totalBookings}</div>
+                </div>
+                <div>
+                  <div style="font-size: 0.85rem; color: #6b7280; margin-bottom: 4px;">Последняя запись</div>
+                  <div style="font-weight: 600; color: #1f2937; font-size: 0.95rem;">${lastBookingDate}</div>
+                  <div style="font-size: 0.85rem; color: #6b7280;">${lastBookingTime}</div>
+                </div>
+                ${lastBooking ? `
+                <div>
+                  <div style="font-size: 0.85rem; color: #6b7280; margin-bottom: 4px;">Последняя услуга</div>
+                  <div style="font-weight: 600; color: #1f2937; font-size: 0.95rem;">${lastBooking.service || '—'}</div>
+                </div>
+                ` : ''}
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 16px;">
+              <button class="btn-secondary" onclick="viewClientBookings('${client.phone}')" style="white-space: nowrap; font-size: 0.9rem;">
+                Просмотр записей
+              </button>
+              <a href="tel:${client.phone}" class="btn-primary" style="text-decoration: none; text-align: center; white-space: nowrap; font-size: 0.9rem;">
+                📞 Позвонить
+              </a>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function viewClientBookings(phone) {
+    window.location.href = `/calendar?clientPhone=${encodeURIComponent(phone)}`;
+  }
+
+  // Поиск
+  document.getElementById('clients-search')?.addEventListener('input', (e) => {
+    const searchTerm = e.target.value.toLowerCase().trim();
+    if (searchTerm === '') {
+      filteredClients = allClients;
+    } else {
+      filteredClients = allClients.filter(client => 
+        client.name.toLowerCase().includes(searchTerm) ||
+        client.phone.includes(searchTerm)
+      );
+    }
+    renderClients();
+    updateStats();
+  });
+
+  // Выход
+  document.getElementById('logout-link')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    await fetch('/api/logout', { method: 'POST' });
+    window.location.href = '/login';
+  });
+
+  // Восстановление аккаунта
+  document.getElementById('restore-account')?.addEventListener('click', async () => {
+    try {
+      const response = await fetch('/api/users/restore', { method: 'POST' });
+      const result = await response.json();
+      if (result.success) {
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Ошибка восстановления аккаунта:', error);
+    }
+  });
+
+  // Загружаем данные при загрузке страницы
+  loadData();
+</script>
+</body>
+</html>
+

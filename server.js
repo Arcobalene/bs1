@@ -3,6 +3,16 @@ const session = require('express-session');
 const bcrypt = require('bcrypt');
 const path = require('path');
 const { users: dbUsers, services, masters, bookings, migrateFromJSON } = require('./database');
+const { 
+  timeToMinutes, 
+  formatTime, 
+  formatDate, 
+  checkTimeOverlap, 
+  validatePhone, 
+  validateUsername, 
+  validatePassword,
+  formatBooking 
+} = require('./utils');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,27 +38,16 @@ app.use(session({
   }
 }));
 
-// Логирование сессий для отладки
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api/login') || req.path.startsWith('/admin')) {
-    console.log(`[${req.method} ${req.path}] Session ID: ${req.sessionID}, userId: ${req.session.userId}`);
-    console.log(`Cookie заголовок в запросе: ${req.headers.cookie || 'нет'}`);
-  }
-  next();
-});
-
-// Middleware для логирования Set-Cookie после сохранения сессии
-app.use((req, res, next) => {
-  const originalEnd = res.end;
-  res.end = function(...args) {
-    if (req.path.startsWith('/api/login') && res.statusCode === 200) {
-      const setCookieHeader = res.getHeader('Set-Cookie');
-      console.log(`Set-Cookie заголовок в ответе: ${setCookieHeader ? (Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : setCookieHeader) : 'не установлен'}`);
+// Логирование только в режиме разработки
+const isDevelopment = process.env.NODE_ENV !== 'production';
+if (isDevelopment) {
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/login') || req.path.startsWith('/admin')) {
+      console.log(`[${req.method} ${req.path}] Session ID: ${req.sessionID}, userId: ${req.session.userId}`);
     }
-    originalEnd.apply(res, args);
-  };
-  next();
-});
+    next();
+  });
+}
 
 // База данных инициализирована в database.js
 // Импортируем функцию инициализации
@@ -117,31 +116,23 @@ async function initDemoAccount() {
 
 // Middleware для проверки авторизации
 async function requireAuth(req, res, next) {
-  console.log(`requireAuth: session.userId = ${req.session.userId}`);
   if (req.session.userId) {
     try {
-      // Проверяем, не заблокирован ли пользователь
       const user = await dbUsers.getById(req.session.userId);
-      console.log(`requireAuth: пользователь найден:`, user ? user.username : 'не найден');
       if (!user) {
-        console.log('requireAuth: пользователь не найден в БД, удаляем сессию');
         req.session.destroy();
         return res.redirect('/login');
       }
       if (user.is_active === false || user.is_active === 0) {
-        console.log('requireAuth: пользователь заблокирован');
         req.session.destroy();
         return res.redirect('/login');
       }
-      console.log('requireAuth: авторизация успешна');
       next();
     } catch (error) {
       console.error('Ошибка проверки авторизации:', error);
-      console.error('Stack:', error.stack);
       res.redirect('/login');
     }
   } else {
-    console.log('requireAuth: нет session.userId, редирект на /login');
     res.redirect('/login');
   }
 }
@@ -211,31 +202,35 @@ app.get('/users', requireAuth, requireAdmin, (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'users.html'));
 });
 
+// Страница клиентов
+app.get('/clients', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'clients.html'));
+});
+
 // API: Регистрация
 app.post('/api/register', async (req, res) => {
   try {
     const { username, password, email } = req.body;
     
-    if (!username || !password) {
-      return res.status(400).json({ success: false, message: 'Заполните все поля' });
+    // Валидация
+    const usernameValidation = validateUsername(username);
+    if (!usernameValidation.valid) {
+      return res.status(400).json({ success: false, message: usernameValidation.message });
     }
 
-    if (username.length < 3 || username.length > 30) {
-      return res.status(400).json({ success: false, message: 'Логин должен быть от 3 до 30 символов' });
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ success: false, message: passwordValidation.message });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ success: false, message: 'Пароль должен содержать минимум 6 символов' });
-    }
-
-    const existingUser = await dbUsers.getByUsername(username);
+    const existingUser = await dbUsers.getByUsername(usernameValidation.username);
     if (existingUser) {
       return res.status(409).json({ success: false, message: 'Пользователь с таким именем уже существует' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const userId = await dbUsers.create({
-      username: username.trim(),
+      username: usernameValidation.username,
       email: email ? email.trim() : '',
       password: hashedPassword,
       role: 'user',
@@ -278,16 +273,11 @@ app.post('/api/login', async (req, res) => {
     }
 
     const trimmedUsername = username.trim();
-    console.log(`Попытка входа: ${trimmedUsername}`);
-    
     const user = await dbUsers.getByUsername(trimmedUsername);
     
     if (!user) {
-      console.log(`Пользователь ${trimmedUsername} не найден`);
       return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
     }
-
-    console.log(`Пользователь найден: ${user.username}, активен: ${user.is_active}`);
 
     // Проверяем, не заблокирован ли пользователь
     if (user.is_active === false || user.is_active === 0) {
@@ -296,14 +286,11 @@ app.post('/api/login', async (req, res) => {
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      console.log(`Неверный пароль для пользователя ${trimmedUsername}`);
       return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
     }
 
-    console.log(`Успешный вход: ${trimmedUsername}, ID: ${user.id}`);
     req.session.userId = user.id;
-    req.session.originalUserId = req.session.originalUserId || user.id; // Для impersonation
-    console.log(`Сессия установлена: userId=${req.session.userId}, originalUserId=${req.session.originalUserId}, Session ID: ${req.sessionID}`);
+    req.session.originalUserId = req.session.originalUserId || user.id;
     
     // Явно сохраняем сессию перед отправкой ответа
     await new Promise((resolve, reject) => {
@@ -312,7 +299,6 @@ app.post('/api/login', async (req, res) => {
           console.error('Ошибка сохранения сессии:', err);
           return reject(err);
         }
-        console.log(`Сессия сохранена успешно. Session ID: ${req.sessionID}`);
         resolve();
       });
     });
@@ -320,8 +306,7 @@ app.post('/api/login', async (req, res) => {
     res.json({ success: true, message: 'Вход выполнен' });
   } catch (error) {
     console.error('Ошибка входа:', error);
-    console.error('Stack:', error.stack);
-    res.status(500).json({ success: false, message: 'Ошибка сервера при входе: ' + error.message });
+    res.status(500).json({ success: false, message: 'Ошибка сервера при входе' });
   }
 });
 
@@ -436,7 +421,7 @@ app.post('/api/salon', requireAuth, async (req, res) => {
 // API: Получить информацию о салоне (публичный доступ)
 app.get('/api/salon/:userId', async (req, res) => {
   try {
-    const user = await dbUsers.getById(parseInt(req.params.userId));
+    const user = await dbUsers.getById(parseInt(req.params.userId, 10));
     if (!user) {
       return res.json({ success: false, salon: null });
     }
@@ -458,7 +443,7 @@ app.get('/api/salon/:userId', async (req, res) => {
 // API: Получить услуги (публичный доступ)
 app.get('/api/services/:userId', async (req, res) => {
   try {
-    const user = await dbUsers.getById(parseInt(req.params.userId));
+    const user = await dbUsers.getById(parseInt(req.params.userId, 10));
     if (!user) {
       return res.json({ success: false, services: [] });
     }
@@ -473,7 +458,7 @@ app.get('/api/services/:userId', async (req, res) => {
 // API: Получить мастеров (публичный доступ)
 app.get('/api/masters/:userId', async (req, res) => {
   try {
-    const user = await dbUsers.getById(parseInt(req.params.userId));
+    const user = await dbUsers.getById(parseInt(req.params.userId, 10));
     if (!user) {
       return res.json({ success: false, masters: [] });
     }
@@ -485,19 +470,50 @@ app.get('/api/masters/:userId', async (req, res) => {
   }
 });
 
-// Функция для проверки пересечения времени
-function timeToMinutes(timeStr) {
-  if (!timeStr) return null;
-  const parts = timeStr.split(':');
-  if (parts.length < 2) return null;
-  const h = parseInt(parts[0]);
-  const m = parseInt(parts[1]);
-  if (isNaN(h) || isNaN(m)) return null;
-  return h * 60 + m;
-}
+// Функция для проверки доступности времени (вынесена для переиспользования)
+async function checkBookingAvailability(userId, date, time, endTime, master, excludeBookingId = null) {
+  const existingBookings = await bookings.getByUserId(userId);
+  const bookingsOnDate = existingBookings.filter(b => {
+    if (b.date !== date) return false;
+    if (excludeBookingId && b.id === excludeBookingId) return false;
+    return true;
+  });
 
-function checkTimeOverlap(start1, end1, start2, end2) {
-  return start1 < end2 && end1 > start2;
+  const requestedStart = timeToMinutes(time);
+  const requestedEnd = endTime ? timeToMinutes(endTime) : (requestedStart + 60);
+
+  if (requestedStart === null || requestedEnd === null) {
+    return { available: false, message: 'Некорректный формат времени' };
+  }
+
+  for (const booking of bookingsOnDate) {
+    const bookingStart = timeToMinutes(booking.time);
+    const bookingEnd = booking.end_time ? timeToMinutes(booking.end_time) : (bookingStart + 60);
+    
+    if (bookingStart === null || bookingEnd === null) continue;
+
+    // Если указан мастер, проверяем только записи этого мастера или без мастера
+    if (master && master.trim() !== '') {
+      if (booking.master && booking.master.trim() !== '' && booking.master !== master) {
+        continue;
+      }
+    }
+
+    if (checkTimeOverlap(requestedStart, requestedEnd, bookingStart, bookingEnd)) {
+      return {
+        available: false,
+        message: 'Это время уже занято',
+        conflictingBooking: {
+          name: booking.name,
+          time: booking.time,
+          endTime: booking.end_time,
+          master: booking.master
+        }
+      };
+    }
+  }
+
+  return { available: true };
 }
 
 // API: Проверить доступность времени
@@ -509,54 +525,24 @@ app.post('/api/bookings/check-availability', async (req, res) => {
       return res.status(400).json({ success: false, available: false, message: 'Не указаны обязательные параметры' });
     }
 
-    const userIdInt = parseInt(userId);
+    const userIdInt = parseInt(userId, 10);
     const user = await dbUsers.getById(userIdInt);
     if (isNaN(userIdInt) || !user) {
       return res.status(400).json({ success: false, available: false, message: 'Некорректный ID пользователя' });
     }
 
-    // Получаем все записи на эту дату
-    const existingBookings = await bookings.getByUserId(userIdInt);
-    const bookingsOnDate = existingBookings.filter(b => b.date === date);
-
-    const requestedStart = timeToMinutes(time);
-    const requestedEnd = endTime ? timeToMinutes(endTime) : (requestedStart + 60); // Если endTime не указан, считаем 1 час
-
-    if (requestedStart === null || requestedEnd === null) {
-      return res.status(400).json({ success: false, available: false, message: 'Некорректный формат времени' });
+    const availability = await checkBookingAvailability(userIdInt, date, time, endTime, master);
+    
+    if (availability.available) {
+      return res.json({ success: true, available: true });
+    } else {
+      return res.json({ 
+        success: true, 
+        available: false, 
+        message: availability.message,
+        conflictingBooking: availability.conflictingBooking
+      });
     }
-
-    // Проверяем пересечения
-    for (const booking of bookingsOnDate) {
-      const bookingStart = timeToMinutes(booking.time);
-      const bookingEnd = booking.end_time ? timeToMinutes(booking.end_time) : (bookingStart + 60);
-      
-      if (bookingStart === null || bookingEnd === null) continue;
-
-      // Если указан мастер, проверяем только записи этого мастера или без мастера
-      if (master && master.trim() !== '') {
-        if (booking.master && booking.master.trim() !== '' && booking.master !== master) {
-          continue; // Это запись другого мастера, пропускаем
-        }
-      }
-
-      // Проверяем пересечение
-      if (checkTimeOverlap(requestedStart, requestedEnd, bookingStart, bookingEnd)) {
-        return res.json({ 
-          success: true, 
-          available: false, 
-          message: 'Это время уже занято',
-          conflictingBooking: {
-            name: booking.name,
-            time: booking.time,
-            endTime: booking.end_time,
-            master: booking.master
-          }
-        });
-      }
-    }
-
-    return res.json({ success: true, available: true });
   } catch (error) {
     console.error('Ошибка проверки доступности:', error);
     res.status(500).json({ success: false, available: false, message: 'Ошибка сервера при проверке доступности' });
@@ -573,54 +559,34 @@ app.post('/api/bookings', async (req, res) => {
     }
 
     // Валидация данных
-    const phoneDigits = phone.replace(/\D/g, '');
-    if (phoneDigits.length < 9) {
-      return res.status(400).json({ success: false, message: 'Некорректный номер телефона' });
+    const phoneValidation = validatePhone(phone);
+    if (!phoneValidation.valid) {
+      return res.status(400).json({ success: false, message: phoneValidation.message });
     }
 
-    const userIdInt = parseInt(userId);
+    // Проверка, что дата не в прошлом
+    const bookingDate = new Date(date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    bookingDate.setHours(0, 0, 0, 0);
+    if (bookingDate < today) {
+      return res.status(400).json({ success: false, message: 'Нельзя создать запись на прошедшую дату' });
+    }
+
+    const userIdInt = parseInt(userId, 10);
     const user = await dbUsers.getById(userIdInt);
     if (isNaN(userIdInt) || !user) {
       return res.status(400).json({ success: false, message: 'Некорректный ID пользователя' });
     }
 
     // Проверяем доступность времени перед созданием записи
-    const requestedStart = timeToMinutes(time);
-    const requestedEnd = endTime ? timeToMinutes(endTime) : (requestedStart + 60);
-    
-    if (requestedStart === null || requestedEnd === null) {
-      return res.status(400).json({ success: false, message: 'Некорректный формат времени' });
-    }
-
-    const existingBookings = await bookings.getByUserId(userIdInt);
-    const bookingsOnDate = existingBookings.filter(b => b.date === date);
-
-    for (const booking of bookingsOnDate) {
-      const bookingStart = timeToMinutes(booking.time);
-      const bookingEnd = booking.end_time ? timeToMinutes(booking.end_time) : (bookingStart + 60);
-      
-      if (bookingStart === null || bookingEnd === null) continue;
-
-      // Если указан мастер, проверяем только записи этого мастера или без мастера
-      if (master && master.trim() !== '') {
-        if (booking.master && booking.master.trim() !== '' && booking.master !== master) {
-          continue; // Это запись другого мастера, пропускаем
-        }
-      }
-
-      // Проверяем пересечение
-      if (checkTimeOverlap(requestedStart, requestedEnd, bookingStart, bookingEnd)) {
-        return res.status(409).json({ 
-          success: false, 
-          message: 'Это время уже занято. Пожалуйста, выберите другое время.',
-          conflictingBooking: {
-            name: booking.name,
-            time: booking.time,
-            endTime: booking.end_time,
-            master: booking.master
-          }
-        });
-      }
+    const availability = await checkBookingAvailability(userIdInt, date, time, endTime, master);
+    if (!availability.available) {
+      return res.status(409).json({ 
+        success: false, 
+        message: availability.message + '. Пожалуйста, выберите другое время.',
+        conflictingBooking: availability.conflictingBooking
+      });
     }
 
     const bookingId = await bookings.create({
@@ -642,35 +608,11 @@ app.post('/api/bookings', async (req, res) => {
   }
 });
 
-// Функция для форматирования времени и даты
-function formatTime(timeStr) {
-  if (!timeStr) return null;
-  if (timeStr.length > 5) {
-    return timeStr.substring(0, 5);
-  }
-  return timeStr;
-}
-
-function formatDate(dateValue) {
-  if (!dateValue) return null;
-  if (dateValue instanceof Date) {
-    const y = dateValue.getFullYear();
-    const m = String(dateValue.getMonth() + 1).padStart(2, '0');
-    const d = String(dateValue.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
-  if (typeof dateValue === 'string') {
-    if (/^\d{4}-\d{2}-\d{2}/.test(dateValue)) {
-      return dateValue.substring(0, 10);
-    }
-  }
-  return dateValue;
-}
 
 // API: Получить записи пользователя (публичный доступ для конкретного пользователя)
 app.get('/api/bookings/:userId', async (req, res) => {
   try {
-    const userId = parseInt(req.params.userId);
+    const userId = parseInt(req.params.userId, 10);
     const date = req.query.date; // Опциональный фильтр по дате
     
     if (isNaN(userId)) {
@@ -686,19 +628,7 @@ app.get('/api/bookings/:userId', async (req, res) => {
     }
     
     // Преобразуем snake_case в camelCase для совместимости с фронтендом
-    const formattedBookings = filteredBookings.map(booking => ({
-      id: booking.id,
-      userId: booking.user_id,
-      name: booking.name,
-      phone: booking.phone,
-      service: booking.service,
-      master: booking.master,
-      date: formatDate(booking.date),
-      time: formatTime(booking.time),
-      endTime: formatTime(booking.end_time),
-      comment: booking.comment,
-      createdAt: booking.created_at
-    }));
+    const formattedBookings = filteredBookings.map(formatBooking);
     
     res.json({ success: true, bookings: formattedBookings });
   } catch (error) {
@@ -712,19 +642,7 @@ app.get('/api/bookings', requireAuth, async (req, res) => {
   try {
     const userBookings = await bookings.getByUserId(req.session.userId);
     // Преобразуем snake_case в camelCase для совместимости с фронтендом
-    const formattedBookings = userBookings.map(booking => ({
-      id: booking.id,
-      userId: booking.user_id,
-      name: booking.name,
-      phone: booking.phone,
-      service: booking.service,
-      master: booking.master,
-      date: formatDate(booking.date),
-      time: formatTime(booking.time),
-      endTime: formatTime(booking.end_time),
-      comment: booking.comment,
-      createdAt: booking.created_at
-    }));
+    const formattedBookings = userBookings.map(formatBooking);
     res.json({ success: true, bookings: formattedBookings });
   } catch (error) {
     console.error('Ошибка получения записей:', error);
@@ -735,7 +653,7 @@ app.get('/api/bookings', requireAuth, async (req, res) => {
 // API: Обновить запись
 app.put('/api/bookings/:id', requireAuth, async (req, res) => {
   try {
-    const bookingId = parseInt(req.params.id);
+    const bookingId = parseInt(req.params.id, 10);
     const { name, phone, service, master, date, time, endTime, comment } = req.body;
 
     if (isNaN(bookingId)) {
@@ -752,49 +670,46 @@ app.put('/api/bookings/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Нет доступа к этой записи' });
     }
 
+    // Проверка, что дата не в прошлом (если изменяется)
+    if (date && date !== existingBooking.date) {
+      const newBookingDate = new Date(date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      newBookingDate.setHours(0, 0, 0, 0);
+      if (newBookingDate < today) {
+        return res.status(400).json({ success: false, message: 'Нельзя изменить запись на прошедшую дату' });
+      }
+    }
+
     // Если изменяются дата или время, проверяем доступность
     if ((date && date !== existingBooking.date) || (time && time !== existingBooking.time)) {
       const checkDate = date || existingBooking.date;
       const checkTime = time || existingBooking.time;
       const checkEndTime = endTime || existingBooking.end_time;
+      const checkMaster = master !== undefined ? master : existingBooking.master;
 
-      const requestedStart = timeToMinutes(checkTime);
-      const requestedEnd = checkEndTime ? timeToMinutes(checkEndTime) : (requestedStart + 60);
-
-      if (requestedStart === null || requestedEnd === null) {
-        return res.status(400).json({ success: false, message: 'Некорректный формат времени' });
-      }
-
-      const existingBookings = await bookings.getByUserId(req.session.userId);
-      const bookingsOnDate = existingBookings.filter(b => b.date === checkDate && b.id !== bookingId);
-
-      for (const booking of bookingsOnDate) {
-        const bookingStart = timeToMinutes(booking.time);
-        const bookingEnd = booking.end_time ? timeToMinutes(booking.end_time) : (bookingStart + 60);
-
-        if (bookingStart === null || bookingEnd === null) continue;
-
-        const checkMaster = master !== undefined ? master : existingBooking.master;
-        if (checkMaster && checkMaster.trim() !== '') {
-          if (booking.master && booking.master.trim() !== '' && booking.master !== checkMaster) {
-            continue;
-          }
-        }
-
-        if (checkTimeOverlap(requestedStart, requestedEnd, bookingStart, bookingEnd)) {
-          return res.status(409).json({
-            success: false,
-            message: 'Это время уже занято. Пожалуйста, выберите другое время.'
-          });
-        }
+      const availability = await checkBookingAvailability(
+        req.session.userId, 
+        checkDate, 
+        checkTime, 
+        checkEndTime, 
+        checkMaster,
+        bookingId
+      );
+      
+      if (!availability.available) {
+        return res.status(409).json({
+          success: false,
+          message: availability.message + '. Пожалуйста, выберите другое время.'
+        });
       }
     }
 
     // Валидация телефона, если он изменяется
     if (phone !== undefined) {
-      const phoneDigits = phone.replace(/\D/g, '');
-      if (phoneDigits.length < 9) {
-        return res.status(400).json({ success: false, message: 'Некорректный номер телефона' });
+      const phoneValidation = validatePhone(phone);
+      if (!phoneValidation.valid) {
+        return res.status(400).json({ success: false, message: phoneValidation.message });
       }
     }
 
@@ -820,7 +735,7 @@ app.put('/api/bookings/:id', requireAuth, async (req, res) => {
 // API: Удалить запись
 app.delete('/api/bookings/:id', requireAuth, async (req, res) => {
   try {
-    const bookingId = parseInt(req.params.id);
+    const bookingId = parseInt(req.params.id, 10);
 
     if (isNaN(bookingId)) {
       return res.status(400).json({ success: false, message: 'Некорректный ID записи' });
@@ -873,7 +788,7 @@ app.get('/api/users', requireAuth, requireAdmin, async (req, res) => {
 // API: Блокировать/разблокировать пользователя
 app.post('/api/users/:userId/toggle', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const userId = parseInt(req.params.userId);
+    const userId = parseInt(req.params.userId, 10);
     const user = await dbUsers.getById(userId);
     
     if (!user) {
@@ -903,7 +818,7 @@ app.post('/api/users/:userId/toggle', requireAuth, requireAdmin, async (req, res
 // API: Войти под другим пользователем (impersonation)
 app.post('/api/users/:userId/impersonate', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const userId = parseInt(req.params.userId);
+    const userId = parseInt(req.params.userId, 10);
     const targetUser = await dbUsers.getById(userId);
     
     if (!targetUser) {
@@ -942,7 +857,7 @@ app.post('/api/users/restore', requireAuth, requireAdmin, (req, res) => {
 // API: Удалить пользователя
 app.delete('/api/users/:userId', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const userId = parseInt(req.params.userId);
+    const userId = parseInt(req.params.userId, 10);
     
     // Нельзя удалить самого себя
     if (userId === req.session.userId) {
@@ -966,6 +881,76 @@ app.delete('/api/users/:userId', requireAuth, requireAdmin, async (req, res) => 
   } catch (error) {
     console.error('Ошибка удаления пользователя:', error);
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// API: Получить список клиентов
+app.get('/api/clients', requireAuth, async (req, res) => {
+  try {
+    const userBookings = await bookings.getByUserId(req.session.userId);
+    
+    // Группируем записи по уникальной комбинации имя+телефон
+    const clientsMap = new Map();
+    
+    userBookings.forEach(booking => {
+      const key = `${booking.name.trim().toLowerCase()}_${booking.phone.trim()}`;
+      
+      if (!clientsMap.has(key)) {
+        clientsMap.set(key, {
+          name: booking.name.trim(),
+          phone: booking.phone.trim(),
+          bookings: [],
+          totalBookings: 0,
+          lastBooking: null
+        });
+      }
+      
+      const client = clientsMap.get(key);
+      client.bookings.push(booking);
+      client.totalBookings = client.bookings.length;
+      
+      // Находим последнюю запись (по дате и времени)
+      if (!client.lastBooking) {
+        client.lastBooking = booking;
+      } else {
+        const lastDate = new Date(client.lastBooking.date);
+        const currentDate = new Date(booking.date);
+        if (currentDate > lastDate || (currentDate.getTime() === lastDate.getTime() && booking.time > client.lastBooking.time)) {
+          client.lastBooking = booking;
+        }
+      }
+    });
+    
+    // Преобразуем Map в массив и форматируем
+    const clients = Array.from(clientsMap.values()).map(client => ({
+      name: client.name,
+      phone: client.phone,
+      totalBookings: client.totalBookings,
+      lastBooking: client.lastBooking ? {
+        date: formatDate(client.lastBooking.date),
+        time: formatTime(client.lastBooking.time),
+        service: client.lastBooking.service,
+        master: client.lastBooking.master
+      } : null
+    }));
+    
+    // Сортируем по дате последней записи (сначала новые)
+    clients.sort((a, b) => {
+      if (!a.lastBooking && !b.lastBooking) return 0;
+      if (!a.lastBooking) return 1;
+      if (!b.lastBooking) return -1;
+      const dateA = new Date(a.lastBooking.date);
+      const dateB = new Date(b.lastBooking.date);
+      if (dateA.getTime() !== dateB.getTime()) {
+        return dateB - dateA;
+      }
+      return (b.lastBooking.time || '').localeCompare(a.lastBooking.time || '');
+    });
+    
+    res.json({ success: true, clients });
+  } catch (error) {
+    console.error('Ошибка получения клиентов:', error);
+    res.status(500).json({ success: false, clients: [] });
   }
 });
 
