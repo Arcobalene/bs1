@@ -350,6 +350,17 @@ footer {
   background: #f9fafb;
 }
 
+.cal-slot-free {
+  background: #f0fdf4;
+  border: 1px dashed #86efac;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.cal-slot-free:hover {
+  background: #dcfce7;
+  border-color: #4ade80;
+}
+
 .cal-slot-busy {
   background: #fee2e2;
   color: #b91c1c;

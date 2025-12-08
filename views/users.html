@@ -11,6 +11,7 @@
   <h1>Beauty Studio</h1>
   <p>Управление пользователями</p>
   <div class="nav-links">
+    <a href="/" id="salon-page-link">Страница салона</a>
     <a href="/admin">Админ-панель</a>
     <a href="/calendar">Календарь</a>
     <a href="#" id="logout-link">Выход</a>
@@ -73,6 +74,12 @@
 
       document.getElementById('user-name').textContent = `Добро пожаловать, ${currentUser.username}!`;
       document.getElementById('user-email').textContent = currentUser.email || 'Email не указан';
+      
+      // Обновляем ссылку "Страница салона" в навигации
+      const salonPageLink = document.getElementById('salon-page-link');
+      if (salonPageLink && currentUser.id) {
+        salonPageLink.href = `/?userId=${currentUser.id}`;
+      }
       
       // Проверяем права администратора (включая обратную совместимость)
       const isAdmin = currentUser.role === 'admin' || currentUser.username === 'admin';

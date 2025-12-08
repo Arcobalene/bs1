@@ -11,7 +11,7 @@
   <h1>Beauty Studio</h1>
   <p>Панель управления салоном</p>
   <div class="nav-links">
-    <a href="/">Главная</a>
+    <a href="/" id="salon-page-link">Страница салона</a>
     <a href="/calendar">Календарь</a>
     <a href="/users" id="users-link">Пользователи</a>
     <a href="#" id="logout-link">Выход</a>
@@ -150,7 +150,13 @@
 
       document.getElementById('user-name').textContent = `Добро пожаловать, ${currentUser.username}!`;
       document.getElementById('user-email').textContent = currentUser.email || 'Email не указан';
-      document.getElementById('booking-link').textContent = `${window.location.origin}/?userId=${currentUser.id}`;
+      const bookingLink = `${window.location.origin}/?userId=${currentUser.id}`;
+      document.getElementById('booking-link').textContent = bookingLink;
+      // Обновляем ссылку "Страница салона" в навигации
+      const salonPageLink = document.getElementById('salon-page-link');
+      if (salonPageLink) {
+        salonPageLink.href = `/?userId=${currentUser.id}`;
+      }
       
       // Показываем ссылку на управление пользователями только для админов
       const usersLink = document.getElementById('users-link');

@@ -529,7 +529,53 @@ app.post('/api/bookings', async (req, res) => {
 app.get('/api/bookings', requireAuth, async (req, res) => {
   try {
     const userBookings = await bookings.getByUserId(req.session.userId);
-    res.json({ success: true, bookings: userBookings });
+    // Преобразуем snake_case в camelCase для совместимости с фронтендом
+    const formattedBookings = userBookings.map(booking => {
+      // Преобразуем время из формата "HH:MM:SS" в "HH:MM" если нужно
+      const formatTime = (timeStr) => {
+        if (!timeStr) return null;
+        // Если время в формате "HH:MM:SS", обрезаем до "HH:MM"
+        if (timeStr.length > 5) {
+          return timeStr.substring(0, 5);
+        }
+        return timeStr;
+      };
+      
+      // Преобразуем дату в формат YYYY-MM-DD
+      const formatDate = (dateValue) => {
+        if (!dateValue) return null;
+        // Если это Date объект
+        if (dateValue instanceof Date) {
+          const y = dateValue.getFullYear();
+          const m = String(dateValue.getMonth() + 1).padStart(2, '0');
+          const d = String(dateValue.getDate()).padStart(2, '0');
+          return `${y}-${m}-${d}`;
+        }
+        // Если это строка, проверяем формат
+        if (typeof dateValue === 'string') {
+          // Если формат уже YYYY-MM-DD, возвращаем как есть
+          if (/^\d{4}-\d{2}-\d{2}/.test(dateValue)) {
+            return dateValue.substring(0, 10);
+          }
+        }
+        return dateValue;
+      };
+      
+      return {
+        id: booking.id,
+        userId: booking.user_id,
+        name: booking.name,
+        phone: booking.phone,
+        service: booking.service,
+        master: booking.master,
+        date: formatDate(booking.date),
+        time: formatTime(booking.time),
+        endTime: formatTime(booking.end_time), // Преобразуем end_time в endTime
+        comment: booking.comment,
+        createdAt: booking.created_at
+      };
+    });
+    res.json({ success: true, bookings: formattedBookings });
   } catch (error) {
     console.error('Ошибка получения записей:', error);
     res.status(500).json({ success: false, bookings: [] });

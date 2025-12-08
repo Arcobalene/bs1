@@ -11,7 +11,7 @@
   <h1>Beauty Studio</h1>
   <p>Календарь записей</p>
   <div class="nav-links">
-    <a href="/">Главная</a>
+    <a href="/" id="salon-page-link">Страница салона</a>
     <a href="/admin">Админ-панель</a>
     <a href="#" id="logout-link">Выход</a>
   </div>
@@ -47,10 +47,10 @@
 <div id="booking-modal" class="modal-overlay hidden">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title">Запись клиента</div>
+      <div class="modal-title" id="modal-title">Запись клиента</div>
       <button type="button" id="modal-close" class="modal-close">×</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" id="modal-body-view">
       <p><strong>Клиент:</strong> <span id="modal-client-name"></span></p>
       <p><strong>Телефон:</strong> <span id="modal-client-phone"></span></p>
       <p>
@@ -62,6 +62,47 @@
       <p><strong>Комментарий:</strong></p>
       <p id="modal-comment"></p>
     </div>
+    <div class="modal-body" id="modal-body-form" style="display: none;">
+      <form id="new-booking-form">
+        <div>
+          <label for="new-booking-name">Имя клиента *</label>
+          <input type="text" id="new-booking-name" required />
+        </div>
+        <div>
+          <label for="new-booking-phone">Телефон *</label>
+          <input type="tel" id="new-booking-phone" placeholder="+998XX XXX XX XX" required />
+        </div>
+        <div>
+          <label for="new-booking-service">Услуга *</label>
+          <select id="new-booking-service" required>
+            <option value="">Выберите услугу</option>
+          </select>
+        </div>
+        <div>
+          <label for="new-booking-master">Мастер</label>
+          <select id="new-booking-master">
+            <option value="">Любой мастер</option>
+          </select>
+        </div>
+        <div>
+          <label for="new-booking-date">Дата *</label>
+          <input type="date" id="new-booking-date" required />
+        </div>
+        <div>
+          <label for="new-booking-time">Время *</label>
+          <input type="time" id="new-booking-time" required />
+        </div>
+        <div>
+          <label for="new-booking-comment">Комментарий</label>
+          <textarea id="new-booking-comment" rows="3"></textarea>
+        </div>
+        <div id="new-booking-alert" style="display: none; margin-top: 12px;"></div>
+        <div style="display: flex; gap: 8px; margin-top: 16px;">
+          <button type="submit" class="btn-primary">Создать запись</button>
+          <button type="button" class="btn-secondary" id="cancel-booking-form">Отмена</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -72,6 +113,8 @@
 <script>
   let bookings = [];
   let masters = [];
+  let services = [];
+  let currentUser = null;
   let currentWeekStart = null;
   const WEEK_DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
@@ -111,15 +154,39 @@
         return;
       }
 
+      currentUser = userResult.user;
+      
+      // Обновляем ссылку "Страница салона" в навигации
+      const salonPageLink = document.getElementById('salon-page-link');
+      if (salonPageLink && currentUser && currentUser.id) {
+        salonPageLink.href = `/?userId=${currentUser.id}`;
+      }
+
       // Загрузка записей
       const bookingsRes = await fetch('/api/bookings');
       const bookingsResult = await bookingsRes.json();
       if (bookingsResult.success) {
         bookings = bookingsResult.bookings;
+        console.log('Загружено записей:', bookings.length);
+        if (bookings.length > 0) {
+          console.log('Пример записи:', bookings[0]);
+        }
+      } else {
+        console.error('Ошибка загрузки записей:', bookingsResult);
       }
 
       // Загрузка мастеров
-      masters = userResult.user.masters || [];
+      masters = currentUser.masters || [];
+      
+      // Загрузка услуг
+      if (currentUser.id) {
+        const servicesRes = await fetch(`/api/services/${currentUser.id}`);
+        const servicesResult = await servicesRes.json();
+        if (servicesResult.success) {
+          services = servicesResult.services;
+        }
+      }
+      
       renderMasterFilter();
       renderCalendar();
     } catch (error) {
@@ -208,7 +275,10 @@
           if (b.date !== iso) return false;
           if (selectedMaster && b.master !== selectedMaster) return false;
           const startM = timeToMinutes(b.time);
-          const endM = timeToMinutes(b.endTime);
+          if (startM === null) return false;
+          // Если endTime не указан, считаем что запись занимает 1 час
+          const endM = b.endTime ? timeToMinutes(b.endTime) : (startM + 60);
+          if (endM === null) return false;
           const cellStart = hour * 60;
           const cellEnd = (hour + 1) * 60;
           return startM < cellEnd && endM > cellStart;
@@ -227,6 +297,13 @@
             cell.dataset.bookingIndex = String(bookingIndex);
             cell.style.cursor = "pointer";
           }
+        } else {
+          // Свободный слот - можно создать запись
+          cell.classList.add("cal-slot-free");
+          cell.dataset.date = iso;
+          cell.dataset.hour = String(hour);
+          cell.style.cursor = "pointer";
+          cell.title = "Кликните, чтобы создать запись";
         }
 
         grid.appendChild(cell);
@@ -257,7 +334,49 @@
 
   function closeBookingModal() {
     const modal = document.getElementById('booking-modal');
-    if (modal) modal.classList.add("hidden");
+    if (modal) {
+      modal.classList.add("hidden");
+      // Сбрасываем форму
+      document.getElementById('modal-body-view').style.display = 'block';
+      document.getElementById('modal-body-form').style.display = 'none';
+      document.getElementById('new-booking-form').reset();
+      document.getElementById('new-booking-alert').style.display = 'none';
+    }
+  }
+
+  function openNewBookingForm(date, hour) {
+    const modal = document.getElementById('booking-modal');
+    if (!modal || !currentUser) return;
+    
+    document.getElementById('modal-title').textContent = 'Создать новую запись';
+    document.getElementById('modal-body-view').style.display = 'none';
+    document.getElementById('modal-body-form').style.display = 'block';
+    
+    // Заполняем дату и время
+    document.getElementById('new-booking-date').value = date;
+    document.getElementById('new-booking-time').value = `${String(hour).padStart(2, '0')}:00`;
+    
+    // Заполняем услуги
+    const serviceSelect = document.getElementById('new-booking-service');
+    serviceSelect.innerHTML = '<option value="">Выберите услугу</option>';
+    services.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.name;
+      opt.textContent = `${s.name} (${s.price.toLocaleString('ru-RU')} сум, ${s.duration} мин)`;
+      serviceSelect.appendChild(opt);
+    });
+    
+    // Заполняем мастеров
+    const masterSelect = document.getElementById('new-booking-master');
+    masterSelect.innerHTML = '<option value="">Любой мастер</option>';
+    masters.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.name;
+      opt.textContent = m.name;
+      masterSelect.appendChild(opt);
+    });
+    
+    modal.classList.remove("hidden");
   }
 
   // Слушатели событий
@@ -274,11 +393,24 @@
   document.getElementById('calendar-master-filter')?.addEventListener('change', renderCalendar);
 
   document.getElementById('calendar-grid')?.addEventListener('click', (e) => {
-    const target = e.target.closest(".cal-slot-busy");
+    const target = e.target.closest(".cal-slot");
     if (!target) return;
-    const idx = target.dataset.bookingIndex;
-    if (idx === undefined) return;
-    openBookingModal(Number(idx));
+    
+    // Если это занятый слот - показываем информацию о записи
+    if (target.classList.contains("cal-slot-busy")) {
+      const idx = target.dataset.bookingIndex;
+      if (idx !== undefined) {
+        openBookingModal(Number(idx));
+      }
+    }
+    // Если это свободный слот - открываем форму создания записи
+    else if (target.classList.contains("cal-slot-free")) {
+      const date = target.dataset.date;
+      const hour = parseInt(target.dataset.hour);
+      if (date && !isNaN(hour)) {
+        openNewBookingForm(date, hour);
+      }
+    }
   });
 
   document.getElementById('modal-close')?.addEventListener('click', closeBookingModal);
@@ -291,6 +423,87 @@
     await fetch('/api/logout', { method: 'POST' });
     window.location.href = '/login';
   });
+
+  // Обработчик формы создания записи
+  document.getElementById('new-booking-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const alert = document.getElementById('new-booking-alert');
+    alert.style.display = 'none';
+    
+    const formData = {
+      userId: currentUser.id,
+      name: document.getElementById('new-booking-name').value.trim(),
+      phone: document.getElementById('new-booking-phone').value.trim(),
+      service: document.getElementById('new-booking-service').value,
+      master: document.getElementById('new-booking-master').value,
+      date: document.getElementById('new-booking-date').value,
+      time: document.getElementById('new-booking-time').value,
+      comment: document.getElementById('new-booking-comment').value.trim()
+    };
+    
+    if (!formData.name || !formData.phone || !formData.service || !formData.date || !formData.time) {
+      alert.textContent = 'Заполните все обязательные поля';
+      alert.className = 'alert alert-error';
+      alert.style.display = 'block';
+      return;
+    }
+    
+    const phoneDigits = formData.phone.replace(/\D/g, '');
+    if (phoneDigits.length < 9) {
+      alert.textContent = 'Некорректный номер телефона (минимум 9 цифр)';
+      alert.className = 'alert alert-error';
+      alert.style.display = 'block';
+      return;
+    }
+    
+    // Вычисляем endTime на основе услуги
+    const selectedService = services.find(s => s.name === formData.service);
+    if (selectedService && selectedService.duration) {
+      const [hours, minutes] = formData.time.split(':').map(Number);
+      const startMinutes = hours * 60 + minutes;
+      const endMinutes = startMinutes + selectedService.duration;
+      const endHours = Math.floor(endMinutes / 60);
+      const endMins = endMinutes % 60;
+      formData.endTime = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
+    }
+    
+    try {
+      const response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      
+      const result = await response.json();
+      if (result.success) {
+        alert.textContent = 'Запись успешно создана!';
+        alert.className = 'alert alert-success';
+        alert.style.display = 'block';
+        
+        // Обновляем данные и календарь
+        setTimeout(async () => {
+          const bookingsRes = await fetch('/api/bookings');
+          const bookingsResult = await bookingsRes.json();
+          if (bookingsResult.success) {
+            bookings = bookingsResult.bookings;
+            renderCalendar();
+          }
+          closeBookingModal();
+        }, 1000);
+      } else {
+        alert.textContent = result.message || 'Ошибка при создании записи';
+        alert.className = 'alert alert-error';
+        alert.style.display = 'block';
+      }
+    } catch (error) {
+      console.error('Ошибка создания записи:', error);
+      alert.textContent = 'Ошибка при создании записи. Попробуйте позже.';
+      alert.className = 'alert alert-error';
+      alert.style.display = 'block';
+    }
+  });
+
+  document.getElementById('cancel-booking-form')?.addEventListener('click', closeBookingModal);
 
   // Загружаем данные при загрузке страницы
   loadData();
