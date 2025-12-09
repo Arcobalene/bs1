@@ -3,6 +3,17 @@
   margin: 0;
   padding: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Улучшение для touch-устройств */
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  touch-action: manipulation;
 }
 
 body {
@@ -966,6 +977,340 @@ footer {
     left: 10px;
     width: auto;
     max-height: 400px;
+  }
+}
+
+/* ========== МОБИЛЬНАЯ ВЕРСИЯ ========== */
+@media (max-width: 768px) {
+  /* Header адаптация */
+  header {
+    padding: 20px 12px 40px;
+  }
+
+  header h1 {
+    font-size: 1.8rem;
+    margin-bottom: 6px;
+  }
+
+  header p {
+    font-size: 0.9rem;
+    padding: 0 8px;
+  }
+
+  .nav-links {
+    margin-top: 12px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .nav-links a {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+  }
+
+  /* Container адаптация */
+  .container {
+    margin: -24px auto 32px;
+    padding: 0 12px 20px;
+  }
+
+  /* Карточки */
+  .card {
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  .card h2 {
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+  }
+
+  .card p.description {
+    font-size: 0.9rem;
+  }
+
+  /* Формы */
+  form {
+    gap: 10px;
+  }
+
+  input[type="text"],
+  input[type="tel"],
+  input[type="date"],
+  input[type="password"],
+  input[type="email"],
+  select,
+  textarea {
+    padding: 10px 12px;
+    font-size: 16px; /* Предотвращает зум на iOS */
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    padding: 10px 16px;
+    font-size: 0.95rem;
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Главные вкладки */
+  .main-tabs {
+    gap: 4px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .main-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .main-tab-button {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Подвкладки */
+  .tabs {
+    gap: 6px;
+    margin-bottom: 14px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 4px;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab-button {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* User info */
+  .user-info {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .user-info h3 {
+    font-size: 1rem;
+  }
+
+  .user-info p {
+    font-size: 0.85rem;
+  }
+
+  /* Админ список */
+  .admin-list-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 0;
+  }
+
+  .admin-list-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .admin-list-actions button {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+  }
+
+  /* Календарь */
+  .week-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .week-controls button {
+    width: 100%;
+    padding: 8px;
+  }
+
+  #week-label {
+    text-align: center;
+    margin: 8px 0;
+  }
+
+  .cal-cell {
+    font-size: 0.7rem;
+    padding: 3px 4px;
+    min-height: 24px;
+  }
+
+  /* Модальные окна */
+  .modal {
+    width: 95%;
+    max-width: none;
+    padding: 14px 16px;
+    margin: 20px;
+  }
+
+  .modal-title {
+    font-size: 0.95rem;
+  }
+
+  /* Карта */
+  #map {
+    height: 300px !important;
+  }
+
+  /* Улучшение для touch-устройств */
+  button,
+  .btn-primary,
+  .btn-secondary,
+  .tab-button,
+  .main-tab-button {
+    min-height: 44px; /* Минимальный размер для удобного нажатия */
+    min-width: 44px;
+  }
+
+  /* Улучшение скролла */
+  body {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Улучшение для форм на iOS */
+  input,
+  select,
+  textarea {
+    -webkit-appearance: none;
+    border-radius: 10px;
+  }
+
+  /* Улучшение для модальных окон */
+  .modal-overlay {
+    padding: 10px;
+  }
+
+  /* Адаптация footer */
+  footer {
+    padding: 8px 12px 12px;
+    font-size: 0.75rem;
+  }
+
+  /* Логотип в header */
+  header img.logo-img {
+    max-height: 60px !important;
+    max-width: 150px !important;
+  }
+
+  /* Улучшение для списков услуг и мастеров */
+  .services-list,
+  .masters-list {
+    gap: 8px;
+  }
+
+  .service-item,
+  .master-item {
+    padding: 8px 0;
+  }
+
+  /* Адаптация для карточек с информацией */
+  .user-info {
+    font-size: 0.9rem;
+  }
+
+  /* Улучшение для разделителей */
+  .divider {
+    margin: 10px 0 12px;
+  }
+
+  /* Адаптация для заметок */
+  .note {
+    font-size: 0.75rem;
+  }
+
+  /* Адаптация для алертов */
+  .alert {
+    padding: 10px 12px;
+    font-size: 0.8rem;
+  }
+}
+
+/* Дополнительные стили для очень маленьких экранов */
+@media (max-width: 480px) {
+  header h1 {
+    font-size: 1.5rem;
+  }
+
+  header p {
+    font-size: 0.85rem;
+  }
+
+  .nav-links a {
+    padding: 5px 10px;
+    font-size: 0.8rem;
+  }
+
+  .card {
+    padding: 14px;
+  }
+
+  .card h2 {
+    font-size: 1.1rem;
+  }
+
+  .main-tab-button {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+
+  .tab-button {
+    padding: 5px 10px;
+    font-size: 0.8rem;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    padding: 9px 14px;
+    font-size: 0.9rem;
+  }
+
+  .service-item,
+  .master-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .service-item span.price {
+    font-size: 0.9rem;
+  }
+
+  .admin-list-main {
+    width: 100%;
+  }
+
+  .admin-list-actions {
+    margin-top: 4px;
+  }
+}
+
+/* Горизонтальная ориентация на мобильных */
+@media (max-width: 768px) and (orientation: landscape) {
+  header {
+    padding: 16px 12px 32px;
+  }
+
+  header h1 {
+    font-size: 1.6rem;
+  }
+
+  .container {
+    margin: -20px auto 24px;
   }
 }
 
