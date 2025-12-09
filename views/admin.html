@@ -40,7 +40,6 @@
   <!-- Главные вкладки админ-панели -->
   <div class="main-tabs">
     <button class="main-tab-button active" data-main-tab="salon-info">Информация о салоне</button>
-    <button class="main-tab-button" data-main-tab="services-masters">Услуги и мастера</button>
     <button class="main-tab-button" data-main-tab="design">Дизайн</button>
   </div>
 
@@ -363,31 +362,6 @@
       previewButton.style.background = `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`;
     }
   }
-
-  // Обработка вкладок
-  document.querySelectorAll('.tab-button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tabName = btn.dataset.tab;
-      
-      // Убираем активный класс со всех кнопок
-      document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-
-      // Скрываем все вкладки
-      document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.style.display = 'none';
-      });
-
-      // Показываем выбранную вкладку
-      const tabContent = document.getElementById(`${tabName}-tab`);
-      if (tabContent) {
-        tabContent.style.display = 'block';
-        if (tabName === 'preview') {
-          updatePreview();
-        }
-      }
-    });
-  });
 
   // Обработчик изменения типа фона страницы
   const pageBgTypeSelect = document.getElementById('design-page-bg-type');
@@ -905,6 +879,10 @@
       if (targetTab) {
         targetTab.style.display = 'block';
         targetTab.classList.add('active');
+        // Обновляем предпросмотр, если переключились на вкладку предпросмотра
+        if (tabName === 'preview') {
+          updatePreview();
+        }
       }
     });
   });
