@@ -1057,7 +1057,7 @@ footer {
 @media (max-width: 768px) {
   /* Header адаптация */
   header {
-    padding: 16px 12px 36px;
+    padding: 16px 12px 24px;
     position: sticky;
     top: 0;
   }
@@ -1073,20 +1073,21 @@ footer {
   }
 
   .nav-links {
-    margin-top: 12px;
-    gap: 8px;
+    margin-top: 16px;
+    gap: 10px;
     flex-wrap: wrap;
   }
 
   .nav-links a {
-    padding: 6px 12px;
+    padding: 8px 14px;
     font-size: 0.85rem;
+    margin: 2px;
   }
 
   /* Container адаптация */
   .container {
-    margin: -24px auto 32px;
-    padding: 0 12px 20px;
+    margin: 0 auto 32px;
+    padding: 24px 12px 20px;
   }
 
   /* Карточки */
@@ -1340,9 +1341,15 @@ footer {
     font-size: 0.85rem;
   }
 
+  .nav-links {
+    gap: 8px;
+    margin-top: 14px;
+  }
+
   .nav-links a {
-    padding: 5px 10px;
+    padding: 7px 12px;
     font-size: 0.8rem;
+    margin: 2px;
   }
 
   .card {
