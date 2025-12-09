@@ -328,6 +328,18 @@ app.get('/api/user', requireAuth, async (req, res) => {
     const userServices = await services.getByUserId(user.id);
     const userMasters = await masters.getByUserId(user.id);
     
+    // Получаем настройки дизайна
+    let salonDesign = {};
+    if (user.salon_design) {
+      try {
+        salonDesign = typeof user.salon_design === 'string' 
+          ? JSON.parse(user.salon_design) 
+          : user.salon_design;
+      } catch (e) {
+        console.error('Ошибка парсинга salon_design:', e);
+      }
+    }
+    
     const userData = {
       id: user.id,
       username: user.username,
@@ -338,6 +350,7 @@ app.get('/api/user', requireAuth, async (req, res) => {
       salonAddress: user.salon_address || '',
       salonLat: user.salon_lat,
       salonLng: user.salon_lng,
+      salonDesign: salonDesign,
       services: userServices,
       masters: userMasters,
       createdAt: user.created_at
@@ -418,6 +431,57 @@ app.post('/api/salon', requireAuth, async (req, res) => {
   }
 });
 
+// API: Сохранить настройки дизайна салона
+app.post('/api/salon/design', requireAuth, async (req, res) => {
+  try {
+    const { design } = req.body;
+    const user = await dbUsers.getById(req.session.userId);
+    
+    if (!user) {
+      return res.json({ success: false, message: 'Пользователь не найден' });
+    }
+
+    // Убеждаемся, что design - это объект
+    const designData = design && typeof design === 'object' ? design : {};
+    
+    await dbUsers.update(req.session.userId, {
+      salonDesign: designData
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Ошибка сохранения настроек дизайна:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера: ' + error.message });
+  }
+});
+
+// API: Получить настройки дизайна салона
+app.get('/api/salon/design', requireAuth, async (req, res) => {
+  try {
+    const user = await dbUsers.getById(req.session.userId);
+    
+    if (!user) {
+      return res.json({ success: false, design: {} });
+    }
+
+    let salonDesign = {};
+    if (user.salon_design) {
+      try {
+        salonDesign = typeof user.salon_design === 'string' 
+          ? JSON.parse(user.salon_design) 
+          : user.salon_design;
+      } catch (e) {
+        console.error('Ошибка парсинга salon_design:', e);
+      }
+    }
+
+    res.json({ success: true, design: salonDesign });
+  } catch (error) {
+    console.error('Ошибка получения настроек дизайна:', error);
+    res.status(500).json({ success: false, design: {} });
+  }
+});
+
 // API: Получить информацию о салоне (публичный доступ)
 app.get('/api/salon/:userId', async (req, res) => {
   try {
@@ -425,13 +489,26 @@ app.get('/api/salon/:userId', async (req, res) => {
     if (!user) {
       return res.json({ success: false, salon: null });
     }
+    
+    let salonDesign = {};
+    if (user.salon_design) {
+      try {
+        salonDesign = typeof user.salon_design === 'string' 
+          ? JSON.parse(user.salon_design) 
+          : user.salon_design;
+      } catch (e) {
+        console.error('Ошибка парсинга salon_design:', e);
+      }
+    }
+    
     res.json({ 
       success: true, 
       salon: {
         name: user.salon_name || 'Beauty Studio',
         address: user.salon_address || '',
         lat: user.salon_lat,
-        lng: user.salon_lng
+        lng: user.salon_lng,
+        design: salonDesign
       }
     });
   } catch (error) {

@@ -17,6 +17,8 @@ header {
   color: white;
   padding: 24px 16px 48px;
   text-align: center;
+  position: relative;
+  z-index: 1;
 }
 
 header h1 {
@@ -51,10 +53,38 @@ header p {
   background: rgba(255, 255, 255, 0.3);
 }
 
+.logout-link {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  color: white;
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  transition: background 0.2s;
+  font-size: 0.9rem;
+}
+
+.logout-link:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+@media (max-width: 600px) {
+  .logout-link {
+    top: 12px;
+    right: 12px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+  }
+}
+
 .container {
   max-width: 1100px;
   margin: -30px auto 40px;
   padding: 0 16px 24px;
+  position: relative;
+  z-index: 2;
 }
 
 .grid {
@@ -240,6 +270,48 @@ textarea {
 
 .hidden {
   display: none !important;
+}
+
+/* Главные вкладки админ-панели */
+.main-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 0;
+}
+
+.main-tab-button {
+  border: none;
+  background: transparent;
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: #6b7280;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.main-tab-button:hover {
+  color: #111827;
+  background: #f9fafb;
+}
+
+.main-tab-button.active {
+  color: #111827;
+  border-bottom-color: #a855f7;
+  background: transparent;
+}
+
+.main-tab-content {
+  display: none;
+}
+
+.main-tab-content.active {
+  display: block;
 }
 
 .tabs {
