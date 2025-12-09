@@ -122,6 +122,17 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(date);
     `);
 
+    // Миграция: добавление поля salon_phone, если его нет
+    try {
+      await client.query(`
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS salon_phone VARCHAR(50)
+      `);
+      console.log('Миграция salon_phone выполнена');
+    } catch (error) {
+      console.log('Поле salon_phone уже существует или ошибка миграции:', error.message);
+    }
+
     console.log('База данных PostgreSQL инициализирована');
   } catch (error) {
     console.error('Ошибка инициализации БД:', error);
@@ -153,7 +164,7 @@ const users = {
 
   create: async (userData) => {
     requirePool();
-    const { username, email, password, role, isActive, salonName, salonAddress, salonLat, salonLng } = userData;
+    const { username, email, password, role, isActive, salonName, salonAddress, salonLat, salonLng, salonPhone } = userData;
     
     // Валидация
     if (!username || !password) {
@@ -164,8 +175,8 @@ const users = {
     }
     
     const result = await pool.query(`
-      INSERT INTO users (username, email, password, role, is_active, salon_name, salon_address, salon_lat, salon_lng)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO users (username, email, password, role, is_active, salon_name, salon_address, salon_lat, salon_lng, salon_phone)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id
     `, [
       username.trim(),
@@ -176,7 +187,8 @@ const users = {
       salonName ? salonName.trim() : '',
       salonAddress ? salonAddress.trim() : '',
       salonLat || null,
-      salonLng || null
+      salonLng || null,
+      salonPhone ? salonPhone.trim() : null
     ]);
     return result.rows[0].id;
   },
@@ -214,6 +226,10 @@ const users = {
     if (userData.salonLng !== undefined) {
       updates.push(`salon_lng = $${paramIndex++}`);
       values.push(userData.salonLng);
+    }
+    if (userData.salonPhone !== undefined) {
+      updates.push(`salon_phone = $${paramIndex++}`);
+      values.push(userData.salonPhone ? userData.salonPhone.trim() : null);
     }
 
     if (updates.length === 0) return;

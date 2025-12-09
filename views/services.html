@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Услуги и мастера — Beauty Studio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header>
+  <div id="logo-container"></div>
+  <h1>Beauty Studio</h1>
+  <p>Управление услугами и мастерами</p>
+  <div class="nav-links">
+    <a href="/" id="salon-page-link">Страница салона</a>
+    <a href="/admin">Админ-панель</a>
+    <a href="/calendar">Календарь</a>
+    <a href="/services">Услуги и мастера</a>
+    <a href="/clients">Клиенты</a>
+    <a href="/users" id="users-link" style="display: none;">Пользователи</a>
+    <a href="#" id="logout-link">Выход</a>
+  </div>
+</header>
+
+<div class="container">
+  <div class="card">
+    <h2>Услуги и мастера</h2>
+    <p class="description">Управляйте услугами и мастерами вашего салона.</p>
+
+    <div class="tabs">
+      <button type="button" class="tab-button active" data-tab="services">Услуги</button>
+      <button type="button" class="tab-button" data-tab="masters">Мастера</button>
+    </div>
+
+    <!-- Вкладка: Услуги -->
+    <div class="tab-content active" id="services-tab">
+      <form id="admin-service-form">
+        <div>
+          <label for="admin-service-name">Название услуги</label>
+          <input type="text" id="admin-service-name" placeholder="Например: Ботокс волос" />
+        </div>
+        <div class="form-row">
+          <div>
+            <label for="admin-service-price">Стоимость, сум</label>
+            <input type="text" id="admin-service-price" placeholder="Например: 350000" />
+          </div>
+          <div>
+            <label for="admin-service-duration">Длительность, минут</label>
+            <input type="text" id="admin-service-duration" placeholder="Например: 90" />
+          </div>
+        </div>
+        <button type="submit" class="btn-primary" id="admin-service-submit">Сохранить услугу</button>
+      </form>
+
+      <h4 style="font-size:0.9rem; margin-top:16px;">Текущие услуги</h4>
+      <div id="admin-services-list" class="admin-list"></div>
+    </div>
+
+    <!-- Вкладка: Мастера -->
+    <div class="tab-content" id="masters-tab" style="display: none;">
+      <form id="admin-master-form">
+        <div>
+          <label for="admin-master-name">Имя мастера</label>
+          <input type="text" id="admin-master-name" placeholder="Например: Лейла" />
+        </div>
+        <div>
+          <label for="admin-master-role">Специализация</label>
+          <input type="text" id="admin-master-role" placeholder="Например: бровист" />
+        </div>
+        <button type="submit" class="btn-primary" id="admin-master-submit">Сохранить мастера</button>
+      </form>
+
+      <h4 style="font-size:0.9rem; margin-top:16px;">Текущие мастера</h4>
+      <div id="admin-masters-list" class="admin-list"></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  © 2025 Beauty Studio. Все права защищены.
+</footer>
+
+<script>
+  let currentUser = null;
+  let services = [];
+  let masters = [];
+  let editingServiceId = null;
+  let editingMasterId = null;
+
+  // Проверка авторизации и загрузка данных
+  async function loadUserData() {
+    try {
+      const response = await fetch('/api/user');
+      const result = await response.json();
+      
+      if (!result.success) {
+        window.location.href = '/login';
+        return;
+      }
+
+      currentUser = result.user;
+      services = currentUser.services || [];
+      masters = currentUser.masters || [];
+
+      // Проверяем, вошли ли мы под другим пользователем
+      if (currentUser.isImpersonating) {
+        const banner = document.getElementById('impersonation-banner');
+        if (banner) {
+          banner.style.display = 'block';
+          document.getElementById('impersonated-user').textContent = currentUser.username;
+          document.getElementById('original-user').textContent = currentUser.originalUsername;
+        }
+      }
+
+      // Обновляем ссылку "Страница салона" в навигации
+      const salonPageLink = document.getElementById('salon-page-link');
+      if (salonPageLink && currentUser && currentUser.id) {
+        salonPageLink.href = `/?userId=${currentUser.id}`;
+      }
+      
+      // Показываем ссылку на управление пользователями только для админов
+      const usersLink = document.getElementById('users-link');
+      const isAdmin = currentUser.role === 'admin' || currentUser.username === 'admin';
+      if (usersLink && isAdmin) {
+        usersLink.style.display = 'inline-block';
+      } else if (usersLink) {
+        usersLink.style.display = 'none';
+      }
+      
+      // Применяем дизайн
+      if (currentUser.salonDesign) {
+        applyDesign(currentUser.salonDesign);
+      }
+      
+      renderServices();
+      renderMasters();
+    } catch (error) {
+      console.error('Ошибка загрузки данных:', error);
+      window.location.href = '/login';
+    }
+  }
+
+  function renderServices() {
+    const list = document.getElementById('admin-services-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+    services.forEach((s) => {
+      const row = document.createElement('div');
+      row.className = 'admin-list-item';
+      
+      const main = document.createElement('div');
+      main.className = 'admin-list-main';
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = s.name;
+      const metaSpan = document.createElement('span');
+      metaSpan.textContent = `${s.price.toLocaleString('ru-RU')} сум · ${s.duration} мин`;
+      main.appendChild(nameSpan);
+      main.appendChild(metaSpan);
+
+      const actions = document.createElement('div');
+      actions.className = 'admin-list-actions';
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.textContent = 'Редактировать';
+      editBtn.dataset.action = 'edit';
+      editBtn.dataset.id = String(s.id);
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.textContent = 'Удалить';
+      deleteBtn.dataset.action = 'delete';
+      deleteBtn.dataset.id = String(s.id);
+      actions.appendChild(editBtn);
+      actions.appendChild(deleteBtn);
+
+      row.appendChild(main);
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
+  }
+
+  function renderMasters() {
+    const list = document.getElementById('admin-masters-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+    masters.forEach((m) => {
+      const row = document.createElement('div');
+      row.className = 'admin-list-item';
+      
+      const main = document.createElement('div');
+      main.className = 'admin-list-main';
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = m.name;
+      const roleSpan = document.createElement('span');
+      roleSpan.textContent = m.role || 'без специализации';
+      main.appendChild(nameSpan);
+      main.appendChild(roleSpan);
+
+      const actions = document.createElement('div');
+      actions.className = 'admin-list-actions';
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.textContent = 'Редактировать';
+      editBtn.dataset.action = 'edit';
+      editBtn.dataset.id = String(m.id);
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.textContent = 'Удалить';
+      deleteBtn.dataset.action = 'delete';
+      deleteBtn.dataset.id = String(m.id);
+      actions.appendChild(editBtn);
+      actions.appendChild(deleteBtn);
+
+      row.appendChild(main);
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
+  }
+
+  // Обработка услуг
+  const serviceForm = document.getElementById('admin-service-form');
+  const serviceName = document.getElementById('admin-service-name');
+  const servicePrice = document.getElementById('admin-service-price');
+  const serviceDuration = document.getElementById('admin-service-duration');
+  const serviceSubmitBtn = document.getElementById('admin-service-submit');
+  const servicesList = document.getElementById('admin-services-list');
+
+  serviceForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = serviceName.value.trim();
+    const priceRaw = servicePrice.value.trim();
+    const durationRaw = serviceDuration.value.trim();
+
+    if (!name || !priceRaw || !durationRaw) {
+      alert('Заполните все поля');
+      return;
+    }
+
+    if (name.length > 100) {
+      alert('Название услуги слишком длинное (максимум 100 символов)');
+      return;
+    }
+
+    const price = Number(priceRaw.replace(/\s+/g, ''));
+    const duration = Number(durationRaw.replace(/\s+/g, ''));
+    if (Number.isNaN(price) || Number.isNaN(duration)) {
+      alert('Стоимость и длительность должны быть числами');
+      return;
+    }
+    if (price <= 0 || duration <= 0) {
+      alert('Стоимость и длительность должны быть положительными числами');
+      return;
+    }
+    if (price > 10000000) {
+      alert('Стоимость слишком высокая (максимум 10 000 000)');
+      return;
+    }
+    if (duration > 1440) {
+      alert('Длительность слишком большая (максимум 1440 минут = 24 часа)');
+      return;
+    }
+
+    if (editingServiceId !== null) {
+      const svc = services.find(s => s.id === editingServiceId);
+      if (svc) {
+        svc.name = name;
+        svc.price = price;
+        svc.duration = duration;
+      }
+      editingServiceId = null;
+      serviceSubmitBtn.textContent = 'Сохранить услугу';
+    } else {
+      const existing = services.find(s => s.name === name);
+      if (existing) {
+        existing.price = price;
+        existing.duration = duration;
+      } else {
+        services.push({
+          id: services.length > 0 ? Math.max(...services.map(s => s.id)) + 1 : 1,
+          name,
+          price,
+          duration
+        });
+      }
+    }
+
+    await saveServices();
+    serviceName.value = '';
+    servicePrice.value = '';
+    serviceDuration.value = '';
+    renderServices();
+  });
+
+  servicesList.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const id = Number(btn.dataset.id);
+    const action = btn.dataset.action;
+    const service = services.find(s => s.id === id);
+    if (!service) return;
+
+    if (action === 'edit') {
+      serviceName.value = service.name;
+      servicePrice.value = String(service.price);
+      serviceDuration.value = String(service.duration);
+      editingServiceId = service.id;
+      serviceSubmitBtn.textContent = 'Обновить услугу';
+    } else if (action === 'delete') {
+      if (!confirm(`Удалить услугу "${service.name}"?`)) return;
+      services = services.filter(s => s.id !== id);
+      if (editingServiceId === id) {
+        editingServiceId = null;
+        serviceName.value = '';
+        servicePrice.value = '';
+        serviceDuration.value = '';
+        serviceSubmitBtn.textContent = 'Сохранить услугу';
+      }
+      saveServices();
+      renderServices();
+    }
+  });
+
+  // Обработка мастеров
+  const masterForm = document.getElementById('admin-master-form');
+  const masterName = document.getElementById('admin-master-name');
+  const masterRole = document.getElementById('admin-master-role');
+  const masterSubmitBtn = document.getElementById('admin-master-submit');
+  const mastersList = document.getElementById('admin-masters-list');
+
+  masterForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = masterName.value.trim();
+    const role = masterRole.value.trim();
+
+    if (!name) {
+      alert('Введите имя мастера');
+      return;
+    }
+
+    if (name.length > 50) {
+      alert('Имя мастера слишком длинное (максимум 50 символов)');
+      return;
+    }
+
+    if (editingMasterId !== null) {
+      const m = masters.find(mm => mm.id === editingMasterId);
+      if (m) {
+        m.name = name;
+        m.role = role || m.role;
+      }
+      editingMasterId = null;
+      masterSubmitBtn.textContent = 'Сохранить мастера';
+    } else {
+      const existing = masters.find(m => m.name === name);
+      if (existing) {
+        existing.role = role || existing.role;
+      } else {
+        masters.push({
+          id: masters.length > 0 ? Math.max(...masters.map(m => m.id)) + 1 : 1,
+          name,
+          role
+        });
+      }
+    }
+
+    await saveMasters();
+    masterName.value = '';
+    masterRole.value = '';
+    renderMasters();
+  });
+
+  mastersList.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const id = Number(btn.dataset.id);
+    const action = btn.dataset.action;
+    const master = masters.find(m => m.id === id);
+    if (!master) return;
+
+    if (action === 'edit') {
+      masterName.value = master.name;
+      masterRole.value = master.role || '';
+      editingMasterId = master.id;
+      masterSubmitBtn.textContent = 'Обновить мастера';
+    } else if (action === 'delete') {
+      if (!confirm(`Удалить мастера "${master.name}"?`)) return;
+      masters = masters.filter(m => m.id !== id);
+      if (editingMasterId === id) {
+        editingMasterId = null;
+        masterName.value = '';
+        masterRole.value = '';
+        masterSubmitBtn.textContent = 'Сохранить мастера';
+      }
+      saveMasters();
+      renderMasters();
+    }
+  });
+
+  async function saveServices() {
+    try {
+      const response = await fetch('/api/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ services })
+      });
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.message || 'Ошибка сохранения');
+      }
+    } catch (error) {
+      console.error('Ошибка сохранения услуг:', error);
+      alert('Ошибка сохранения услуг: ' + (error.message || 'Неизвестная ошибка'));
+      throw error;
+    }
+  }
+
+  async function saveMasters() {
+    try {
+      const response = await fetch('/api/masters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ masters })
+      });
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.message || 'Ошибка сохранения');
+      }
+    } catch (error) {
+      console.error('Ошибка сохранения мастеров:', error);
+      alert('Ошибка сохранения мастеров: ' + (error.message || 'Неизвестная ошибка'));
+      throw error;
+    }
+  }
+
+  // Переключение вкладок "Услуги" и "Мастера"
+  document.querySelectorAll('.tab-button[data-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabName = btn.dataset.tab;
+      
+      // Убираем активный класс со всех кнопок
+      document.querySelectorAll('.tab-button[data-tab]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      // Скрываем все вкладки
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.style.display = 'none';
+        tab.classList.remove('active');
+      });
+      
+      // Показываем выбранную вкладку
+      const targetTab = document.getElementById(`${tabName}-tab`);
+      if (targetTab) {
+        targetTab.style.display = 'block';
+        targetTab.classList.add('active');
+      }
+    });
+  });
+
+  // Выход
+  document.getElementById('logout-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    fetch('/api/logout', { method: 'POST' })
+      .then(() => {
+        window.location.href = '/login';
+      })
+      .catch(err => {
+        console.error('Ошибка выхода:', err);
+        window.location.href = '/login';
+      });
+  });
+
+  // Функция применения дизайна
+  function applyDesign(design) {
+    if (!design) return;
+
+    const style = document.createElement('style');
+    style.id = 'salon-custom-design';
+
+    const primaryColor = design.primaryColor || '#f973b6';
+    const secondaryColor = design.secondaryColor || '#a855f7';
+    const headerBg = design.headerBg || '#f973b6';
+    const cardBg = design.cardBg || '#ffffff';
+    const textColor = design.textColor || '#222222';
+    const pageBg = design.pageBg || '#f7f7fb';
+    const pageBgType = design.pageBgType || 'color';
+    const pageBgSecondary = design.pageBgSecondary || '#ffffff';
+    const pageBgImage = design.pageBgImage || '';
+
+    const isLightBg = isLightColor(cardBg);
+    const finalTextColor = isLightBg ? textColor : '#ffffff';
+
+    // Определяем фон страницы
+    let bodyBg = pageBg;
+    if (pageBgType === 'gradient') {
+      bodyBg = `linear-gradient(135deg, ${pageBg}, ${pageBgSecondary})`;
+    } else if (pageBgType === 'image' && pageBgImage) {
+      bodyBg = `url(${pageBgImage}) center/cover no-repeat`;
+    }
+
+    // Применяем логотип в header, если есть
+    const logoContainer = document.getElementById('logo-container');
+    if (design.logo && logoContainer) {
+      let logoImg = logoContainer.querySelector('img.logo-img');
+      if (!logoImg) {
+        logoImg = document.createElement('img');
+        logoImg.className = 'logo-img';
+        logoImg.alt = 'Логотип салона';
+        logoContainer.appendChild(logoImg);
+      }
+      logoImg.src = design.logo;
+      logoImg.style.cssText = 'max-height: 80px; max-width: 200px; object-fit: contain; margin: 0 auto 12px auto; display: block;';
+    } else if (logoContainer) {
+      const logoImg = logoContainer.querySelector('img.logo-img');
+      if (logoImg) logoImg.remove();
+    }
+
+    style.textContent = `
+      body {
+        background: ${bodyBg} !important;
+      }
+      header {
+        background: linear-gradient(135deg, ${headerBg}, ${secondaryColor}) !important;
+        position: relative !important;
+      }
+      .card {
+        background: ${cardBg} !important;
+        color: ${finalTextColor} !important;
+      }
+      .card * {
+        color: inherit !important;
+      }
+      .card h2, .card h3, .card h4, .card h5, .card h6 {
+        color: ${finalTextColor} !important;
+      }
+      .card p, .card .description, .card .note, .card div, .card span:not(.price) {
+        color: ${finalTextColor} !important;
+      }
+      .card label {
+        color: ${finalTextColor} !important;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}) !important;
+        color: white !important;
+      }
+      .btn-primary:hover {
+        background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}) !important;
+        filter: brightness(1.1);
+        color: white !important;
+      }
+      input:focus, select:focus, textarea:focus {
+        border-color: ${primaryColor} !important;
+        box-shadow: 0 0 0 1px rgba(${hexToRgb(primaryColor)}, 0.35) !important;
+      }
+      input, select, textarea {
+        color: ${finalTextColor} !important;
+        background: ${isLightBg ? '#f9fafb' : 'rgba(255, 255, 255, 0.1)'} !important;
+      }
+      input::placeholder, textarea::placeholder {
+        color: ${isLightBg ? '#9ca3af' : 'rgba(255, 255, 255, 0.6)'} !important;
+      }
+    `;
+
+    const oldStyle = document.getElementById('salon-custom-design');
+    if (oldStyle) oldStyle.remove();
+    document.head.appendChild(style);
+  }
+
+  function isLightColor(hex) {
+    const rgb = hexToRgbArray(hex);
+    if (!rgb) return true;
+    const brightness = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
+    return brightness > 128;
+  }
+
+  function hexToRgbArray(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? [
+      parseInt(result[1], 16),
+      parseInt(result[2], 16),
+      parseInt(result[3], 16)
+    ] : null;
+  }
+
+  function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? 
+      `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` 
+      : '249, 115, 182';
+  }
+
+  // Загружаем данные при загрузке страницы
+  loadUserData();
+</script>
+</body>
+</html>
+

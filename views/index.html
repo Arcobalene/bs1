@@ -32,6 +32,7 @@
 
     <!-- Правая колонка: форма записи -->
     <div class="card">
+      <p id="salon-phone" style="margin-bottom: 16px; font-size: 1.1rem; font-weight: 500; text-align: center; color: #6b7280; display: none;"></p>
       <h2>Онлайн запись</h2>
       <p class="description">Заполните форму, мы подтвердим запись в ближайшее время.</p>
 
@@ -172,14 +173,22 @@
       const salonData = await salonRes.json();
 
       if (servicesData.success) {
-        services = servicesData.services;
+        services = servicesData.services || [];
         rebuildServiceDurations();
         renderServicesAndMasters();
+      } else {
+        console.error('Ошибка загрузки услуг:', servicesData);
+        const servicesListEl = document.getElementById("services-list");
+        if (servicesListEl) {
+          servicesListEl.innerHTML = '<p style="color: #ef4444; text-align: center; padding: 20px;">Ошибка загрузки услуг</p>';
+        }
       }
 
       if (mastersData.success) {
-        masters = mastersData.masters;
+        masters = mastersData.masters || [];
         renderServicesAndMasters();
+      } else {
+        console.error('Ошибка загрузки мастеров:', mastersData);
       }
 
       // Загружаем актуальные записи из базы для заполнения busyIntervals
@@ -209,9 +218,19 @@
         // Обновляем заголовок
         const headerTitle = document.getElementById('salon-name-header');
         const headerDesc = document.getElementById('salon-description');
+        const salonPhone = document.getElementById('salon-phone');
         if (headerTitle) headerTitle.textContent = salon.name || 'Beauty Studio';
         if (headerDesc && salon.address) {
           headerDesc.textContent = salon.address;
+        }
+        // Отображаем телефон, если он есть
+        if (salonPhone) {
+          if (salon.phone && salon.phone.trim()) {
+            salonPhone.textContent = `📞 ${salon.phone}`;
+            salonPhone.style.display = 'block';
+          } else {
+            salonPhone.style.display = 'none';
+          }
         }
 
         // Показываем карту, если есть координаты
@@ -276,18 +295,22 @@
 
     if (servicesListEl) {
       servicesListEl.innerHTML = "";
-      services.forEach((s) => {
-        const row = document.createElement("div");
-        row.className = "service-item";
-        const nameSpan = document.createElement("span");
-        nameSpan.textContent = s.name;
-        const priceSpan = document.createElement("span");
-        priceSpan.className = "price";
-        priceSpan.textContent = `${s.price.toLocaleString("ru-RU")} сум · ${Math.round((s.duration / 60) * 10) / 10} ч`;
-        row.appendChild(nameSpan);
-        row.appendChild(priceSpan);
-        servicesListEl.appendChild(row);
-      });
+      if (services && services.length > 0) {
+        services.forEach((s) => {
+          const row = document.createElement("div");
+          row.className = "service-item";
+          const nameSpan = document.createElement("span");
+          nameSpan.textContent = s.name;
+          const priceSpan = document.createElement("span");
+          priceSpan.className = "price";
+          priceSpan.textContent = `${s.price.toLocaleString("ru-RU")} сум · ${Math.round((s.duration / 60) * 10) / 10} ч`;
+          row.appendChild(nameSpan);
+          row.appendChild(priceSpan);
+          servicesListEl.appendChild(row);
+        });
+      } else {
+        servicesListEl.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 20px;">Услуги пока не добавлены</p>';
+      }
     }
 
     if (serviceSelect) {

@@ -197,6 +197,11 @@ app.get('/calendar', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'calendar.html'));
 });
 
+// Страница услуг и мастеров
+app.get('/services', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'services.html'));
+});
+
 // Страница управления пользователями (только для админов)
 app.get('/users', requireAuth, requireAdmin, (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'users.html'));
@@ -338,6 +343,7 @@ app.get('/api/user', requireAuth, async (req, res) => {
       salonAddress: user.salon_address || '',
       salonLat: user.salon_lat,
       salonLng: user.salon_lng,
+      salonPhone: user.salon_phone || '',
       services: userServices,
       masters: userMasters,
       createdAt: user.created_at
@@ -397,7 +403,7 @@ app.post('/api/masters', requireAuth, async (req, res) => {
 // API: Обновить информацию о салоне
 app.post('/api/salon', requireAuth, async (req, res) => {
   try {
-    const { salonName, salonAddress, salonLat, salonLng } = req.body;
+    const { salonName, salonAddress, salonLat, salonLng, salonPhone } = req.body;
     const user = await dbUsers.getById(req.session.userId);
     
     if (!user) {
@@ -408,7 +414,8 @@ app.post('/api/salon', requireAuth, async (req, res) => {
       salonName: salonName !== undefined ? (salonName || '') : undefined,
       salonAddress: salonAddress !== undefined ? (salonAddress || '') : undefined,
       salonLat: salonLat !== undefined ? (salonLat ? parseFloat(salonLat) : null) : undefined,
-      salonLng: salonLng !== undefined ? (salonLng ? parseFloat(salonLng) : null) : undefined
+      salonLng: salonLng !== undefined ? (salonLng ? parseFloat(salonLng) : null) : undefined,
+      salonPhone: salonPhone !== undefined ? (salonPhone || '') : undefined
     });
 
     res.json({ success: true });
@@ -431,7 +438,8 @@ app.get('/api/salon/:userId', async (req, res) => {
         name: user.salon_name || 'Beauty Studio',
         address: user.salon_address || '',
         lat: user.salon_lat,
-        lng: user.salon_lng
+        lng: user.salon_lng,
+        phone: user.salon_phone || ''
       }
     });
   } catch (error) {
