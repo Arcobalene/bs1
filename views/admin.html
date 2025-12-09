@@ -1202,8 +1202,16 @@
   });
   
   // Инициализация при загрузке страницы
-  updateNotificationsPanel();
-  updateNotificationsBadge();
+  // Ждем, пока DOM полностью загрузится
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      updateNotificationsPanel();
+      updateNotificationsBadge();
+    });
+  } else {
+    updateNotificationsPanel();
+    updateNotificationsBadge();
+  }
   
   // Тестовая функция для проверки уведомлений (можно вызвать из консоли: testNotification())
   window.testNotification = function() {
@@ -1216,6 +1224,7 @@
   
   async function checkNewBookings() {
     try {
+      console.log('Проверка новых записей...');
       const bookingsRes = await fetch('/api/bookings');
       if (!bookingsRes.ok) {
         console.error('Ошибка получения записей:', bookingsRes.status);
@@ -1245,17 +1254,20 @@
           newBookings.forEach(booking => {
             const date = new Date(booking.date);
             const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+            console.log('Показываем уведомление для записи:', booking.id, booking.name);
             if (typeof showNotification === 'function') {
-            showNotification(
-              'Новая запись!',
-              `${booking.name} - ${booking.service} на ${dateStr} в ${booking.time}`,
-              'info',
-              booking.id // Передаем ID записи
-            );
+              showNotification(
+                'Новая запись!',
+                `${booking.name} - ${booking.service} на ${dateStr} в ${booking.time}`,
+                'info',
+                booking.id // Передаем ID записи
+              );
             } else {
               console.error('Функция showNotification не найдена!');
             }
           });
+        } else if (newBookings.length > 0) {
+          console.log(`Найдено ${newBookings.length} новых записей, но прошло только ${timeSinceLastCheck}мс с последней проверки (нужно > 2000мс)`);
         }
         
         lastBookingCheck = Date.now();
@@ -1268,17 +1280,30 @@
   }
   
   // Инициализируем список известных записей после загрузки данных
-  setTimeout(async () => {
+  let notificationCheckInterval = null;
+  
+  async function initNotificationCheck() {
     try {
       const bookingsRes = await fetch('/api/bookings');
+      if (!bookingsRes.ok) {
+        console.error('Ошибка получения записей при инициализации:', bookingsRes.status);
+        return;
+      }
+      
       const bookingsResult = await bookingsRes.json();
       if (bookingsResult.success && bookingsResult.bookings) {
         // Сохраняем ID всех текущих записей как уже известные
         bookingsResult.bookings.forEach(booking => {
           knownBookingIds.add(String(booking.id));
         });
+        
+        // Очищаем предыдущий интервал, если он существует
+        if (notificationCheckInterval) {
+          clearInterval(notificationCheckInterval);
+        }
+        
         // Проверяем новые записи каждые 30 секунд
-        setInterval(checkNewBookings, 30000);
+        notificationCheckInterval = setInterval(checkNewBookings, 30000);
         console.log(`Проверка новых записей инициализирована (${knownBookingIds.size} известных записей, интервал: 30 секунд)`);
         
         // Первая проверка через 5 секунд после инициализации
@@ -1288,11 +1313,24 @@
         }, 5000);
       } else {
         console.log('Нет записей при инициализации или ошибка:', bookingsResult);
+        // Все равно запускаем проверку, даже если записей нет
+        if (!notificationCheckInterval) {
+          notificationCheckInterval = setInterval(checkNewBookings, 30000);
+          console.log('Проверка новых записей запущена (записей пока нет)');
+        }
       }
     } catch (error) {
       console.error('Ошибка инициализации проверки записей:', error);
+      // Все равно запускаем проверку при ошибке
+      if (!notificationCheckInterval) {
+        notificationCheckInterval = setInterval(checkNewBookings, 30000);
+        console.log('Проверка новых записей запущена (после ошибки инициализации)');
+      }
     }
-  }, 2000);
+  }
+  
+  // Инициализируем проверку после загрузки страницы
+  setTimeout(initNotificationCheck, 2000);
 </script>
 </body>
 </html>
