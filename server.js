@@ -355,11 +355,8 @@ app.get('/api/user', requireAuth, async (req, res) => {
       salonAddress: user.salon_address || '',
       salonLat: user.salon_lat,
       salonLng: user.salon_lng,
-<<<<<<< HEAD
       salonPhone: user.salon_phone || '',
-=======
       salonDesign: salonDesign,
->>>>>>> 70ed25dca6420da189c618bda8175aeee7d960a0
       services: userServices,
       masters: userMasters,
       createdAt: user.created_at
@@ -518,11 +515,8 @@ app.get('/api/salon/:userId', async (req, res) => {
         address: user.salon_address || '',
         lat: user.salon_lat,
         lng: user.salon_lng,
-<<<<<<< HEAD
-        phone: user.salon_phone || ''
-=======
+        phone: user.salon_phone || '',
         design: salonDesign
->>>>>>> 70ed25dca6420da189c618bda8175aeee7d960a0
       }
     });
   } catch (error) {
