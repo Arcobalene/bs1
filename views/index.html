@@ -220,8 +220,21 @@
         const headerDesc = document.getElementById('salon-description');
         const salonPhone = document.getElementById('salon-phone');
         if (headerTitle) headerTitle.textContent = salon.name || 'Beauty Studio';
-        if (headerDesc && salon.address) {
-          headerDesc.textContent = salon.address;
+        
+        // Применяем настройки дизайна
+        if (salon.design) {
+          applyDesign(salon.design);
+        }
+        
+        // Устанавливаем описание из дизайна или адрес
+        if (headerDesc) {
+          if (salon.design && salon.design.headerDescription) {
+            headerDesc.textContent = salon.design.headerDescription;
+          } else if (salon.design && salon.design.headerTitle) {
+            headerDesc.textContent = salon.design.headerTitle;
+          } else if (salon.address) {
+            headerDesc.textContent = salon.address;
+          }
         }
         // Отображаем телефон, если он есть
         if (salonPhone) {
@@ -247,6 +260,172 @@
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
     }
+  }
+
+  // Применение настроек дизайна
+  function applyDesign(design) {
+    if (!design) return;
+
+    const style = document.createElement('style');
+    style.id = 'salon-custom-design';
+
+    const primaryColor = design.primaryColor || '#f973b6';
+    const secondaryColor = design.secondaryColor || '#a855f7';
+    const headerBg = design.headerBg || '#f973b6';
+    const cardBg = design.cardBg || '#ffffff';
+    const textColor = design.textColor || '#222222';
+    const pageBg = design.pageBg || '#f7f7fb';
+    const pageBgType = design.pageBgType || 'color';
+    const pageBgSecondary = design.pageBgSecondary || '#ffffff';
+    const pageBgImage = design.pageBgImage || '';
+
+    // Вычисляем, светлый или темный фон для автоматической настройки текста
+    const isLightBg = isLightColor(cardBg);
+    const finalTextColor = isLightBg ? textColor : '#ffffff';
+
+    // Определяем фон страницы
+    let bodyBg = pageBg;
+    if (pageBgType === 'gradient') {
+      bodyBg = `linear-gradient(135deg, ${pageBg}, ${pageBgSecondary})`;
+    } else if (pageBgType === 'image' && pageBgImage) {
+      bodyBg = `url(${pageBgImage}) center/cover no-repeat`;
+    }
+
+    // Применяем логотип в header, если есть
+    if (design.logo) {
+      const header = document.querySelector('header');
+      const headerTitle = document.getElementById('salon-name-header');
+      let logoImg = header ? header.querySelector('img.logo-img') : null;
+      
+      if (!logoImg && header && headerTitle) {
+        logoImg = document.createElement('img');
+        logoImg.src = design.logo;
+        logoImg.className = 'logo-img';
+        logoImg.alt = 'Логотип салона';
+        logoImg.style.cssText = 'max-height: 80px; max-width: 200px; margin-bottom: 12px; display: block; margin-left: auto; margin-right: auto; object-fit: contain;';
+        header.insertBefore(logoImg, headerTitle);
+      } else if (logoImg) {
+        logoImg.src = design.logo;
+        logoImg.style.display = 'block';
+      }
+    } else {
+      // Удаляем логотип, если его нет
+      const logoImg = document.querySelector('header img.logo-img');
+      if (logoImg) logoImg.remove();
+    }
+
+    // Добавляем CSS для всех элементов через style элемент
+    style.textContent = `
+      body {
+        background: ${bodyBg} !important;
+      }
+      header {
+        background: linear-gradient(135deg, ${headerBg}, ${secondaryColor}) !important;
+        position: relative !important;
+      }
+      .card {
+        background: ${cardBg} !important;
+        color: ${finalTextColor} !important;
+      }
+      .card * {
+        color: inherit !important;
+      }
+      .card h2,
+      .card h3,
+      .card h4,
+      .card h5,
+      .card h6 {
+        color: ${finalTextColor} !important;
+      }
+      .card p,
+      .card .description,
+      .card .note,
+      .card div,
+      .card span:not(.price) {
+        color: ${finalTextColor} !important;
+      }
+      .card label {
+        color: ${finalTextColor} !important;
+      }
+      .card .service-item,
+      .card .master-item {
+        color: ${finalTextColor} !important;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}) !important;
+        color: white !important;
+      }
+      .btn-primary:hover {
+        background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}) !important;
+        filter: brightness(1.1);
+        color: white !important;
+      }
+      .service-item span.price {
+        color: ${primaryColor} !important;
+      }
+      .service-item span:first-child {
+        color: ${finalTextColor} !important;
+      }
+      .master-item span {
+        color: ${finalTextColor} !important;
+      }
+      .master-item span.role {
+        color: ${finalTextColor} !important;
+        opacity: 0.7;
+      }
+      input:focus, select:focus, textarea:focus {
+        border-color: ${primaryColor} !important;
+        box-shadow: 0 0 0 1px rgba(${hexToRgb(primaryColor)}, 0.35) !important;
+      }
+      input, select, textarea {
+        color: ${finalTextColor} !important;
+        background: ${isLightBg ? '#f9fafb' : 'rgba(255, 255, 255, 0.1)'} !important;
+      }
+      input::placeholder, textarea::placeholder {
+        color: ${isLightBg ? '#9ca3af' : 'rgba(255, 255, 255, 0.6)'} !important;
+      }
+      .alert-success {
+        background: #dcfce7 !important;
+        color: #166534 !important;
+      }
+      .alert-error {
+        background: #fee2e2 !important;
+        color: #b91c1c !important;
+      }
+    `;
+
+    // Удаляем старый стиль, если есть
+    const oldStyle = document.getElementById('salon-custom-design');
+    if (oldStyle) oldStyle.remove();
+
+    document.head.appendChild(style);
+  }
+
+  // Функция для определения, светлый ли цвет
+  function isLightColor(hex) {
+    const rgb = hexToRgbArray(hex);
+    if (!rgb) return true;
+    // Используем формулу для определения яркости
+    const brightness = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
+    return brightness > 128;
+  }
+
+  // Функция для конвертации hex в массив RGB
+  function hexToRgbArray(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? [
+      parseInt(result[1], 16),
+      parseInt(result[2], 16),
+      parseInt(result[3], 16)
+    ] : null;
+  }
+
+  // Вспомогательная функция для конвертации hex в rgb
+  function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? 
+      `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` 
+      : '249, 115, 182';
   }
 
   function initSalonMap(salon) {

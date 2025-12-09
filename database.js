@@ -122,6 +122,7 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(date);
     `);
 
+<<<<<<< HEAD
     // Миграция: добавление поля salon_phone, если его нет
     try {
       await client.query(`
@@ -131,6 +132,17 @@ async function initDatabase() {
       console.log('Миграция salon_phone выполнена');
     } catch (error) {
       console.log('Поле salon_phone уже существует или ошибка миграции:', error.message);
+=======
+    // Миграция: добавление поля salon_design, если его нет
+    try {
+      await client.query(`
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS salon_design JSONB DEFAULT '{}'::jsonb
+      `);
+      console.log('Миграция salon_design выполнена');
+    } catch (error) {
+      console.log('Поле salon_design уже существует или ошибка миграции:', error.message);
+>>>>>>> 70ed25dca6420da189c618bda8175aeee7d960a0
     }
 
     console.log('База данных PostgreSQL инициализирована');
@@ -164,7 +176,11 @@ const users = {
 
   create: async (userData) => {
     requirePool();
+<<<<<<< HEAD
     const { username, email, password, role, isActive, salonName, salonAddress, salonLat, salonLng, salonPhone } = userData;
+=======
+    const { username, email, password, role, isActive, salonName, salonAddress, salonLat, salonLng, salonDesign } = userData;
+>>>>>>> 70ed25dca6420da189c618bda8175aeee7d960a0
     
     // Валидация
     if (!username || !password) {
@@ -175,7 +191,11 @@ const users = {
     }
     
     const result = await pool.query(`
+<<<<<<< HEAD
       INSERT INTO users (username, email, password, role, is_active, salon_name, salon_address, salon_lat, salon_lng, salon_phone)
+=======
+      INSERT INTO users (username, email, password, role, is_active, salon_name, salon_address, salon_lat, salon_lng, salon_design)
+>>>>>>> 70ed25dca6420da189c618bda8175aeee7d960a0
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id
     `, [
@@ -188,7 +208,11 @@ const users = {
       salonAddress ? salonAddress.trim() : '',
       salonLat || null,
       salonLng || null,
+<<<<<<< HEAD
       salonPhone ? salonPhone.trim() : null
+=======
+      salonDesign ? JSON.stringify(salonDesign) : '{}'
+>>>>>>> 70ed25dca6420da189c618bda8175aeee7d960a0
     ]);
     return result.rows[0].id;
   },
@@ -227,9 +251,19 @@ const users = {
       updates.push(`salon_lng = $${paramIndex++}`);
       values.push(userData.salonLng);
     }
+<<<<<<< HEAD
     if (userData.salonPhone !== undefined) {
       updates.push(`salon_phone = $${paramIndex++}`);
       values.push(userData.salonPhone ? userData.salonPhone.trim() : null);
+=======
+    if (userData.salonDesign !== undefined) {
+      updates.push(`salon_design = $${paramIndex++}::jsonb`);
+      // PostgreSQL JSONB принимает объект напрямую или JSON строку
+      const designValue = typeof userData.salonDesign === 'string' 
+        ? userData.salonDesign 
+        : JSON.stringify(userData.salonDesign);
+      values.push(designValue);
+>>>>>>> 70ed25dca6420da189c618bda8175aeee7d960a0
     }
 
     if (updates.length === 0) return;
