@@ -8,7 +8,10 @@
 </head>
 <body>
 <header>
-  <a href="#" id="logout-link" class="logout-link">Выход</a>
+  <div class="header-top-links">
+    <a href="/users" id="users-link" class="header-top-link">Пользователи</a>
+    <a href="#" id="logout-link" class="logout-link">Выход</a>
+  </div>
   <h1>Beauty Studio</h1>
   <p>База клиентов</p>
   <div class="nav-links">
@@ -17,7 +20,6 @@
     <a href="/calendar">Календарь</a>
     <a href="/services">Услуги и мастера</a>
     <a href="/clients">Клиенты</a>
-    <a href="/users" id="users-link" style="display: none;">Пользователи</a>
   </div>
 </header>
 
@@ -92,10 +94,12 @@
       // Показываем ссылку на управление пользователями только для админов
       const usersLink = document.getElementById('users-link');
       const isAdmin = currentUser.role === 'admin' || currentUser.username === 'admin';
-      if (usersLink && isAdmin) {
-        usersLink.style.display = 'inline-block';
-      } else if (usersLink) {
-        usersLink.style.display = 'none';
+      if (usersLink) {
+        if (isAdmin) {
+          usersLink.classList.add('show');
+        } else {
+          usersLink.classList.remove('show');
+        }
       }
 
       // Проверяем impersonation
@@ -378,8 +382,45 @@
       : '249, 115, 182';
   }
 
+  // Подсветка активной страницы в навигации
+  function highlightActivePage() {
+    const currentPath = window.location.pathname;
+    const navLinks = document.querySelectorAll('.nav-links a, .header-top-links a');
+    
+    navLinks.forEach(link => {
+      // Пропускаем ссылку на выход
+      if (link.id === 'logout-link' || link.href === '#' || !link.href) {
+        return;
+      }
+      
+      try {
+        const linkPath = new URL(link.href, window.location.origin).pathname;
+        // Нормализуем пути (убираем trailing slash)
+        const normalizedCurrent = currentPath.replace(/\/$/, '') || '/';
+        const normalizedLink = linkPath.replace(/\/$/, '') || '/';
+        
+        if (normalizedLink === normalizedCurrent) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      } catch (e) {
+        // Если не удалось распарсить URL, просто сравниваем href
+        const href = link.getAttribute('href');
+        if (href && (href === currentPath || href.replace(/\/$/, '') === currentPath.replace(/\/$/, ''))) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      }
+    });
+  }
+
   // Загружаем данные при загрузке страницы
   loadData();
+  
+  // Подсвечиваем активную страницу
+  highlightActivePage();
 </script>
 </body>
 </html>

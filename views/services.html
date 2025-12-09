@@ -8,6 +8,10 @@
 </head>
 <body>
 <header>
+  <div class="header-top-links">
+    <a href="/users" id="users-link" class="header-top-link">Пользователи</a>
+    <a href="#" id="logout-link" class="logout-link">Выход</a>
+  </div>
   <div id="logo-container"></div>
   <h1>Beauty Studio</h1>
   <p>Управление услугами и мастерами</p>
@@ -17,8 +21,6 @@
     <a href="/calendar">Календарь</a>
     <a href="/services">Услуги и мастера</a>
     <a href="/clients">Клиенты</a>
-    <a href="/users" id="users-link" style="display: none;">Пользователи</a>
-    <a href="#" id="logout-link">Выход</a>
   </div>
 </header>
 
@@ -76,6 +78,64 @@
   </div>
 </div>
 
+<!-- Модальное окно для редактирования услуги -->
+<div id="edit-service-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Редактировать услугу</div>
+      <button type="button" class="modal-close" id="close-edit-service-modal">×</button>
+    </div>
+    <div class="modal-body">
+      <form id="edit-service-form">
+        <div>
+          <label for="edit-service-name">Название услуги</label>
+          <input type="text" id="edit-service-name" placeholder="Например: Ботокс волос" required />
+        </div>
+        <div class="form-row">
+          <div>
+            <label for="edit-service-price">Стоимость, сум</label>
+            <input type="text" id="edit-service-price" placeholder="Например: 350000" required />
+          </div>
+          <div>
+            <label for="edit-service-duration">Длительность, минут</label>
+            <input type="text" id="edit-service-duration" placeholder="Например: 90" required />
+          </div>
+        </div>
+        <div style="display: flex; gap: 12px; margin-top: 20px;">
+          <button type="submit" class="btn-primary" style="flex: 1;">Сохранить</button>
+          <button type="button" class="btn-secondary" id="cancel-edit-service" style="flex: 1;">Отмена</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Модальное окно для редактирования мастера -->
+<div id="edit-master-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Редактировать мастера</div>
+      <button type="button" class="modal-close" id="close-edit-master-modal">×</button>
+    </div>
+    <div class="modal-body">
+      <form id="edit-master-form">
+        <div>
+          <label for="edit-master-name">Имя мастера</label>
+          <input type="text" id="edit-master-name" placeholder="Например: Лейла" required />
+        </div>
+        <div>
+          <label for="edit-master-role">Специализация</label>
+          <input type="text" id="edit-master-role" placeholder="Например: бровист" />
+        </div>
+        <div style="display: flex; gap: 12px; margin-top: 20px;">
+          <button type="submit" class="btn-primary" style="flex: 1;">Сохранить</button>
+          <button type="button" class="btn-secondary" id="cancel-edit-master" style="flex: 1;">Отмена</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <footer>
   © 2025 Beauty Studio. Все права защищены.
 </footer>
@@ -121,10 +181,12 @@
       // Показываем ссылку на управление пользователями только для админов
       const usersLink = document.getElementById('users-link');
       const isAdmin = currentUser.role === 'admin' || currentUser.username === 'admin';
-      if (usersLink && isAdmin) {
-        usersLink.style.display = 'inline-block';
-      } else if (usersLink) {
-        usersLink.style.display = 'none';
+      if (usersLink) {
+        if (isAdmin) {
+          usersLink.classList.add('show');
+        } else {
+          usersLink.classList.remove('show');
+        }
       }
       
       // Применяем дизайн
@@ -261,29 +323,28 @@
       return;
     }
 
-    if (editingServiceId !== null) {
-      const svc = services.find(s => s.id === editingServiceId);
-      if (svc) {
-        svc.name = name;
-        svc.price = price;
-        svc.duration = duration;
+    // Проверяем, существует ли услуга с таким же названием
+    const existing = services.find(s => s.name === name);
+    if (existing) {
+      if (!confirm(`Услуга с названием "${name}" уже существует. Хотите отредактировать существующую услугу?`)) {
+        return;
       }
-      editingServiceId = null;
-      serviceSubmitBtn.textContent = 'Сохранить услугу';
-    } else {
-      const existing = services.find(s => s.name === name);
-      if (existing) {
-        existing.price = price;
-        existing.duration = duration;
-      } else {
-        services.push({
-          id: services.length > 0 ? Math.max(...services.map(s => s.id)) + 1 : 1,
-          name,
-          price,
-          duration
-        });
-      }
+      // Очищаем поля основной формы перед открытием модального окна
+      serviceName.value = '';
+      servicePrice.value = '';
+      serviceDuration.value = '';
+      // Открываем модальное окно редактирования вместо тихого обновления
+      openEditServiceModal(existing);
+      return;
     }
+
+    // Создаем новую услугу
+    services.push({
+      id: services.length > 0 ? Math.max(...services.map(s => s.id)) + 1 : 1,
+      name,
+      price,
+      duration
+    });
 
     await saveServices();
     serviceName.value = '';
@@ -301,11 +362,7 @@
     if (!service) return;
 
     if (action === 'edit') {
-      serviceName.value = service.name;
-      servicePrice.value = String(service.price);
-      serviceDuration.value = String(service.duration);
-      editingServiceId = service.id;
-      serviceSubmitBtn.textContent = 'Обновить услугу';
+      openEditServiceModal(service);
     } else if (action === 'delete') {
       if (!confirm(`Удалить услугу "${service.name}"?`)) return;
       services = services.filter(s => s.id !== id);
@@ -315,6 +372,8 @@
         servicePrice.value = '';
         serviceDuration.value = '';
         serviceSubmitBtn.textContent = 'Сохранить услугу';
+        // Закрываем модальное окно, если редактируемая услуга была удалена
+        closeEditServiceModal();
       }
       saveServices();
       renderServices();
@@ -343,26 +402,26 @@
       return;
     }
 
-    if (editingMasterId !== null) {
-      const m = masters.find(mm => mm.id === editingMasterId);
-      if (m) {
-        m.name = name;
-        m.role = role || m.role;
+    // Проверяем, существует ли мастер с таким же именем
+    const existing = masters.find(m => m.name === name);
+    if (existing) {
+      if (!confirm(`Мастер с именем "${name}" уже существует. Хотите отредактировать существующего мастера?`)) {
+        return;
       }
-      editingMasterId = null;
-      masterSubmitBtn.textContent = 'Сохранить мастера';
-    } else {
-      const existing = masters.find(m => m.name === name);
-      if (existing) {
-        existing.role = role || existing.role;
-      } else {
-        masters.push({
-          id: masters.length > 0 ? Math.max(...masters.map(m => m.id)) + 1 : 1,
-          name,
-          role
-        });
-      }
+      // Очищаем поля основной формы перед открытием модального окна
+      masterName.value = '';
+      masterRole.value = '';
+      // Открываем модальное окно редактирования вместо тихого обновления
+      openEditMasterModal(existing);
+      return;
     }
+
+    // Создаем нового мастера
+    masters.push({
+      id: masters.length > 0 ? Math.max(...masters.map(m => m.id)) + 1 : 1,
+      name,
+      role
+    });
 
     await saveMasters();
     masterName.value = '';
@@ -379,10 +438,7 @@
     if (!master) return;
 
     if (action === 'edit') {
-      masterName.value = master.name;
-      masterRole.value = master.role || '';
-      editingMasterId = master.id;
-      masterSubmitBtn.textContent = 'Обновить мастера';
+      openEditMasterModal(master);
     } else if (action === 'delete') {
       if (!confirm(`Удалить мастера "${master.name}"?`)) return;
       masters = masters.filter(m => m.id !== id);
@@ -391,6 +447,8 @@
         masterName.value = '';
         masterRole.value = '';
         masterSubmitBtn.textContent = 'Сохранить мастера';
+        // Закрываем модальное окно, если редактируемый мастер был удален
+        closeEditMasterModal();
       }
       saveMasters();
       renderMasters();
@@ -559,6 +617,22 @@
       input::placeholder, textarea::placeholder {
         color: ${isLightBg ? '#9ca3af' : 'rgba(255, 255, 255, 0.6)'} !important;
       }
+      .modal {
+        background: ${cardBg} !important;
+        color: ${finalTextColor} !important;
+      }
+      .modal * {
+        color: inherit !important;
+      }
+      .modal-title {
+        color: ${finalTextColor} !important;
+      }
+      .modal-close {
+        color: ${isLightBg ? '#6b7280' : 'rgba(255, 255, 255, 0.8)'} !important;
+      }
+      .modal-close:hover {
+        color: ${isLightBg ? '#374151' : '#ffffff'} !important;
+      }
     `;
 
     const oldStyle = document.getElementById('salon-custom-design');
@@ -589,8 +663,215 @@
       : '249, 115, 182';
   }
 
+  // Подсветка активной страницы в навигации
+  function highlightActivePage() {
+    const currentPath = window.location.pathname;
+    const navLinks = document.querySelectorAll('.nav-links a, .header-top-links a');
+    
+    navLinks.forEach(link => {
+      // Пропускаем ссылку на выход
+      if (link.id === 'logout-link' || link.href === '#' || !link.href) {
+        return;
+      }
+      
+      try {
+        const linkPath = new URL(link.href, window.location.origin).pathname;
+        // Нормализуем пути (убираем trailing slash)
+        const normalizedCurrent = currentPath.replace(/\/$/, '') || '/';
+        const normalizedLink = linkPath.replace(/\/$/, '') || '/';
+        
+        if (normalizedLink === normalizedCurrent) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      } catch (e) {
+        // Если не удалось распарсить URL, просто сравниваем href
+        const href = link.getAttribute('href');
+        if (href && (href === currentPath || href.replace(/\/$/, '') === currentPath.replace(/\/$/, ''))) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      }
+    });
+  }
+
+  // Функции для работы с модальными окнами редактирования услуг
+  function openEditServiceModal(service) {
+    const modal = document.getElementById('edit-service-modal');
+    const nameInput = document.getElementById('edit-service-name');
+    const priceInput = document.getElementById('edit-service-price');
+    const durationInput = document.getElementById('edit-service-duration');
+    
+    if (!modal || !nameInput || !priceInput || !durationInput) return;
+    
+    nameInput.value = service.name;
+    priceInput.value = String(service.price);
+    durationInput.value = String(service.duration);
+    editingServiceId = service.id;
+    
+    modal.classList.remove('hidden');
+  }
+
+  function closeEditServiceModal() {
+    const modal = document.getElementById('edit-service-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      editingServiceId = null;
+      document.getElementById('edit-service-form').reset();
+    }
+  }
+
+  // Обработчик формы редактирования услуги
+  document.getElementById('edit-service-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('edit-service-name').value.trim();
+    const priceRaw = document.getElementById('edit-service-price').value.trim();
+    const durationRaw = document.getElementById('edit-service-duration').value.trim();
+
+    if (!name || !priceRaw || !durationRaw) {
+      alert('Заполните все поля');
+      return;
+    }
+
+    if (name.length > 100) {
+      alert('Название услуги слишком длинное (максимум 100 символов)');
+      return;
+    }
+
+    const price = Number(priceRaw.replace(/\s+/g, ''));
+    const duration = Number(durationRaw.replace(/\s+/g, ''));
+    if (Number.isNaN(price) || Number.isNaN(duration)) {
+      alert('Стоимость и длительность должны быть числами');
+      return;
+    }
+    if (price <= 0 || duration <= 0) {
+      alert('Стоимость и длительность должны быть положительными числами');
+      return;
+    }
+    if (price > 10000000) {
+      alert('Стоимость слишком высокая (максимум 10 000 000)');
+      return;
+    }
+    if (duration > 1440) {
+      alert('Длительность слишком большая (максимум 1440 минут = 24 часа)');
+      return;
+    }
+
+    if (editingServiceId !== null) {
+      // Проверяем, что редактируемый элемент все еще существует
+      const svc = services.find(s => s.id === editingServiceId);
+      if (!svc) {
+        alert('Эта услуга была удалена. Модальное окно будет закрыто.');
+        closeEditServiceModal();
+        return;
+      }
+
+      // Проверяем на дубликаты имен (исключая текущий редактируемый элемент)
+      const existing = services.find(s => s.name === name && s.id !== editingServiceId);
+      if (existing) {
+        alert(`Услуга с названием "${name}" уже существует. Пожалуйста, выберите другое название.`);
+        return;
+      }
+
+      svc.name = name;
+      svc.price = price;
+      svc.duration = duration;
+      await saveServices();
+      renderServices();
+      closeEditServiceModal();
+    } else {
+      alert('Ошибка: не выбран элемент для редактирования. Модальное окно будет закрыто.');
+      closeEditServiceModal();
+    }
+  });
+
+  // Функции для работы с модальными окнами редактирования мастеров
+  function openEditMasterModal(master) {
+    const modal = document.getElementById('edit-master-modal');
+    const nameInput = document.getElementById('edit-master-name');
+    const roleInput = document.getElementById('edit-master-role');
+    
+    if (!modal || !nameInput || !roleInput) return;
+    
+    nameInput.value = master.name;
+    roleInput.value = master.role || '';
+    editingMasterId = master.id;
+    
+    modal.classList.remove('hidden');
+  }
+
+  function closeEditMasterModal() {
+    const modal = document.getElementById('edit-master-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      editingMasterId = null;
+      document.getElementById('edit-master-form').reset();
+    }
+  }
+
+  // Обработчик формы редактирования мастера
+  document.getElementById('edit-master-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('edit-master-name').value.trim();
+    const role = document.getElementById('edit-master-role').value.trim();
+
+    if (!name) {
+      alert('Введите имя мастера');
+      return;
+    }
+
+    if (name.length > 50) {
+      alert('Имя мастера слишком длинное (максимум 50 символов)');
+      return;
+    }
+
+    if (editingMasterId !== null) {
+      // Проверяем, что редактируемый элемент все еще существует
+      const m = masters.find(mm => mm.id === editingMasterId);
+      if (!m) {
+        alert('Этот мастер был удален. Модальное окно будет закрыто.');
+        closeEditMasterModal();
+        return;
+      }
+
+      // Проверяем на дубликаты имен (исключая текущий редактируемый элемент)
+      const existing = masters.find(m => m.name === name && m.id !== editingMasterId);
+      if (existing) {
+        alert(`Мастер с именем "${name}" уже существует. Пожалуйста, выберите другое имя.`);
+        return;
+      }
+
+      m.name = name;
+      m.role = role || m.role;
+      await saveMasters();
+      renderMasters();
+      closeEditMasterModal();
+    } else {
+      alert('Ошибка: не выбран элемент для редактирования. Модальное окно будет закрыто.');
+      closeEditMasterModal();
+    }
+  });
+
+  // Обработчики закрытия модальных окон
+  document.getElementById('close-edit-service-modal')?.addEventListener('click', closeEditServiceModal);
+  document.getElementById('cancel-edit-service')?.addEventListener('click', closeEditServiceModal);
+  document.getElementById('edit-service-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'edit-service-modal') closeEditServiceModal();
+  });
+
+  document.getElementById('close-edit-master-modal')?.addEventListener('click', closeEditMasterModal);
+  document.getElementById('cancel-edit-master')?.addEventListener('click', closeEditMasterModal);
+  document.getElementById('edit-master-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'edit-master-modal') closeEditMasterModal();
+  });
+
   // Загружаем данные при загрузке страницы
   loadUserData();
+  
+  // Подсвечиваем активную страницу
+  highlightActivePage();
 </script>
 </body>
 </html>

@@ -8,15 +8,18 @@
 </head>
 <body>
 <header>
-  <a href="#" id="logout-link" class="logout-link">Выход</a>
+  <div class="header-top-links">
+    <a href="/users" id="users-link" class="header-top-link">Пользователи</a>
+    <a href="#" id="logout-link" class="logout-link">Выход</a>
+  </div>
   <h1>Beauty Studio</h1>
   <p>Панель управления салоном</p>
   <div class="nav-links">
     <a href="/" id="salon-page-link">Страница салона</a>
+    <a href="/admin">Админ-панель</a>
     <a href="/calendar">Календарь</a>
     <a href="/services">Услуги и мастера</a>
     <a href="/clients">Клиенты</a>
-    <a href="/users" id="users-link">Пользователи</a>
   </div>
 </header>
 
@@ -45,8 +48,8 @@
 
   <!-- Вкладка: Информация о салоне -->
   <div class="main-tab-content active" id="salon-info-tab">
-    <div class="card">
-      <h2>Информация о салоне</h2>
+  <div class="card">
+    <h2>Информация о салоне</h2>
     <p class="description">Настройте название салона и укажите местоположение на карте.</p>
 
     <form id="salon-form">
@@ -96,7 +99,7 @@
 
         <div class="tab-content" id="colors-tab">
           <div class="form-row">
-            <div>
+      <div>
               <label for="design-primary-color">Основной цвет</label>
               <input type="color" id="design-primary-color" value="#f973b6" />
               <p class="note">Цвет кнопок и акцентов</p>
@@ -106,19 +109,19 @@
               <input type="color" id="design-secondary-color" value="#a855f7" />
               <p class="note">Второй цвет градиента</p>
             </div>
-          </div>
-          <div class="form-row">
-            <div>
+      </div>
+      <div class="form-row">
+        <div>
               <label for="design-header-bg">Фон заголовка</label>
               <input type="color" id="design-header-bg" value="#f973b6" />
               <p class="note">Цвет фона шапки</p>
-            </div>
-            <div>
+        </div>
+        <div>
               <label for="design-card-bg">Фон карточек</label>
               <input type="color" id="design-card-bg" value="#ffffff" />
               <p class="note">Цвет фона карточек</p>
-            </div>
-          </div>
+        </div>
+      </div>
           <div>
             <label for="design-text-color">Цвет текста</label>
             <input type="color" id="design-text-color" value="#222222" />
@@ -148,19 +151,19 @@
             <input type="text" id="design-page-bg-image-url" placeholder="https://example.com/image.jpg" />
             <p class="note">Введите URL изображения для фона</p>
           </div>
-        </div>
+  </div>
 
         <div class="tab-content" id="header-tab" style="display: none;">
-          <div>
+      <div>
             <label for="design-header-title">Заголовок страницы</label>
             <input type="text" id="design-header-title" placeholder="Например: Добро пожаловать в наш салон" />
             <p class="note">Текст, который отображается под названием салона</p>
-          </div>
-          <div>
+      </div>
+      <div>
             <label for="design-header-description">Описание</label>
             <textarea id="design-header-description" placeholder="Краткое описание вашего салона..."></textarea>
             <p class="note">Дополнительная информация о салоне</p>
-          </div>
+      </div>
           <div class="divider" style="margin: 16px 0;"></div>
           <div>
             <label for="design-logo">Логотип</label>
@@ -242,10 +245,12 @@
       // Показываем ссылку на управление пользователями только для админов
       const usersLink = document.getElementById('users-link');
       const isAdmin = currentUser.role === 'admin' || currentUser.username === 'admin';
-      if (usersLink && isAdmin) {
-        usersLink.style.display = 'inline-block';
-      } else if (usersLink) {
-        usersLink.style.display = 'none';
+      if (usersLink) {
+        if (isAdmin) {
+          usersLink.classList.add('show');
+        } else {
+          usersLink.classList.remove('show');
+        }
       }
       
       // Загружаем информацию о салоне
@@ -378,8 +383,8 @@
         if (file.size > 2 * 1024 * 1024) { // 2MB лимит
           alert('Размер файла не должен превышать 2MB');
           e.target.value = '';
-          return;
-        }
+      return;
+    }
         
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -436,7 +441,7 @@
   const designForm = document.getElementById('design-form');
   if (designForm) {
     designForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
+    e.preventDefault();
       const designAlert = document.getElementById('design-alert');
       if (designAlert) designAlert.style.display = 'none';
 
@@ -476,7 +481,7 @@
           }
           // Применяем дизайн сразу после сохранения
           applyDesign(design);
-        } else {
+    } else {
           if (designAlert) {
             designAlert.className = 'alert alert-error';
             designAlert.textContent = result.message || 'Ошибка сохранения';
@@ -909,8 +914,45 @@
     });
   });
 
+  // Подсветка активной страницы в навигации
+  function highlightActivePage() {
+    const currentPath = window.location.pathname;
+    const navLinks = document.querySelectorAll('.nav-links a, .header-top-links a');
+    
+    navLinks.forEach(link => {
+      // Пропускаем ссылку на выход
+      if (link.id === 'logout-link' || link.href === '#' || !link.href) {
+        return;
+      }
+      
+      try {
+        const linkPath = new URL(link.href, window.location.origin).pathname;
+        // Нормализуем пути (убираем trailing slash)
+        const normalizedCurrent = currentPath.replace(/\/$/, '') || '/';
+        const normalizedLink = linkPath.replace(/\/$/, '') || '/';
+        
+        if (normalizedLink === normalizedCurrent) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      } catch (e) {
+        // Если не удалось распарсить URL, просто сравниваем href
+        const href = link.getAttribute('href');
+        if (href && (href === currentPath || href.replace(/\/$/, '') === currentPath.replace(/\/$/, ''))) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      }
+    });
+  }
+
   // Загружаем данные при загрузке страницы
   loadUserData();
+  
+  // Подсвечиваем активную страницу
+  highlightActivePage();
 </script>
 
 <!-- Контейнер для push-уведомлений -->
@@ -1071,50 +1113,50 @@
     console.log('showNotification вызвана:', { title, message, type, bookingId });
     
     try {
-      // Добавляем в список
+    // Добавляем в список
       if (typeof addNotificationToList === 'function') {
-        addNotificationToList(title, message, type, bookingId);
+    addNotificationToList(title, message, type, bookingId);
       } else {
         console.error('Функция addNotificationToList не найдена!');
       }
-      
-      // Показываем временное уведомление
-      const container = document.getElementById('notification-container');
+    
+    // Показываем временное уведомление
+    const container = document.getElementById('notification-container');
       if (!container) {
         console.error('Контейнер уведомлений не найден!');
         return;
       }
-      
-      const notification = document.createElement('div');
-      notification.className = `notification ${type}`;
-      
-      const icons = {
-        success: '✓',
-        error: '✕',
-        warning: '⚠',
-        info: 'ℹ'
-      };
-      
-      notification.innerHTML = `
-        <div class="notification-icon">${icons[type] || icons.success}</div>
-        <div class="notification-content">
-          <div class="notification-title">${title}</div>
-          <div class="notification-message">${message}</div>
-        </div>
-        <button class="notification-close" onclick="this.parentElement.remove()">×</button>
-      `;
-      
-      container.appendChild(notification);
-      
-      // Автоматически скрываем через 5 секунд
+    
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    
+    const icons = {
+      success: '✓',
+      error: '✕',
+      warning: '⚠',
+      info: 'ℹ'
+    };
+    
+    notification.innerHTML = `
+      <div class="notification-icon">${icons[type] || icons.success}</div>
+      <div class="notification-content">
+        <div class="notification-title">${title}</div>
+        <div class="notification-message">${message}</div>
+      </div>
+      <button class="notification-close" onclick="this.parentElement.remove()">×</button>
+    `;
+    
+    container.appendChild(notification);
+    
+    // Автоматически скрываем через 5 секунд
+    setTimeout(() => {
+      notification.classList.add('hiding');
       setTimeout(() => {
-        notification.classList.add('hiding');
-        setTimeout(() => {
-          if (notification.parentElement) {
-            notification.remove();
-          }
-        }, 300);
-      }, 5000);
+        if (notification.parentElement) {
+          notification.remove();
+        }
+      }, 300);
+    }, 5000);
     } catch (error) {
       console.error('Ошибка в showNotification:', error);
     }
@@ -1204,12 +1246,12 @@
             const date = new Date(booking.date);
             const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
             if (typeof showNotification === 'function') {
-              showNotification(
-                'Новая запись!',
-                `${booking.name} - ${booking.service} на ${dateStr} в ${booking.time}`,
-                'info',
-                booking.id // Передаем ID записи
-              );
+            showNotification(
+              'Новая запись!',
+              `${booking.name} - ${booking.service} на ${dateStr} в ${booking.time}`,
+              'info',
+              booking.id // Передаем ID записи
+            );
             } else {
               console.error('Функция showNotification не найдена!');
             }

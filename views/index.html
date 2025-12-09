@@ -864,8 +864,45 @@
   if (masterSelect) masterSelect.addEventListener("change", generateSlots);
   if (timeSelect) timeSelect.addEventListener("change", updateDurationHint);
 
+  // Подсветка активной страницы в навигации
+  function highlightActivePage() {
+    const currentPath = window.location.pathname;
+    const navLinks = document.querySelectorAll('.nav-links a, .header-top-links a');
+    
+    navLinks.forEach(link => {
+      // Пропускаем ссылку на выход
+      if (link.id === 'logout-link' || link.href === '#' || !link.href) {
+        return;
+      }
+      
+      try {
+        const linkPath = new URL(link.href, window.location.origin).pathname;
+        // Нормализуем пути (убираем trailing slash)
+        const normalizedCurrent = currentPath.replace(/\/$/, '') || '/';
+        const normalizedLink = linkPath.replace(/\/$/, '') || '/';
+        
+        if (normalizedLink === normalizedCurrent) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      } catch (e) {
+        // Если не удалось распарсить URL, просто сравниваем href
+        const href = link.getAttribute('href');
+        if (href && (href === currentPath || href.replace(/\/$/, '') === currentPath.replace(/\/$/, ''))) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      }
+    });
+  }
+
   // Загружаем данные при загрузке страницы
   loadData();
+  
+  // Подсвечиваем активную страницу
+  highlightActivePage();
 </script>
 </body>
 </html>
