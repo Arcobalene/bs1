@@ -52,6 +52,7 @@
   <div class="main-tabs">
     <button class="main-tab-button active" data-main-tab="salon-info">Информация о салоне</button>
     <button class="main-tab-button" data-main-tab="design">Дизайн</button>
+    <button class="main-tab-button" data-main-tab="telegram-integration" id="telegram-tab-button" style="display: none;">Интеграция Telegram</button>
   </div>
 
   <!-- Вкладка: Информация о салоне -->
@@ -325,6 +326,73 @@
       </form>
     </div>
   </div>
+
+  <!-- Вкладка: Интеграция Telegram (только для админов) -->
+  <div class="main-tab-content" id="telegram-integration-tab" style="display: none;">
+    <div class="card">
+      <h2>Интеграция с Telegram ботом</h2>
+      <p class="description">Настройте интеграцию с Telegram ботом для получения уведомлений о новых записях.</p>
+
+      <form id="telegram-form">
+        <div>
+          <label for="telegram-bot-token">Токен Telegram бота</label>
+          <input type="text" id="telegram-bot-token" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz" />
+          <p class="note">Получите токен у @BotFather в Telegram. Создайте бота командой /newbot</p>
+        </div>
+
+        <div>
+          <label for="telegram-chat-id">Chat ID для уведомлений</label>
+          <input type="text" id="telegram-chat-id" placeholder="123456789 или @channel_name" />
+          <p class="note">ID чата или канала, куда будут отправляться уведомления. Узнайте у @userinfobot</p>
+        </div>
+
+        <div>
+          <label>
+            <input type="checkbox" id="telegram-enabled" />
+            Включить уведомления в Telegram
+          </label>
+          <p class="note">При включении уведомления будут отправляться при каждой новой записи</p>
+        </div>
+
+        <div>
+          <label>
+            <input type="checkbox" id="telegram-notify-new-bookings" />
+            Уведомлять о новых записях
+          </label>
+        </div>
+
+        <div>
+          <label>
+            <input type="checkbox" id="telegram-notify-cancellations" />
+            Уведомлять об отменах записей
+          </label>
+        </div>
+
+        <div>
+          <label>
+            <input type="checkbox" id="telegram-notify-changes" />
+            Уведомлять об изменениях в записях
+          </label>
+        </div>
+
+        <button type="button" class="btn-secondary" id="test-telegram-btn" style="margin-right: 8px;">Тестовая отправка</button>
+        <button type="submit" class="btn-primary">Сохранить настройки</button>
+        <div id="telegram-alert" class="alert" style="display: none;"></div>
+      </form>
+
+      <div style="margin-top: 24px; padding: 16px; background: #f3f4f6; border-radius: 8px;">
+        <h3 style="margin-bottom: 12px; font-size: 1rem;">Инструкция по настройке:</h3>
+        <ol style="margin-left: 20px; line-height: 1.8;">
+          <li>Откройте Telegram и найдите бота <strong>@BotFather</strong></li>
+          <li>Отправьте команду <code>/newbot</code> и следуйте инструкциям</li>
+          <li>Скопируйте полученный токен и вставьте в поле "Токен Telegram бота"</li>
+          <li>Для получения Chat ID найдите бота <strong>@userinfobot</strong> и отправьте ему любое сообщение</li>
+          <li>Скопируйте ваш ID (число) и вставьте в поле "Chat ID для уведомлений"</li>
+          <li>Для каналов: добавьте бота в канал как администратора, затем отправьте сообщение в канал и получите ID через @userinfobot</li>
+        </ol>
+      </div>
+    </div>
+  </div>
 </div>
 
 <footer>
@@ -378,6 +446,19 @@
           usersLink.classList.remove('show');
         }
       }
+      
+      // Показываем вкладку интеграции Telegram только для админов
+      const telegramTabButton = document.getElementById('telegram-tab-button');
+      if (telegramTabButton) {
+        if (isAdmin) {
+          telegramTabButton.style.display = 'inline-block';
+        } else {
+          telegramTabButton.style.display = 'none';
+        }
+      }
+      
+      // Сохраняем currentUser в window для использования в других функциях
+      window.currentUser = currentUser;
       
       // Загружаем информацию о салоне
       loadSalonInfo();
@@ -1171,6 +1252,124 @@
   
   // Подсвечиваем активную страницу
   highlightActivePage();
+
+  // Загрузка настроек Telegram
+  async function loadTelegramSettings() {
+    try {
+      const response = await fetch('/api/telegram/settings');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.settings) {
+          const settings = data.settings;
+          document.getElementById('telegram-bot-token').value = settings.botToken || '';
+          document.getElementById('telegram-chat-id').value = settings.chatId || '';
+          document.getElementById('telegram-enabled').checked = settings.enabled || false;
+          document.getElementById('telegram-notify-new-bookings').checked = settings.notifyNewBookings || false;
+          document.getElementById('telegram-notify-cancellations').checked = settings.notifyCancellations || false;
+          document.getElementById('telegram-notify-changes').checked = settings.notifyChanges || false;
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки настроек Telegram:', error);
+    }
+  }
+
+  // Сохранение настроек Telegram
+  const telegramForm = document.getElementById('telegram-form');
+  if (telegramForm) {
+    telegramForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const alertDiv = document.getElementById('telegram-alert');
+      alertDiv.style.display = 'none';
+      
+      const settings = {
+        botToken: document.getElementById('telegram-bot-token').value.trim(),
+        chatId: document.getElementById('telegram-chat-id').value.trim(),
+        enabled: document.getElementById('telegram-enabled').checked,
+        notifyNewBookings: document.getElementById('telegram-notify-new-bookings').checked,
+        notifyCancellations: document.getElementById('telegram-notify-cancellations').checked,
+        notifyChanges: document.getElementById('telegram-notify-changes').checked
+      };
+      
+      try {
+        const response = await fetch('/api/telegram/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settings)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          alertDiv.className = 'alert success';
+          alertDiv.textContent = 'Настройки Telegram успешно сохранены!';
+          alertDiv.style.display = 'block';
+        } else {
+          alertDiv.className = 'alert error';
+          alertDiv.textContent = data.message || 'Ошибка сохранения настроек';
+          alertDiv.style.display = 'block';
+        }
+      } catch (error) {
+        alertDiv.className = 'alert error';
+        alertDiv.textContent = 'Ошибка при сохранении настроек';
+        alertDiv.style.display = 'block';
+        console.error('Ошибка сохранения настроек Telegram:', error);
+      }
+    });
+  }
+
+  // Тестовая отправка сообщения в Telegram
+  const testTelegramBtn = document.getElementById('test-telegram-btn');
+  if (testTelegramBtn) {
+    testTelegramBtn.addEventListener('click', async () => {
+      const alertDiv = document.getElementById('telegram-alert');
+      alertDiv.style.display = 'none';
+      
+      const botToken = document.getElementById('telegram-bot-token').value.trim();
+      const chatId = document.getElementById('telegram-chat-id').value.trim();
+      
+      if (!botToken || !chatId) {
+        alertDiv.className = 'alert error';
+        alertDiv.textContent = 'Заполните токен бота и Chat ID перед тестированием';
+        alertDiv.style.display = 'block';
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/telegram/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ botToken, chatId })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          alertDiv.className = 'alert success';
+          alertDiv.textContent = 'Тестовое сообщение успешно отправлено! Проверьте Telegram.';
+          alertDiv.style.display = 'block';
+        } else {
+          alertDiv.className = 'alert error';
+          alertDiv.textContent = data.message || 'Ошибка отправки тестового сообщения';
+          alertDiv.style.display = 'block';
+        }
+      } catch (error) {
+        alertDiv.className = 'alert error';
+        alertDiv.textContent = 'Ошибка при отправке тестового сообщения';
+        alertDiv.style.display = 'block';
+        console.error('Ошибка тестовой отправки Telegram:', error);
+      }
+    });
+  }
+
+  // Загружаем настройки Telegram при загрузке страницы (только для админов)
+  loadUserData().then(() => {
+    const currentUser = window.currentUser;
+    if (currentUser && (currentUser.role === 'admin' || currentUser.username === 'admin')) {
+      loadTelegramSettings();
+    }
+  });
 </script>
 
 <!-- Контейнер для push-уведомлений -->
