@@ -98,7 +98,6 @@
       if (salonPageLink && currentUser.id) {
         salonPageLink.href = `/booking?userId=${currentUser.id}`;
       }
-      }
       
       // Проверяем права администратора (включая обратную совместимость)
       const isAdmin = currentUser.role === 'admin' || currentUser.username === 'admin';

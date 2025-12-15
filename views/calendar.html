@@ -214,7 +214,6 @@
       if (salonPageLink && currentUser && currentUser.id) {
         salonPageLink.href = `/booking?userId=${currentUser.id}`;
       }
-      }
       
       // Показываем ссылку на управление пользователями только для админов
       const usersLink = document.getElementById('users-link');
@@ -1431,9 +1430,14 @@
   // Инициализируем список известных записей после загрузки данных
   setTimeout(() => {
     // Сохраняем ID всех текущих записей как уже известные
-    bookings.forEach(booking => {
-      knownBookingIds.add(String(booking.id));
-    });
+    if (bookings && Array.isArray(bookings)) {
+      bookings.forEach(booking => {
+        knownBookingIds.add(String(booking.id));
+      });
+      console.log('Проверка новых записей инициализирована (' + bookings.length + ' известных записей, интервал: 30 секунд)');
+    } else {
+      console.log('Проверка новых записей инициализирована (0 известных записей, интервал: 30 секунд)');
+    }
     // Проверяем новые записи каждые 30 секунд
     setInterval(checkNewBookings, 30000);
   }, 2000);
