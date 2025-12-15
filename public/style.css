@@ -99,7 +99,7 @@ header p {
 }
 
 #users-link.header-top-link.show {
-  display: inline-block !important;
+  display: inline-flex !important;
 }
 
 .header-top-links {
@@ -117,17 +117,28 @@ header p {
 #users-link.header-top-link {
   color: white;
   text-decoration: none;
-  padding: 8px 16px;
-  border-radius: 999px;
+  padding: 8px;
+  border-radius: 50%;
   background: rgba(255, 255, 255, 0.2);
-  transition: background 0.2s;
-  font-size: 0.9rem;
-  display: inline-block;
+  transition: background 0.2s, transform 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
 }
 
 .logout-link:hover,
 #users-link.header-top-link:hover {
   background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+.logout-link svg,
+#users-link.header-top-link svg {
+  width: 20px;
+  height: 20px;
+  fill: white;
 }
 
 @media (max-width: 600px) {
@@ -139,8 +150,15 @@ header p {
   
   .logout-link,
   #users-link.header-top-link {
-    padding: 6px 12px;
-    font-size: 0.85rem;
+    padding: 6px;
+    width: 32px;
+    height: 32px;
+  }
+  
+  .logout-link svg,
+  #users-link.header-top-link svg {
+    width: 18px;
+    height: 18px;
   }
 }
 
@@ -310,14 +328,18 @@ textarea {
 }
 
 .btn-secondary {
-  background: #111827;
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.35);
+  background: #6b7280;
+  box-shadow: 0 10px 25px rgba(107, 114, 128, 0.35);
 }
 
-.btn-primary:hover,
-.btn-secondary:hover {
+.btn-primary:hover {
   transform: translateY(-1px);
   box-shadow: 0 15px 30px rgba(15, 23, 42, 0.55);
+}
+
+.btn-secondary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 15px 30px rgba(107, 114, 128, 0.55);
 }
 
 .btn-primary:active,
