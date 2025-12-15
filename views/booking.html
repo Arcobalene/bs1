@@ -678,7 +678,11 @@
         const sectionName = (salonData.design && salonData.design.sectionServices && salonData.design.sectionServices.trim()) 
           ? salonData.design.sectionServices 
           : 'Услуги';
-        servicesListEl.innerHTML = `<p style="color: #6b7280; text-align: center; padding: 20px;">${sectionName} пока не добавлены</p>`;
+        const emptyMsg = document.createElement('p');
+        emptyMsg.style.cssText = 'color: #6b7280; text-align: center; padding: 20px;';
+        emptyMsg.textContent = `${sectionName} пока не добавлены`;
+        servicesListEl.innerHTML = '';
+        servicesListEl.appendChild(emptyMsg);
       }
     }
 
@@ -727,7 +731,11 @@
         const sectionName = (salonData.design && salonData.design.sectionMasters && salonData.design.sectionMasters.trim()) 
           ? salonData.design.sectionMasters 
           : 'Мастера';
-        mastersListEl.innerHTML = `<p style="color: #6b7280; text-align: center; padding: 20px;">${sectionName} пока не добавлены</p>`;
+        const emptyMsg = document.createElement('p');
+        emptyMsg.style.cssText = 'color: #6b7280; text-align: center; padding: 20px;';
+        emptyMsg.textContent = `${sectionName} пока не добавлены`;
+        mastersListEl.innerHTML = '';
+        mastersListEl.appendChild(emptyMsg);
       }
     }
 

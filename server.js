@@ -953,10 +953,16 @@ app.get('/api/masters/:masterId/photos', requireAuth, async (req, res) => {
 app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
   try {
     const masterId = parseInt(req.params.masterId, 10);
-    const filename = req.params.filename;
+    let filename = req.params.filename;
     
-    if (!filename || !masterId) {
+    if (!filename || !masterId || isNaN(masterId)) {
       return res.status(400).json({ success: false, message: 'Неверные параметры запроса' });
+    }
+    
+    // Валидация filename: предотвращаем path traversal
+    filename = filename.replace(/\.\./g, '').replace(/[\/\\]/g, '');
+    if (!filename || filename.length === 0) {
+      return res.status(400).json({ success: false, message: 'Некорректное имя файла' });
     }
     
     const objectName = `master-${masterId}/${filename}`;
@@ -1118,7 +1124,17 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
 app.delete('/api/masters/:masterId/photos/:filename', requireAuth, async (req, res) => {
   try {
     const masterId = parseInt(req.params.masterId, 10);
-    const filename = req.params.filename;
+    const originalFilename = req.params.filename;
+    
+    if (!originalFilename || !masterId || isNaN(masterId)) {
+      return res.status(400).json({ success: false, message: 'Неверные параметры запроса' });
+    }
+    
+    // Базовая валидация: проверяем, что filename не пустой и не содержит только опасные символы
+    if (originalFilename.trim().length === 0) {
+      return res.status(400).json({ success: false, message: 'Некорректное имя файла' });
+    }
+    
     const user = await dbUsers.getById(req.session.userId);
     
     if (!user) {
@@ -1133,13 +1149,29 @@ app.delete('/api/masters/:masterId/photos/:filename', requireAuth, async (req, r
       return res.status(404).json({ success: false, message: 'Мастер не найден' });
     }
 
-    const objectName = `master-${masterId}/${filename}`;
+    // Ищем фото в базе данных по оригинальному имени
+    const photoToDelete = (master.photos || []).find(p => p.filename === originalFilename);
+    
+    if (!photoToDelete) {
+      return res.status(404).json({ success: false, message: 'Фото не найдено' });
+    }
+
+    // Санитизируем filename только для формирования objectName (безопасность для MinIO)
+    // Но используем оригинальное имя для поиска в БД
+    const sanitizedFilename = originalFilename.replace(/\.\./g, '').replace(/[\/\\]/g, '');
+    const objectName = `master-${masterId}/${sanitizedFilename}`;
     
     try {
-      await minioClient.removeObject(BUCKET_NAME, objectName);
+      // Пробуем удалить из MinIO (может не существовать, если уже удалено)
+      try {
+        await minioClient.removeObject(BUCKET_NAME, objectName);
+      } catch (minioError) {
+        // Игнорируем ошибку, если файл уже не существует в MinIO
+        console.log(`Файл ${objectName} не найден в MinIO (возможно, уже удален):`, minioError.message);
+      }
       
-      // Обновляем список фото в БД
-      const currentPhotos = (master.photos || []).filter(p => p.filename !== filename);
+      // Обновляем список фото в БД, используя оригинальное имя для поиска
+      const currentPhotos = (master.photos || []).filter(p => p.filename !== originalFilename);
       await masters.updatePhotos(masterId, currentPhotos);
       
       res.json({ success: true });
