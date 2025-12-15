@@ -1035,10 +1035,31 @@
       console.error('Яндекс карты не загружены. Убедитесь, что API ключ указан правильно.');
       const mapEl = document.getElementById('map');
       if (mapEl) {
-        mapEl.innerHTML = '<p style="padding: 20px; text-align: center; color: #6b7280;">Для отображения карты необходим API ключ Яндекс.Карт. Укажите его в настройках.</p>';
+        mapEl.textContent = '';
+        const msg = document.createElement('p');
+        msg.style.cssText = 'padding: 20px; text-align: center; color: #6b7280;';
+        msg.textContent = 'Для отображения карты необходим API ключ Яндекс.Карт. Укажите его в настройках.';
+        mapEl.appendChild(msg);
       }
       return;
     }
+
+    // Уничтожаем старую карту, если она существует
+    if (map) {
+      try {
+        map.destroy();
+        map = null;
+        placemark = null;
+      } catch (e) {
+        console.warn('Ошибка при уничтожении старой карты:', e);
+      }
+    }
+
+    const mapEl = document.getElementById('map');
+    if (!mapEl) return;
+
+    // Очищаем контейнер карты
+    mapEl.textContent = '';
 
     ymaps.ready(() => {
       const lat = currentUser.salonLat || 41.3111; // Ташкент по умолчанию
@@ -1095,8 +1116,11 @@
     if (salonLat) salonLat.value = currentUser.salonLat || '';
     if (salonLng) salonLng.value = currentUser.salonLng || '';
 
-    // Инициализируем карту после загрузки данных
-    setTimeout(initMap, 100);
+    // Инициализируем карту после загрузки данных, только если вкладка активна
+    const salonInfoTab = document.getElementById('salon-info-tab');
+    if (salonInfoTab && salonInfoTab.classList.contains('active')) {
+      setTimeout(initMap, 100);
+    }
   }
 
   const salonForm = document.getElementById('salon-form');
@@ -1215,6 +1239,10 @@
       if (targetContent) {
         targetContent.classList.add('active');
         targetContent.style.display = 'block';
+        // Инициализируем карту, если переключились на вкладку информации о салоне и карта еще не инициализирована
+        if (tabId === 'salon-info' && typeof ymaps !== 'undefined' && !map) {
+          setTimeout(initMap, 100);
+        }
       }
     });
   });
@@ -1759,12 +1787,23 @@
             const date = new Date(booking.date);
             const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
             console.log('📢 Показываем уведомление для записи:', booking.id, booking.name);
+            // Добавляем уведомление в список
+            if (typeof addNotificationToList === 'function') {
+              addNotificationToList(
+                'Новая запись!',
+                `${booking.name} - ${booking.service} на ${dateStr} в ${booking.time}`,
+                'info',
+                booking.id
+              );
+            }
+            
+            // Показываем push-уведомление
             if (typeof showNotification === 'function') {
               showNotification(
                 'Новая запись!',
                 `${booking.name} - ${booking.service} на ${dateStr} в ${booking.time}`,
                 'info',
-                booking.id // Передаем ID записи
+                booking.id
               );
             } else {
               console.error('❌ Функция showNotification не найдена!');
@@ -1829,15 +1868,15 @@
         // Устанавливаем lastBookingCheck, чтобы первая проверка не показывала уведомления
         lastBookingCheck = Date.now();
         
-        // Проверяем новые записи каждые 30 секунд
-        notificationCheckInterval = setInterval(checkNewBookings, 30000);
-        console.log(`✅ Проверка новых записей инициализирована (${knownBookingIds.size} известных записей, интервал: 30 секунд)`);
+        // Проверяем новые записи каждые 15 секунд (уменьшили интервал для более быстрой реакции)
+        notificationCheckInterval = setInterval(checkNewBookings, 15000);
+        console.log(`✅ Проверка новых записей инициализирована (${knownBookingIds.size} известных записей, интервал: 15 секунд)`);
         
-        // Первая проверка через 5 секунд после инициализации
+        // Первая проверка через 3 секунды после инициализации
         setTimeout(() => {
           console.log('🔍 Выполняется первая проверка новых записей...');
           checkNewBookings();
-        }, 5000);
+        }, 3000);
       } else {
         console.log('Нет записей при инициализации или ошибка:', bookingsResult);
         // Все равно запускаем проверку, даже если записей нет

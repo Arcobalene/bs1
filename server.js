@@ -1848,18 +1848,22 @@ async function sendTelegramNotificationIfEnabled(userId, booking, eventType) {
     }
 
     // Проверяем номер телефона, если он указан в настройках
+    // Если номер указан, отправляем уведомления только для записей с этим номером
     if (telegramSettings.phone && telegramSettings.phone.trim()) {
       const settingsPhone = normalizePhone(telegramSettings.phone);
       const bookingPhone = normalizePhone(booking.phone);
       
       console.log(`📞 Проверка номера телефона: настройки="${settingsPhone}", запись="${bookingPhone}"`);
       
-      if (settingsPhone && bookingPhone && settingsPhone !== bookingPhone) {
+      if (!settingsPhone || !bookingPhone) {
+        console.log('⚠️ Один из номеров пуст - пропускаем проверку');
+      } else if (settingsPhone !== bookingPhone) {
         // Номер не совпадает - не отправляем уведомление
-        console.log(`❌ Номер телефона не совпадает. Настройки: ${settingsPhone}, Запись: ${bookingPhone}`);
+        console.log(`❌ Номер телефона не совпадает. Настройки: ${settingsPhone}, Запись: ${bookingPhone}. Уведомление не отправлено.`);
         return;
+      } else {
+        console.log('✅ Номер телефона совпадает');
       }
-      console.log('✅ Номер телефона совпадает');
     } else {
       console.log('ℹ️ Номер телефона не указан в настройках - отправляем для всех записей');
     }
