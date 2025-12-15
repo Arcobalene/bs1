@@ -409,6 +409,23 @@
   // Получаем userId из URL параметров
   const urlParams = new URLSearchParams(window.location.search);
   let userId = urlParams.get('userId');
+  
+  // Сразу показываем нужную страницу на основе userId
+  // Это предотвращает "мигание" пустой страницы
+  (function() {
+    const landingPage = document.getElementById('landing-page');
+    const bookingPage = document.getElementById('booking-page');
+    
+    if (userId) {
+      // Если есть userId, показываем страницу записи
+      if (bookingPage) bookingPage.style.display = 'block';
+      if (landingPage) landingPage.style.display = 'none';
+    } else {
+      // Если нет userId, показываем лендинг
+      if (landingPage) landingPage.style.display = 'block';
+      if (bookingPage) bookingPage.style.display = 'none';
+    }
+  })();
 
   let services = [];
   let masters = [];
@@ -1231,7 +1248,21 @@
           window.history.replaceState({}, '', newUrl);
           // Обновляем переменную userId для дальнейшего использования
           userId = currentUser.id;
+          // Переключаемся на страницу записи
+          showBookingPage();
+          // Показываем заголовок салона
+          const salonHeader = document.getElementById('salon-name-header');
+          const salonDescription = document.getElementById('salon-description');
+          if (salonHeader) salonHeader.style.display = 'block';
+          if (salonDescription) salonDescription.style.display = 'block';
           // loadData() будет вызван после завершения checkAuthAndShowMenu()
+        } else if (currentUser.id && userId) {
+          // Если userId уже есть, убеждаемся что показываем правильную страницу
+          showBookingPage();
+          const salonHeader = document.getElementById('salon-name-header');
+          const salonDescription = document.getElementById('salon-description');
+          if (salonHeader) salonHeader.style.display = 'block';
+          if (salonDescription) salonDescription.style.display = 'block';
         }
         
         // Показываем верхние ссылки (иконки пользователя и выхода)

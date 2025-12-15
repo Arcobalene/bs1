@@ -1718,7 +1718,7 @@ footer {
     width: 48px;
     height: 48px;
     margin: 0 auto 20px;
-    padding: 10px;
+    padding: 0;
     background: linear-gradient(135deg, rgba(249, 115, 182, 0.1), rgba(168, 85, 247, 0.1));
     border-radius: 12px;
     display: flex;
@@ -1728,9 +1728,10 @@ footer {
   }
 
   .landing-benefit-icon-compact svg {
-    width: 100%;
-    height: 100%;
+    width: 28px;
+    height: 28px;
     stroke: #f973b6;
+    flex-shrink: 0;
   }
 
   .landing-benefit-card-title {
@@ -1858,7 +1859,7 @@ footer {
     width: 40px;
     height: 40px;
     margin: 0 auto 16px;
-    padding: 8px;
+    padding: 0;
     background: linear-gradient(135deg, rgba(249, 115, 182, 0.1), rgba(168, 85, 247, 0.1));
     border-radius: 10px;
     display: flex;
@@ -1868,10 +1869,11 @@ footer {
   }
 
   .landing-feature-icon svg {
-    width: 100%;
-    height: 100%;
+    width: 24px;
+    height: 24px;
     stroke: #f973b6;
     transition: all 0.4s ease;
+    flex-shrink: 0;
   }
 
   .landing-feature-card:hover .landing-feature-icon {
@@ -2183,7 +2185,12 @@ footer {
     .landing-benefit-icon-compact {
       width: 40px;
       height: 40px;
-      padding: 8px;
+      padding: 0;
+    }
+    
+    .landing-benefit-icon-compact svg {
+      width: 24px;
+      height: 24px;
     }
 
     .landing-carousel-btn {
