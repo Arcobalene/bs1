@@ -624,10 +624,10 @@ app.get('/api/masters/:userId', async (req, res) => {
       return res.json({ success: false, masters: [] });
     }
     const userMasters = await masters.getByUserId(user.id);
-    // Добавляем полные URL для фото (всегда формируем правильный URL)
-    const mastersWithPhotoUrls = userMasters.map(master => ({
-      ...master,
-      photos: (master.photos || []).map(photo => {
+    
+    // Проверяем наличие фото в MinIO для каждого мастера
+    const mastersWithPhotoUrls = await Promise.all(userMasters.map(async (master) => {
+      const photos = (master.photos || []).map(photo => {
         // Убеждаемся, что filename существует и формируем правильный URL
         const photoUrl = photo.filename 
           ? `/api/masters/photos/${master.id}/${photo.filename}`
@@ -637,8 +637,33 @@ app.get('/api/masters/:userId', async (req, res) => {
           url: photoUrl,
           filename: photo.filename || photo.url?.split('/').pop() || ''
         };
-      }).filter(photo => photo.filename) // Фильтруем фото без filename
+      }).filter(photo => photo.filename); // Фильтруем фото без filename
+      
+      // Проверяем, какие фото действительно существуют в MinIO
+      if (photos.length > 0) {
+        const existingPhotos = [];
+        for (const photo of photos) {
+          try {
+            const objectName = `master-${master.id}/${photo.filename}`;
+            await minioClient.statObject(BUCKET_NAME, objectName);
+            existingPhotos.push(photo);
+          } catch (error) {
+            console.warn(`⚠️ Фото не найдено в MinIO для мастера ${master.id}: ${photo.filename}`);
+          }
+        }
+        // Возвращаем только фото, которые существуют в MinIO
+        return {
+          ...master,
+          photos: existingPhotos
+        };
+      }
+      
+      return {
+        ...master,
+        photos: photos
+      };
     }));
+    
     res.json({ success: true, masters: mastersWithPhotoUrls });
   } catch (error) {
     console.error('Ошибка получения мастеров:', error);
@@ -727,7 +752,16 @@ app.post('/api/masters/:masterId/photos', requireAuth, upload.array('photos', 10
     // Обновляем список фото в БД только если есть успешно загруженные фото
     const currentPhotos = master.photos || [];
     const updatedPhotos = [...currentPhotos, ...uploadedPhotos];
+    
+    console.log(`💾 Сохранение фото в БД для мастера ${masterId}:`, {
+      currentPhotosCount: currentPhotos.length,
+      uploadedPhotosCount: uploadedPhotos.length,
+      totalPhotosCount: updatedPhotos.length,
+      filenames: uploadedPhotos.map(p => p.filename)
+    });
+    
     await masters.updatePhotos(masterId, updatedPhotos);
+    console.log(`✅ Фото сохранены в БД для мастера ${masterId}`);
 
     // Возвращаем успех, но также информируем о неудачных загрузках, если они были
     const response = { 
@@ -747,6 +781,52 @@ app.post('/api/masters/:masterId/photos', requireAuth, upload.array('photos', 10
   } catch (error) {
     console.error('Ошибка загрузки фото:', error);
     res.status(500).json({ success: false, message: 'Ошибка загрузки фото' });
+  }
+});
+
+// API: Получить список фото мастера (для отладки)
+app.get('/api/masters/:masterId/photos', requireAuth, async (req, res) => {
+  try {
+    const masterId = parseInt(req.params.masterId, 10);
+    const user = await dbUsers.getById(req.session.userId);
+    
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Не авторизован' });
+    }
+
+    const userMasters = await masters.getByUserId(user.id);
+    const master = userMasters.find(m => m.id === masterId);
+    
+    if (!master) {
+      return res.status(404).json({ success: false, message: 'Мастер не найден' });
+    }
+
+    // Получаем список объектов из MinIO
+    const objectsList = [];
+    try {
+      const bucketExists = await minioClient.bucketExists(BUCKET_NAME);
+      if (bucketExists) {
+        const stream = minioClient.listObjects(BUCKET_NAME, `master-${masterId}/`, true);
+        stream.on('data', (obj) => objectsList.push(obj.name));
+        await new Promise((resolve, reject) => {
+          stream.on('end', resolve);
+          stream.on('error', reject);
+        });
+      }
+    } catch (error) {
+      console.error('Ошибка получения списка объектов из MinIO:', error.message);
+    }
+
+    res.json({
+      success: true,
+      masterId: masterId,
+      photosInDB: master.photos || [],
+      photosInMinIO: objectsList,
+      bucketExists: await minioClient.bucketExists(BUCKET_NAME).catch(() => false)
+    });
+  } catch (error) {
+    console.error('Ошибка получения списка фото:', error);
+    res.status(500).json({ success: false, message: 'Ошибка получения списка фото' });
   }
 });
 
@@ -799,11 +879,21 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
           stream.on('data', (obj) => objectsList.push(obj.name));
           stream.on('end', () => {
             console.log(`📁 Объекты в папке master-${masterId}/:`, objectsList);
+            console.log(`🔍 Ищем: ${objectName}`);
+            console.log(`📋 Доступные объекты:`, objectsList.map(o => `  - ${o}`).join('\n'));
           });
+          // Ждем немного, чтобы stream успел обработать данные
+          await new Promise(resolve => setTimeout(resolve, 100));
         } catch (listError) {
           console.error('Ошибка при получении списка объектов:', listError.message);
         }
-        return res.status(404).json({ success: false, message: 'Фото не найдено' });
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Фото не найдено',
+          objectName: objectName,
+          masterId: masterId,
+          filename: filename
+        });
       }
       
       const dataStream = await minioClient.getObject(BUCKET_NAME, objectName);
