@@ -1670,52 +1670,6 @@ app.get('/api/clients', requireAuth, async (req, res) => {
   }
 });
 
-// Обработка ошибок
-app.use((err, req, res, next) => {
-  console.error('Ошибка:', err);
-  res.status(500).json({ success: false, message: 'Внутренняя ошибка сервера' });
-});
-
-// 404 обработчик
-app.use((req, res) => {
-  res.status(404).json({ success: false, message: 'Страница не найдена' });
-});
-
-// Инициализация БД, миграция и демо-аккаунта, затем запуск сервера
-(async () => {
-  try {
-    // Инициализируем БД (создание таблиц)
-    await initDatabase();
-    console.log('База данных инициализирована');
-    
-    // Миграция данных из JSON (если нужно)
-    await migrateFromJSON();
-    
-    // Создаем демо-аккаунт
-    await initDemoAccount();
-    
-    // Запускаем сервер
-    app.listen(PORT, () => {
-      console.log(`Сервер запущен на http://localhost:${PORT}`);
-      console.log(`Окружение: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`База данных: ${process.env.DB_TYPE || 'SQLite'}`);
-      console.log('');
-      console.log('Доступные страницы:');
-      console.log(`  Главная: http://localhost:${PORT}/`);
-      console.log(`  Вход: http://localhost:${PORT}/login`);
-      console.log(`  Регистрация: http://localhost:${PORT}/register`);
-      console.log('');
-      console.log('Демо-аккаунт:');
-      console.log('  Логин: admin');
-      console.log('  Пароль: admin123');
-      console.log('');
-    });
-  } catch (error) {
-    console.error('Ошибка инициализации:', error);
-    process.exit(1);
-  }
-})();
-
 // Функция для отправки сообщения в Telegram
 function sendTelegramMessage(botToken, chatId, message) {
   return new Promise((resolve, reject) => {
@@ -1876,3 +1830,49 @@ app.post('/api/telegram/test', requireAuth, requireAdmin, async (req, res) => {
     });
   }
 });
+
+// Обработка ошибок
+app.use((err, req, res, next) => {
+  console.error('Ошибка:', err);
+  res.status(500).json({ success: false, message: 'Внутренняя ошибка сервера' });
+});
+
+// 404 обработчик
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: 'Страница не найдена' });
+});
+
+// Инициализация БД, миграция и демо-аккаунта, затем запуск сервера
+(async () => {
+  try {
+    // Инициализируем БД (создание таблиц)
+    await initDatabase();
+    console.log('База данных инициализирована');
+    
+    // Миграция данных из JSON (если нужно)
+    await migrateFromJSON();
+    
+    // Создаем демо-аккаунт
+    await initDemoAccount();
+    
+    // Запускаем сервер
+    app.listen(PORT, () => {
+      console.log(`Сервер запущен на http://localhost:${PORT}`);
+      console.log(`Окружение: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`База данных: ${process.env.DB_TYPE || 'SQLite'}`);
+      console.log('');
+      console.log('Доступные страницы:');
+      console.log(`  Главная: http://localhost:${PORT}/`);
+      console.log(`  Вход: http://localhost:${PORT}/login`);
+      console.log(`  Регистрация: http://localhost:${PORT}/register`);
+      console.log('');
+      console.log('Демо-аккаунт:');
+      console.log('  Логин: admin');
+      console.log('  Пароль: admin123');
+      console.log('');
+    });
+  } catch (error) {
+    console.error('Ошибка инициализации:', error);
+    process.exit(1);
+  }
+})();
