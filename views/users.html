@@ -23,7 +23,7 @@
   <h1>Beauty Studio</h1>
   <p>Управление пользователями</p>
   <div class="nav-links">
-    <a href="/" id="home-link">На главную</a>
+    <a href="/booking" id="salon-page-link">Страница салона</a>
     <a href="/admin">Админ-панель</a>
     <a href="/calendar">Календарь</a>
     <a href="/services">Услуги и мастера</a>
@@ -93,10 +93,10 @@
       document.getElementById('user-name').textContent = `Добро пожаловать, ${currentUser.username}!`;
       document.getElementById('user-email').textContent = currentUser.email || 'Email не указан';
       
-      // Ссылка "На главную" всегда ведет на лендинг
-      const homeLink = document.getElementById('home-link');
-      if (homeLink) {
-        homeLink.href = '/';
+      // Обновляем ссылку "Страница салона" в навигации
+      const salonPageLink = document.getElementById('salon-page-link');
+      if (salonPageLink && currentUser.id) {
+        salonPageLink.href = `/booking?userId=${currentUser.id}`;
       }
       }
       

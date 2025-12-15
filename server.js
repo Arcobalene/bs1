@@ -187,12 +187,12 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'login.html'));
 });
 
-// Страница регистрации (перенаправляет на login.html с открытым модальным окном)
+// Страница регистрации
 app.get('/register', (req, res) => {
   if (req.session.userId) {
     return res.redirect('/admin');
   }
-  res.sendFile(path.join(__dirname, 'views', 'login.html'));
+  res.sendFile(path.join(__dirname, 'views', 'register.html'));
 });
 
 // Страница админки

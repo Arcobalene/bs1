@@ -24,7 +24,7 @@
   <h1>Beauty Studio</h1>
   <p>Управление услугами и мастерами</p>
   <div class="nav-links">
-    <a href="/" id="home-link">На главную</a>
+    <a href="/booking" id="salon-page-link">Страница салона</a>
     <a href="/admin">Админ-панель</a>
     <a href="/calendar">Календарь</a>
     <a href="/services">Услуги и мастера</a>
@@ -180,10 +180,10 @@
         }
       }
 
-      // Ссылка "На главную" всегда ведет на лендинг
-      const homeLink = document.getElementById('home-link');
-      if (homeLink) {
-        homeLink.href = '/';
+      // Обновляем ссылку "Страница салона" в навигации
+      const salonPageLink = document.getElementById('salon-page-link');
+      if (salonPageLink && currentUser && currentUser.id) {
+        salonPageLink.href = `/booking?userId=${currentUser.id}`;
       }
       }
       
