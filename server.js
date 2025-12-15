@@ -4,6 +4,7 @@ const bcrypt = require('bcrypt');
 const path = require('path');
 const multer = require('multer');
 const Minio = require('minio');
+const https = require('https');
 const { users: dbUsers, services, masters, bookings, migrateFromJSON } = require('./database');
 const { 
   timeToMinutes, 
@@ -1714,3 +1715,164 @@ app.use((req, res) => {
     process.exit(1);
   }
 })();
+
+// Функция для отправки сообщения в Telegram
+function sendTelegramMessage(botToken, chatId, message) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(`https://api.telegram.org/bot${botToken}/sendMessage`);
+    const postData = JSON.stringify({
+      chat_id: chatId,
+      text: message,
+      parse_mode: 'HTML'
+    });
+    
+    const options = {
+      hostname: url.hostname,
+      port: url.port || 443,
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    };
+    
+    const req = https.request(options, (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        try {
+          const jsonData = JSON.parse(data);
+          
+          if (res.statusCode !== 200 || !jsonData.ok) {
+            reject(new Error(jsonData.description || 'Ошибка отправки сообщения в Telegram'));
+            return;
+          }
+          
+          resolve({ success: true, data: jsonData });
+        } catch (error) {
+          reject(new Error('Ошибка парсинга ответа от Telegram API'));
+        }
+      });
+    });
+    
+    req.on('error', (error) => {
+      reject(error);
+    });
+    
+    req.write(postData);
+    req.end();
+  });
+}
+
+// API: Получить настройки Telegram (только для админов)
+app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const user = await dbUsers.getById(req.session.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+    }
+    
+    let telegramSettings = null;
+    if (user.telegram_settings) {
+      try {
+        telegramSettings = typeof user.telegram_settings === 'string' 
+          ? JSON.parse(user.telegram_settings) 
+          : user.telegram_settings;
+      } catch (e) {
+        console.error('Ошибка парсинга telegram_settings:', e);
+        telegramSettings = {};
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      settings: telegramSettings || {
+        botToken: '',
+        chatId: '',
+        enabled: false,
+        notifyNewBookings: true,
+        notifyCancellations: false,
+        notifyChanges: false
+      }
+    });
+  } catch (error) {
+    console.error('Ошибка получения настроек Telegram:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// API: Сохранить настройки Telegram (только для админов)
+app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { botToken, chatId, enabled, notifyNewBookings, notifyCancellations, notifyChanges } = req.body;
+    
+    const user = await dbUsers.getById(req.session.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+    }
+    
+    const settings = {
+      botToken: botToken || '',
+      chatId: chatId || '',
+      enabled: enabled === true,
+      notifyNewBookings: notifyNewBookings !== false,
+      notifyCancellations: notifyCancellations === true,
+      notifyChanges: notifyChanges === true
+    };
+    
+    // Сохраняем настройки в БД
+    const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+    
+    if (DB_TYPE === 'postgres') {
+      const { pool: dbPool } = require('./database');
+      if (!dbPool) {
+        return res.status(500).json({ success: false, message: 'База данных не инициализирована' });
+      }
+      const client = await dbPool.connect();
+      try {
+        await client.query(
+          'UPDATE users SET telegram_settings = $1 WHERE id = $2',
+          [JSON.stringify(settings), req.session.userId]
+        );
+      } finally {
+        client.release();
+      }
+    } else {
+      // Для SQLite (если используется)
+      return res.status(500).json({ success: false, message: 'Telegram интеграция доступна только с PostgreSQL' });
+    }
+    
+    res.json({ success: true, message: 'Настройки сохранены' });
+  } catch (error) {
+    console.error('Ошибка сохранения настроек Telegram:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// API: Тестовая отправка сообщения в Telegram (только для админов)
+app.post('/api/telegram/test', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { botToken, chatId } = req.body;
+    
+    if (!botToken || !chatId) {
+      return res.status(400).json({ success: false, message: 'Токен бота и Chat ID обязательны' });
+    }
+    
+    const testMessage = `✅ <b>Тестовое сообщение</b>\n\nИнтеграция с Telegram ботом работает корректно!`;
+    
+    await sendTelegramMessage(botToken, chatId, testMessage);
+    
+    res.json({ success: true, message: 'Тестовое сообщение успешно отправлено' });
+  } catch (error) {
+    console.error('Ошибка тестовой отправки Telegram:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Ошибка отправки сообщения. Проверьте токен бота и Chat ID.' 
+    });
+  }
+});

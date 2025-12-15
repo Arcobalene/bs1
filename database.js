@@ -69,8 +69,22 @@ async function initDatabase() {
         salon_address TEXT,
         salon_lat REAL,
         salon_lng REAL,
+        telegram_settings JSONB,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+    
+    // Добавляем колонку telegram_settings, если её нет (для существующих БД)
+    await client.query(`
+      DO $$ 
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'users' AND column_name = 'telegram_settings'
+        ) THEN
+          ALTER TABLE users ADD COLUMN telegram_settings JSONB;
+        END IF;
+      END $$;
     `);
 
     // Таблица услуг
