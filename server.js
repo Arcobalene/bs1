@@ -171,12 +171,12 @@ app.get('/', (req, res) => {
   if (req.session.userId) {
     return res.redirect('/admin');
   }
-  res.sendFile(path.join(__dirname, 'views', 'landing.html'));
+  res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
 // Страница записи салона
 app.get('/booking', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'index.html'));
+  res.sendFile(path.join(__dirname, 'views', 'booking.html'));
 });
 
 // Страница входа

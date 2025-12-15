@@ -23,7 +23,7 @@
   <h1>Beauty Studio</h1>
   <p>Панель управления салоном</p>
   <div class="nav-links">
-    <a href="/" id="salon-page-link">Страница салона</a>
+    <a href="/booking" id="salon-page-link">Страница салона</a>
     <a href="/admin">Админ-панель</a>
     <a href="/calendar">Календарь</a>
     <a href="/services">Услуги и мастера</a>
@@ -247,12 +247,12 @@
 
       document.getElementById('user-name').textContent = `Добро пожаловать, ${currentUser.username}!`;
       document.getElementById('user-email').textContent = currentUser.email || 'Email не указан';
-      const bookingLink = `${window.location.origin}/?userId=${currentUser.id}`;
+      const bookingLink = `${window.location.origin}/booking?userId=${currentUser.id}`;
       document.getElementById('booking-link').textContent = bookingLink;
       // Обновляем ссылку "Страница салона" в навигации
       const salonPageLink = document.getElementById('salon-page-link');
       if (salonPageLink) {
-        salonPageLink.href = `/?userId=${currentUser.id}`;
+        salonPageLink.href = `/booking?userId=${currentUser.id}`;
       }
       
       // Показываем ссылку на управление пользователями только для админов
