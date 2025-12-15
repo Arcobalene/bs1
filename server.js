@@ -21,33 +21,52 @@ const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production';
 
 // Настройка MinIO
+const MINIO_ENDPOINT = process.env.MINIO_ENDPOINT || 'localhost';
+const MINIO_PORT = parseInt(process.env.MINIO_PORT || '9000', 10);
+const MINIO_ACCESS_KEY = process.env.MINIO_ACCESS_KEY || 'minioadmin';
+const MINIO_SECRET_KEY = process.env.MINIO_SECRET_KEY || 'minioadmin';
+
+console.log(`🔧 Настройка MinIO: ${MINIO_ENDPOINT}:${MINIO_PORT}`);
+
 const minioClient = new Minio.Client({
-  endPoint: process.env.MINIO_ENDPOINT || 'localhost',
-  port: parseInt(process.env.MINIO_PORT || '9000', 10),
+  endPoint: MINIO_ENDPOINT,
+  port: MINIO_PORT,
   useSSL: process.env.MINIO_USE_SSL === 'true',
-  accessKey: process.env.MINIO_ACCESS_KEY || 'minioadmin',
-  secretKey: process.env.MINIO_SECRET_KEY || 'minioadmin'
+  accessKey: MINIO_ACCESS_KEY,
+  secretKey: MINIO_SECRET_KEY
 });
 
 const BUCKET_NAME = 'master-photos';
 
 // Инициализация bucket в MinIO
 (async () => {
-  try {
-    // Ждем немного, чтобы MinIO успел запуститься
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    const exists = await minioClient.bucketExists(BUCKET_NAME);
-    if (!exists) {
-      await minioClient.makeBucket(BUCKET_NAME, 'us-east-1');
-      console.log(`✅ Bucket ${BUCKET_NAME} создан в MinIO`);
-    } else {
-      console.log(`✅ Bucket ${BUCKET_NAME} уже существует в MinIO`);
+  let retries = 5;
+  let delay = 2000;
+  
+  while (retries > 0) {
+    try {
+      // Ждем немного, чтобы MinIO успел запуститься
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      const exists = await minioClient.bucketExists(BUCKET_NAME);
+      if (!exists) {
+        await minioClient.makeBucket(BUCKET_NAME, 'us-east-1');
+        console.log(`✅ Bucket ${BUCKET_NAME} создан в MinIO`);
+      } else {
+        console.log(`✅ Bucket ${BUCKET_NAME} уже существует в MinIO`);
+      }
+      return; // Успешно инициализировано
+    } catch (error) {
+      retries--;
+      if (retries > 0) {
+        console.warn(`⚠️ Попытка подключения к MinIO (осталось ${retries} попыток):`, error.message);
+        delay *= 2; // Увеличиваем задержку при каждой попытке
+      } else {
+        console.error('❌ Ошибка инициализации MinIO после всех попыток:', error.message);
+        console.error(`Убедитесь, что MinIO запущен и доступен по адресу: ${MINIO_ENDPOINT}:${MINIO_PORT}`);
+        console.error('Приложение продолжит работу, но загрузка фото будет недоступна');
+      }
     }
-  } catch (error) {
-    console.error('❌ Ошибка инициализации MinIO:', error.message);
-    console.error('Убедитесь, что MinIO запущен и доступен по адресу:', 
-      `${process.env.MINIO_ENDPOINT || 'localhost'}:${process.env.MINIO_PORT || '9000'}`);
   }
 })();
 
@@ -653,13 +672,28 @@ app.post('/api/masters/:masterId/photos', requireAuth, upload.array('photos', 10
     const failedUploads = [];
     
     for (const file of req.files) {
-      const filename = `${masterId}_${Date.now()}_${Math.random().toString(36).substring(7)}.${file.mimetype.split('/')[1]}`;
+      // Добавляем небольшую задержку между файлами, чтобы избежать конфликтов timestamp
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
+      const timestamp = Date.now();
+      const randomStr = Math.random().toString(36).substring(7);
+      const extension = file.mimetype.split('/')[1] || 'jpeg';
+      const filename = `${masterId}_${timestamp}_${randomStr}.${extension}`;
       const objectName = `master-${masterId}/${filename}`;
       
       try {
+        // Проверяем, что bucket существует
+        const bucketExists = await minioClient.bucketExists(BUCKET_NAME);
+        if (!bucketExists) {
+          await minioClient.makeBucket(BUCKET_NAME, 'us-east-1');
+          console.log(`✅ Bucket ${BUCKET_NAME} создан при загрузке фото`);
+        }
+        
         await minioClient.putObject(BUCKET_NAME, objectName, file.buffer, file.size, {
           'Content-Type': file.mimetype
         });
+        
+        console.log(`✅ Фото загружено в MinIO: ${objectName}`);
         
         uploadedPhotos.push({
           filename: filename,
@@ -669,7 +703,8 @@ app.post('/api/masters/:masterId/photos', requireAuth, upload.array('photos', 10
           uploadedAt: new Date().toISOString()
         });
       } catch (error) {
-        console.error(`Ошибка загрузки файла ${file.originalname} в MinIO:`, error);
+        console.error(`❌ Ошибка загрузки файла ${file.originalname} в MinIO:`, error.message);
+        console.error(`   ObjectName: ${objectName}, Bucket: ${BUCKET_NAME}`);
         failedUploads.push({
           originalName: file.originalname,
           error: error.message || 'Неизвестная ошибка'
@@ -727,11 +762,21 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
     
     const objectName = `master-${masterId}/${filename}`;
     
+    console.log(`🔍 Запрос фото: masterId=${masterId}, filename=${filename}, objectName=${objectName}`);
+    
     try {
+      // Проверяем существование bucket
+      const bucketExists = await minioClient.bucketExists(BUCKET_NAME);
+      if (!bucketExists) {
+        console.error(`❌ Bucket ${BUCKET_NAME} не существует`);
+        return res.status(500).json({ success: false, message: 'Хранилище фото недоступно' });
+      }
+      
       // Получаем метаданные объекта для определения Content-Type
       let contentType = 'image/jpeg'; // По умолчанию
       try {
         const stat = await minioClient.statObject(BUCKET_NAME, objectName);
+        console.log(`✅ Фото найдено в MinIO: ${objectName}, размер: ${stat.size} байт`);
         if (stat.metaData && stat.metaData['content-type']) {
           contentType = stat.metaData['content-type'];
         } else {
@@ -746,22 +791,18 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
           contentType = mimeTypes[ext] || 'image/jpeg';
         }
       } catch (statError) {
-        // Если не удалось получить метаданные, определяем по расширению
-        const ext = filename.split('.').pop()?.toLowerCase();
-        const mimeTypes = {
-          'jpg': 'image/jpeg',
-          'jpeg': 'image/jpeg',
-          'png': 'image/png',
-          'webp': 'image/webp'
-        };
-        contentType = mimeTypes[ext] || 'image/jpeg';
-      }
-      
-      // Проверяем существование объекта перед получением
-      try {
-        await minioClient.statObject(BUCKET_NAME, objectName);
-      } catch (statError) {
-        console.error(`Фото не найдено в MinIO: ${objectName}`, statError.message);
+        console.error(`❌ Фото не найдено в MinIO: ${objectName}`, statError.message);
+        // Пробуем найти все объекты в папке мастера для отладки
+        try {
+          const objectsList = [];
+          const stream = minioClient.listObjects(BUCKET_NAME, `master-${masterId}/`, true);
+          stream.on('data', (obj) => objectsList.push(obj.name));
+          stream.on('end', () => {
+            console.log(`📁 Объекты в папке master-${masterId}/:`, objectsList);
+          });
+        } catch (listError) {
+          console.error('Ошибка при получении списка объектов:', listError.message);
+        }
         return res.status(404).json({ success: false, message: 'Фото не найдено' });
       }
       
