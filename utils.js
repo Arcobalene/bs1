@@ -67,7 +67,39 @@ function validatePassword(password) {
   if (password.length < 6) {
     return { valid: false, message: 'Пароль должен содержать минимум 6 символов' };
   }
+  if (password.length > 128) {
+    return { valid: false, message: 'Пароль слишком длинный (максимум 128 символов)' };
+  }
   return { valid: true };
+}
+
+// Санитизация строки для предотвращения XSS
+function sanitizeString(str, maxLength = 1000) {
+  if (typeof str !== 'string') return '';
+  return str.trim().substring(0, maxLength).replace(/[<>]/g, '');
+}
+
+// Валидация и санитизация email
+function validateEmail(email) {
+  if (!email) return { valid: false, message: 'Email обязателен' };
+  const trimmed = email.trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(trimmed)) {
+    return { valid: false, message: 'Некорректный формат email' };
+  }
+  if (trimmed.length > 255) {
+    return { valid: false, message: 'Email слишком длинный' };
+  }
+  return { valid: true, email: trimmed };
+}
+
+// Валидация ID (положительное целое число)
+function validateId(id, paramName = 'ID') {
+  const num = parseInt(id, 10);
+  if (isNaN(num) || num <= 0 || !Number.isInteger(num)) {
+    return { valid: false, message: `Некорректный ${paramName}` };
+  }
+  return { valid: true, id: num };
 }
 
 // Форматирование booking для ответа API
@@ -95,6 +127,9 @@ module.exports = {
   validatePhone,
   validateUsername,
   validatePassword,
+  validateEmail,
+  validateId,
+  sanitizeString,
   formatBooking
 };
 

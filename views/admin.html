@@ -1475,7 +1475,11 @@
     if (!panelBody) return;
     
     if (notificationsList.length === 0) {
-      panelBody.innerHTML = '<div class="notifications-panel-empty">Нет уведомлений</div>';
+      panelBody.textContent = '';
+      const emptyEl = document.createElement('div');
+      emptyEl.className = 'notifications-panel-empty';
+      emptyEl.textContent = 'Нет уведомлений';
+      panelBody.appendChild(emptyEl);
       return;
     }
     
@@ -1493,7 +1497,8 @@
       info: '#3b82f6'
     };
     
-    panelBody.innerHTML = notificationsList.map(notif => {
+    panelBody.textContent = '';
+    notificationsList.forEach(notif => {
       const date = new Date(notif.time);
       const timeStr = date.toLocaleString('ru-RU', {
         day: '2-digit',
@@ -1502,20 +1507,45 @@
         minute: '2-digit'
       });
       
-      return `
-        <div class="notification-item ${notif.read ? '' : 'unread'}" data-id="${notif.id}" data-booking-id="${notif.bookingId || ''}">
-          <div class="notification-item-icon" style="color: ${iconColors[notif.type] || iconColors.success}">
-            ${icons[notif.type] || icons.success}
-          </div>
-          <div class="notification-item-content">
-            <div class="notification-item-title">${notif.title}</div>
-            <div class="notification-item-message">${notif.message}</div>
-            <div class="notification-item-time">${timeStr}</div>
-          </div>
-          <button class="notification-item-close" onclick="removeNotification(${notif.id})">×</button>
-        </div>
-      `;
-    }).join('');
+      const item = document.createElement('div');
+      item.className = `notification-item ${notif.read ? '' : 'unread'}`;
+      item.dataset.id = notif.id;
+      item.dataset.bookingId = notif.bookingId || '';
+      
+      const iconEl = document.createElement('div');
+      iconEl.className = 'notification-item-icon';
+      iconEl.style.color = iconColors[notif.type] || iconColors.success;
+      iconEl.textContent = icons[notif.type] || icons.success;
+      
+      const contentEl = document.createElement('div');
+      contentEl.className = 'notification-item-content';
+      
+      const titleEl = document.createElement('div');
+      titleEl.className = 'notification-item-title';
+      titleEl.textContent = notif.title;
+      
+      const messageEl = document.createElement('div');
+      messageEl.className = 'notification-item-message';
+      messageEl.textContent = notif.message;
+      
+      const timeEl = document.createElement('div');
+      timeEl.className = 'notification-item-time';
+      timeEl.textContent = timeStr;
+      
+      contentEl.appendChild(titleEl);
+      contentEl.appendChild(messageEl);
+      contentEl.appendChild(timeEl);
+      
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'notification-item-close';
+      closeBtn.textContent = '×';
+      closeBtn.onclick = () => removeNotification(notif.id);
+      
+      item.appendChild(iconEl);
+      item.appendChild(contentEl);
+      item.appendChild(closeBtn);
+      panelBody.appendChild(item);
+    });
     
     // Добавляем обработчики клика для отметки как прочитанное и перехода
     panelBody.querySelectorAll('.notification-item').forEach(item => {
@@ -1580,14 +1610,38 @@
       info: 'ℹ'
     };
     
-    notification.innerHTML = `
-      <div class="notification-icon">${icons[type] || icons.success}</div>
-      <div class="notification-content">
-        <div class="notification-title">${title}</div>
-        <div class="notification-message">${message}</div>
-      </div>
-      <button class="notification-close" onclick="this.parentElement.remove()">×</button>
-    `;
+    const escapeHtml = (str) => {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    };
+    
+    const iconEl = document.createElement('div');
+    iconEl.className = 'notification-icon';
+    iconEl.textContent = icons[type] || icons.success;
+    
+    const contentEl = document.createElement('div');
+    contentEl.className = 'notification-content';
+    
+    const titleEl = document.createElement('div');
+    titleEl.className = 'notification-title';
+    titleEl.textContent = title;
+    
+    const messageEl = document.createElement('div');
+    messageEl.className = 'notification-message';
+    messageEl.textContent = message;
+    
+    contentEl.appendChild(titleEl);
+    contentEl.appendChild(messageEl);
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'notification-close';
+    closeBtn.textContent = '×';
+    closeBtn.onclick = () => notification.remove();
+    
+    notification.appendChild(iconEl);
+    notification.appendChild(contentEl);
+    notification.appendChild(closeBtn);
     
     container.appendChild(notification);
     

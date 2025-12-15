@@ -681,7 +681,7 @@
         const emptyMsg = document.createElement('p');
         emptyMsg.style.cssText = 'color: #6b7280; text-align: center; padding: 20px;';
         emptyMsg.textContent = `${sectionName} пока не добавлены`;
-        servicesListEl.innerHTML = '';
+        servicesListEl.textContent = '';
         servicesListEl.appendChild(emptyMsg);
       }
     }
@@ -1169,13 +1169,21 @@
         if (navLinks) {
           // Сразу создаем ссылку с правильным userId
           const salonPageUrl = currentUser.id ? `/booking?userId=${currentUser.id}` : '/booking';
-          navLinks.innerHTML = `
-            <a href="${salonPageUrl}" id="salon-page-link">Страница салона</a>
-            <a href="/admin">Админ-панель</a>
-            <a href="/calendar">Календарь</a>
-            <a href="/services">Услуги и мастера</a>
-            <a href="/clients">Клиенты</a>
-          `;
+          navLinks.textContent = '';
+          const links = [
+            { href: salonPageUrl, id: 'salon-page-link', text: 'Страница салона' },
+            { href: '/admin', text: 'Админ-панель' },
+            { href: '/calendar', text: 'Календарь' },
+            { href: '/services', text: 'Услуги и мастера' },
+            { href: '/clients', text: 'Клиенты' }
+          ];
+          links.forEach(link => {
+            const a = document.createElement('a');
+            a.href = link.href;
+            if (link.id) a.id = link.id;
+            a.textContent = link.text;
+            navLinks.appendChild(a);
+          });
         }
         
         // Показываем ссылку на управление пользователями только для админов
@@ -1247,7 +1255,10 @@
       viewerModal.id = 'master-photo-viewer-modal';
       viewerModal.className = 'modal-overlay hidden';
       viewerModal.style.cssText = 'z-index: 999999 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; padding-top: 180px !important; align-items: center !important; justify-content: center !important; overflow-y: auto !important; background: rgba(0, 0, 0, 0.9) !important;';
-      viewerModal.innerHTML = `
+      viewerModal.textContent = '';
+      const viewerContent = document.createElement('div');
+      viewerContent.className = 'photo-viewer-content';
+      viewerContent.innerHTML = `
         <div style="max-width: 90vw; max-height: calc(100vh - 200px); margin: 0 auto; position: relative; display: flex; align-items: center; justify-content: center;">
           <button type="button" class="modal-close" id="master-photo-viewer-close" style="position: absolute; top: -50px; right: 0; background: rgba(255, 255, 255, 0.2); color: white; border: none; font-size: 2rem; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; z-index: 1; transition: background 0.2s;">×</button>
           <img id="master-photo-viewer-img" src="" alt="Фото мастера" style="max-width: 100%; max-height: calc(100vh - 200px); object-fit: contain; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
@@ -1293,7 +1304,10 @@
       viewerModal.id = 'master-photo-viewer-modal';
       viewerModal.className = 'modal-overlay hidden';
       viewerModal.style.cssText = 'z-index: 999999 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; padding-top: 180px !important; align-items: center !important; justify-content: center !important; overflow-y: auto !important; background: rgba(0, 0, 0, 0.9) !important;';
-      viewerModal.innerHTML = `
+      viewerModal.textContent = '';
+      const viewerContent = document.createElement('div');
+      viewerContent.className = 'photo-viewer-content';
+      viewerContent.innerHTML = `
         <div style="max-width: 90vw; max-height: calc(100vh - 200px); margin: 0 auto; position: relative; display: flex; align-items: center; justify-content: center;">
           <button type="button" class="modal-close" id="master-photo-viewer-close" style="position: absolute; top: -50px; right: 0; background: rgba(255, 255, 255, 0.2); color: white; border: none; font-size: 2rem; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; z-index: 1; transition: background 0.2s;">×</button>
           <img id="master-photo-viewer-img" src="" alt="Фото мастера" style="width: 250px; height: 250px; object-fit: contain; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); cursor: pointer;">
@@ -1344,7 +1358,11 @@
     
     const photos = master.photos || [];
     if (photos.length === 0) {
-      modalContent.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 40px;">Фото работ пока не добавлены</p>';
+      modalContent.textContent = '';
+      const emptyMsg = document.createElement('p');
+      emptyMsg.style.cssText = 'text-align: center; color: #6b7280; padding: 40px;';
+      emptyMsg.textContent = 'Фото работ пока не добавлены';
+      modalContent.appendChild(emptyMsg);
     } else {
       // Устанавливаем сетку для фото
       modalContent.style.display = 'grid';

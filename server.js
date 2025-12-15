@@ -14,11 +14,22 @@ const {
   validatePhone, 
   validateUsername, 
   validatePassword,
+  validateEmail,
+  validateId,
+  sanitizeString,
   formatBooking 
 } = require('./utils');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Validate critical environment variables
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'beauty-studio-secret-key-change-in-production') {
+    console.error('❌ CRITICAL: SESSION_SECRET must be set in production!');
+    process.exit(1);
+  }
+}
 const SESSION_SECRET = process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production';
 
 // Настройка MinIO
@@ -87,10 +98,22 @@ const upload = multer({
   }
 });
 
-// Middleware
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-app.use(express.static('public'));
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
+// Body parsing with limits
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.static('public', { maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0 }));
 
 // Настройка сессий
 app.use(session({
@@ -99,11 +122,11 @@ app.use(session({
   saveUninitialized: false, // Не сохранять пустые сессии
   name: 'beauty.studio.sid', // Явное имя cookie
   cookie: { 
-    secure: false, // В Docker без HTTPS должно быть false
+    secure: process.env.NODE_ENV === 'production' && process.env.HTTPS_ENABLED === 'true',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 часа
-    sameSite: 'lax', // Защита от CSRF
-    path: '/' // Cookie доступна для всех путей
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: 'lax',
+    path: '/'
   }
 }));
 
@@ -529,11 +552,11 @@ app.post('/api/salon', requireAuth, async (req, res) => {
     }
 
     await dbUsers.update(req.session.userId, {
-      salonName: salonName !== undefined ? (salonName || '') : undefined,
-      salonAddress: salonAddress !== undefined ? (salonAddress || '') : undefined,
+      salonName: salonName !== undefined ? sanitizeString(salonName, 255) : undefined,
+      salonAddress: salonAddress !== undefined ? sanitizeString(salonAddress, 500) : undefined,
       salonLat: salonLat !== undefined ? (salonLat ? parseFloat(salonLat) : null) : undefined,
       salonLng: salonLng !== undefined ? (salonLng ? parseFloat(salonLng) : null) : undefined,
-      salonPhone: salonPhone !== undefined ? (salonPhone || '') : undefined
+      salonPhone: salonPhone !== undefined ? (salonPhone ? sanitizeString(salonPhone.trim(), 50) : '') : undefined
     });
 
     res.json({ success: true });
@@ -597,7 +620,11 @@ app.get('/api/salon/design', requireAuth, async (req, res) => {
 // API: Получить информацию о салоне (публичный доступ)
 app.get('/api/salon/:userId', async (req, res) => {
   try {
-    const user = await dbUsers.getById(parseInt(req.params.userId, 10));
+    const idValidation = validateId(req.params.userId, 'ID пользователя');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, salon: null, message: idValidation.message });
+    }
+    const user = await dbUsers.getById(idValidation.id);
     if (!user) {
       return res.json({ success: false, salon: null });
     }
@@ -633,7 +660,11 @@ app.get('/api/salon/:userId', async (req, res) => {
 // API: Получить услуги (публичный доступ)
 app.get('/api/services/:userId', async (req, res) => {
   try {
-    const user = await dbUsers.getById(parseInt(req.params.userId, 10));
+    const idValidation = validateId(req.params.userId, 'ID пользователя');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, services: [], message: idValidation.message });
+    }
+    const user = await dbUsers.getById(idValidation.id);
     if (!user) {
       return res.json({ success: false, services: [] });
     }
@@ -648,7 +679,11 @@ app.get('/api/services/:userId', async (req, res) => {
 // API: Получить мастеров (публичный доступ)
 app.get('/api/masters/:userId', async (req, res) => {
   try {
-    const user = await dbUsers.getById(parseInt(req.params.userId, 10));
+    const idValidation = validateId(req.params.userId, 'ID пользователя');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, masters: [], message: idValidation.message });
+    }
+    const user = await dbUsers.getById(idValidation.id);
     if (!user) {
       return res.json({ success: false, masters: [] });
     }
@@ -781,7 +816,11 @@ app.get('/api/minio/health', async (req, res) => {
 // API: Загрузить фото мастера
 app.post('/api/masters/:masterId/photos', requireAuth, upload.array('photos', 10), async (req, res) => {
   try {
-    const masterId = parseInt(req.params.masterId, 10);
+    const idValidation = validateId(req.params.masterId, 'ID мастера');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, message: idValidation.message });
+    }
+    const masterId = idValidation.id;
     const user = await dbUsers.getById(req.session.userId);
     
     if (!user) {
@@ -935,7 +974,11 @@ app.post('/api/masters/:masterId/photos', requireAuth, upload.array('photos', 10
 // API: Получить список фото мастера (для отладки)
 app.get('/api/masters/:masterId/photos', requireAuth, async (req, res) => {
   try {
-    const masterId = parseInt(req.params.masterId, 10);
+    const idValidation = validateId(req.params.masterId, 'ID мастера');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, message: idValidation.message });
+    }
+    const masterId = idValidation.id;
     const user = await dbUsers.getById(req.session.userId);
     
     if (!user) {
@@ -981,7 +1024,11 @@ app.get('/api/masters/:masterId/photos', requireAuth, async (req, res) => {
 // API: Получить фото мастера
 app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
   try {
-    const masterId = parseInt(req.params.masterId, 10);
+    const idValidation = validateId(req.params.masterId, 'ID мастера');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, message: idValidation.message });
+    }
+    const masterId = idValidation.id;
     let filename = req.params.filename;
     
     if (!filename || !masterId || isNaN(masterId)) {
@@ -1122,7 +1169,12 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
         res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Length', buffer.length);
         res.setHeader('Cache-Control', 'public, max-age=31536000');
-        res.setHeader('Access-Control-Allow-Origin', '*'); // Для CORS
+        // CORS only for image requests - restrict to specific origins in production
+        const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['*'];
+        const origin = req.headers.origin;
+        if (allowedOrigins.includes('*') || (origin && allowedOrigins.includes(origin))) {
+          res.setHeader('Access-Control-Allow-Origin', origin || '*');
+        }
         res.send(buffer);
       });
       
@@ -1152,7 +1204,11 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
 // API: Удалить фото мастера
 app.delete('/api/masters/:masterId/photos/:filename', requireAuth, async (req, res) => {
   try {
-    const masterId = parseInt(req.params.masterId, 10);
+    const idValidation = validateId(req.params.masterId, 'ID мастера');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, message: idValidation.message });
+    }
+    const masterId = idValidation.id;
     const originalFilename = req.params.filename;
     
     if (!originalFilename || !masterId || isNaN(masterId)) {
@@ -1317,14 +1373,17 @@ app.post('/api/bookings', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Нельзя создать запись на прошедшую дату' });
     }
 
-    const userIdInt = parseInt(userId, 10);
-    const user = await dbUsers.getById(userIdInt);
-    if (isNaN(userIdInt) || !user) {
-      return res.status(400).json({ success: false, message: 'Некорректный ID пользователя' });
+    const idValidation = validateId(userId, 'ID пользователя');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, message: idValidation.message });
+    }
+    const user = await dbUsers.getById(idValidation.id);
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Пользователь не найден' });
     }
 
     // Проверяем доступность времени перед созданием записи
-    const availability = await checkBookingAvailability(userIdInt, date, time, endTime, master);
+    const availability = await checkBookingAvailability(idValidation.id, date, time, endTime, master);
     if (!availability.available) {
       return res.status(409).json({ 
         success: false, 
@@ -1334,21 +1393,21 @@ app.post('/api/bookings', async (req, res) => {
     }
 
     const bookingId = await bookings.create({
-      userId: userIdInt,
-      name: name.trim(),
+      userId: idValidation.id,
+      name: sanitizeString(name, 255),
       phone: phone.trim(),
-      service: service.trim(),
-      master: master ? master.trim() : '',
+      service: sanitizeString(service, 255),
+      master: master ? sanitizeString(master, 100) : '',
       date: date.trim(),
       time: time.trim(),
       endTime: endTime ? endTime.trim() : null,
-      comment: comment ? comment.trim() : ''
+      comment: comment ? sanitizeString(comment, 1000) : ''
     });
 
     // Отправляем уведомление в Telegram, если настроено
     try {
       console.log(`📨 Попытка отправить Telegram уведомление для записи: ${name.trim()}, телефон: ${phone.trim()}`);
-      await sendTelegramNotificationIfEnabled(userIdInt, {
+      await sendTelegramNotificationIfEnabled(idValidation.id, {
         name: name.trim(),
         phone: phone.trim(),
         service: service.trim(),
@@ -1416,12 +1475,12 @@ app.get('/api/bookings', requireAuth, async (req, res) => {
 // API: Обновить запись
 app.put('/api/bookings/:id', requireAuth, async (req, res) => {
   try {
-    const bookingId = parseInt(req.params.id, 10);
-    const { name, phone, service, master, date, time, endTime, comment } = req.body;
-
-    if (isNaN(bookingId)) {
-      return res.status(400).json({ success: false, message: 'Некорректный ID записи' });
+    const idValidation = validateId(req.params.id, 'ID записи');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, message: idValidation.message });
     }
+    const bookingId = idValidation.id;
+    const { name, phone, service, master, date, time, endTime, comment } = req.body;
 
     // Проверяем, что запись существует и принадлежит текущему пользователю
     const existingBooking = await bookings.getById(bookingId);
@@ -1476,17 +1535,18 @@ app.put('/api/bookings/:id', requireAuth, async (req, res) => {
       }
     }
 
-    // Обновляем запись
-    await bookings.update(bookingId, {
-      name,
-      phone,
-      service,
-      master,
-      date,
-      time,
-      endTime,
-      comment
-    });
+    // Обновляем запись с санитизацией
+    const updateData = {};
+    if (name !== undefined) updateData.name = sanitizeString(name, 255);
+    if (phone !== undefined) updateData.phone = phone.trim();
+    if (service !== undefined) updateData.service = sanitizeString(service, 255);
+    if (master !== undefined) updateData.master = master ? sanitizeString(master, 100) : '';
+    if (date !== undefined) updateData.date = date.trim();
+    if (time !== undefined) updateData.time = time.trim();
+    if (endTime !== undefined) updateData.endTime = endTime ? endTime.trim() : null;
+    if (comment !== undefined) updateData.comment = comment ? sanitizeString(comment, 1000) : '';
+    
+    await bookings.update(bookingId, updateData);
 
     res.json({ success: true, message: 'Запись обновлена' });
   } catch (error) {
@@ -1498,7 +1558,11 @@ app.put('/api/bookings/:id', requireAuth, async (req, res) => {
 // API: Удалить запись
 app.delete('/api/bookings/:id', requireAuth, async (req, res) => {
   try {
-    const bookingId = parseInt(req.params.id, 10);
+    const idValidation = validateId(req.params.id, 'ID записи');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, message: idValidation.message });
+    }
+    const bookingId = idValidation.id;
 
     if (isNaN(bookingId)) {
       return res.status(400).json({ success: false, message: 'Некорректный ID записи' });
@@ -1799,7 +1863,14 @@ async function sendTelegramNotificationIfEnabled(userId, booking, eventType) {
       console.log('ℹ️ Номер телефона не указан в настройках - отправляем для всех записей');
     }
 
-    // Формируем сообщение
+    const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (m) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    }[m]));
+    
     let message = '';
     if (eventType === 'new') {
       message = `📅 <b>Новая запись</b>\n\n`;
@@ -1809,19 +1880,19 @@ async function sendTelegramNotificationIfEnabled(userId, booking, eventType) {
       message = `✏️ <b>Изменение записи</b>\n\n`;
     }
 
-    message += `👤 <b>Клиент:</b> ${booking.name}\n`;
-    message += `📞 <b>Телефон:</b> ${booking.phone}\n`;
-    message += `💼 <b>Услуга:</b> ${booking.service}\n`;
+    message += `👤 <b>Клиент:</b> ${escapeHtml(booking.name)}\n`;
+    message += `📞 <b>Телефон:</b> ${escapeHtml(booking.phone)}\n`;
+    message += `💼 <b>Услуга:</b> ${escapeHtml(booking.service)}\n`;
     if (booking.master) {
-      message += `👨‍💼 <b>Мастер:</b> ${booking.master}\n`;
+      message += `👨‍💼 <b>Мастер:</b> ${escapeHtml(booking.master)}\n`;
     }
-    message += `📆 <b>Дата:</b> ${booking.date}\n`;
-    message += `🕐 <b>Время:</b> ${booking.time}`;
+    message += `📆 <b>Дата:</b> ${escapeHtml(booking.date)}\n`;
+    message += `🕐 <b>Время:</b> ${escapeHtml(booking.time)}`;
     if (booking.endTime) {
-      message += ` - ${booking.endTime}`;
+      message += ` - ${escapeHtml(booking.endTime)}`;
     }
     if (booking.comment) {
-      message += `\n💬 <b>Комментарий:</b> ${booking.comment}`;
+      message += `\n💬 <b>Комментарий:</b> ${escapeHtml(booking.comment)}`;
     }
 
     // Отправляем сообщение
@@ -1935,7 +2006,31 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
 // API: Сохранить настройки Telegram (только для админов)
 app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { botToken, chatId, enabled, notifyNewBookings, notifyCancellations, notifyChanges } = req.body;
+    const { botToken, chatId, enabled, notifyNewBookings, notifyCancellations, notifyChanges, phone } = req.body;
+    
+    // Валидация токена бота (формат: число:строка)
+    if (botToken && botToken.trim()) {
+      const tokenPattern = /^\d+:[A-Za-z0-9_-]+$/;
+      if (!tokenPattern.test(botToken.trim())) {
+        return res.status(400).json({ success: false, message: 'Некорректный формат токена бота' });
+      }
+    }
+    
+    // Валидация Chat ID (число или строка начинающаяся с @)
+    if (chatId && chatId.trim()) {
+      const chatIdStr = chatId.trim();
+      if (!/^-?\d+$/.test(chatIdStr) && !chatIdStr.startsWith('@')) {
+        return res.status(400).json({ success: false, message: 'Некорректный формат Chat ID' });
+      }
+    }
+    
+    // Валидация телефона, если указан
+    if (phone && phone.trim()) {
+      const phoneValidation = validatePhone(phone);
+      if (!phoneValidation.valid) {
+        return res.status(400).json({ success: false, message: phoneValidation.message });
+      }
+    }
     
     const user = await dbUsers.getById(req.session.userId);
     if (!user) {
@@ -1943,9 +2038,9 @@ app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =
     }
     
     const settings = {
-      botToken: botToken || '',
-      chatId: chatId || '',
-      phone: req.body.phone || '',
+      botToken: botToken ? botToken.trim() : '',
+      chatId: chatId ? chatId.trim() : '',
+      phone: phone ? phone.trim() : '',
       enabled: enabled === true,
       notifyNewBookings: notifyNewBookings !== false,
       notifyCancellations: notifyCancellations === true,
@@ -1996,9 +2091,21 @@ app.post('/api/telegram/test', requireAuth, requireAdmin, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Токен бота и Chat ID обязательны' });
     }
     
+    // Валидация формата токена
+    const tokenPattern = /^\d+:[A-Za-z0-9_-]+$/;
+    if (!tokenPattern.test(botToken.trim())) {
+      return res.status(400).json({ success: false, message: 'Некорректный формат токена бота' });
+    }
+    
+    // Валидация Chat ID
+    const chatIdStr = chatId.trim();
+    if (!/^-?\d+$/.test(chatIdStr) && !chatIdStr.startsWith('@')) {
+      return res.status(400).json({ success: false, message: 'Некорректный формат Chat ID' });
+    }
+    
     const testMessage = `✅ <b>Тестовое сообщение</b>\n\nИнтеграция с Telegram ботом работает корректно!`;
     
-    await sendTelegramMessage(botToken, chatId, testMessage);
+    await sendTelegramMessage(botToken.trim(), chatIdStr, testMessage);
     
     res.json({ success: true, message: 'Тестовое сообщение успешно отправлено' });
   } catch (error) {
