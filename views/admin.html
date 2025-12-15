@@ -245,6 +245,50 @@
           
           <div class="divider" style="margin: 24px 0;"></div>
           
+          <h3 style="margin-bottom: 16px;">Названия секций на странице</h3>
+          <p class="note" style="margin-bottom: 16px;">Настройте названия заголовков секций на странице салона</p>
+          
+          <div class="form-row">
+            <div>
+              <label for="design-section-services">Название секции "Услуги"</label>
+              <input type="text" id="design-section-services" placeholder="Например: Услуги" />
+              <p class="note">Заголовок секции услуг</p>
+            </div>
+            <div>
+              <label for="design-section-masters">Название секции "Мастера"</label>
+              <input type="text" id="design-section-masters" placeholder="Например: Специалисты" />
+              <p class="note">Заголовок секции мастеров</p>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div>
+              <label for="design-section-booking">Название секции "Онлайн запись"</label>
+              <input type="text" id="design-section-booking" placeholder="Например: Онлайн запись" />
+              <p class="note">Заголовок формы записи</p>
+            </div>
+            <div>
+              <label for="design-section-location">Название секции "Как нас найти"</label>
+              <input type="text" id="design-section-location" placeholder="Например: Как нас найти" />
+              <p class="note">Заголовок секции с картой</p>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div>
+              <label for="design-label-master">Название поля "Мастер"</label>
+              <input type="text" id="design-label-master" placeholder="Например: Специалист" />
+              <p class="note">Название поля выбора мастера в форме</p>
+            </div>
+            <div>
+              <label for="design-option-any-master">Текст "Любой свободный мастер"</label>
+              <input type="text" id="design-option-any-master" placeholder="Например: Любой свободный специалист" />
+              <p class="note">Текст опции выбора любого мастера</p>
+            </div>
+          </div>
+          
+          <div class="divider" style="margin: 24px 0;"></div>
+          
           <h3 style="margin-bottom: 16px;">Логотип</h3>
           
           <div>
@@ -369,7 +413,13 @@
     headerTitleSize: 'normal',
     headerTitleColor: '#ffffff',
     headerDescriptionSize: 'normal',
-    headerDescriptionColor: '#ffffff'
+    headerDescriptionColor: '#ffffff',
+    sectionServices: '',
+    sectionMasters: '',
+    sectionBooking: '',
+    sectionLocation: '',
+    labelMaster: '',
+    optionAnyMaster: ''
   };
 
   // Загрузка настроек дизайна
@@ -408,6 +458,12 @@
     document.getElementById('design-header-title-color').value = designSettings.headerTitleColor || '#ffffff';
     document.getElementById('design-header-description-size').value = designSettings.headerDescriptionSize || 'normal';
     document.getElementById('design-header-description-color').value = designSettings.headerDescriptionColor || '#ffffff';
+    document.getElementById('design-section-services').value = designSettings.sectionServices || '';
+    document.getElementById('design-section-masters').value = designSettings.sectionMasters || '';
+    document.getElementById('design-section-booking').value = designSettings.sectionBooking || '';
+    document.getElementById('design-section-location').value = designSettings.sectionLocation || '';
+    document.getElementById('design-label-master').value = designSettings.labelMaster || '';
+    document.getElementById('design-option-any-master').value = designSettings.optionAnyMaster || '';
     
     // Показываем/скрываем дополнительные поля в зависимости от типа фона
     updatePageBgFields();
@@ -551,7 +607,7 @@
   }
 
   // Обновление предпросмотра при изменении цветов
-  ['design-primary-color', 'design-secondary-color', 'design-header-bg', 'design-card-bg', 'design-text-color', 'design-button-text-color', 'design-header-name', 'design-header-title', 'design-header-description', 'design-header-name-size', 'design-header-name-color', 'design-header-title-size', 'design-header-title-color', 'design-header-description-size', 'design-header-description-color', 'design-page-bg', 'design-page-bg-secondary', 'design-page-bg-image-url'].forEach(id => {
+  ['design-primary-color', 'design-secondary-color', 'design-header-bg', 'design-card-bg', 'design-text-color', 'design-button-text-color', 'design-header-name', 'design-header-title', 'design-header-description', 'design-header-name-size', 'design-header-name-color', 'design-header-title-size', 'design-header-title-color', 'design-header-description-size', 'design-header-description-color', 'design-section-services', 'design-section-masters', 'design-section-booking', 'design-section-location', 'design-label-master', 'design-option-any-master', 'design-page-bg', 'design-page-bg-secondary', 'design-page-bg-image-url'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener('input', () => {
@@ -595,7 +651,13 @@
         headerTitleSize: document.getElementById('design-header-title-size').value,
         headerTitleColor: document.getElementById('design-header-title-color').value,
         headerDescriptionSize: document.getElementById('design-header-description-size').value,
-        headerDescriptionColor: document.getElementById('design-header-description-color').value
+        headerDescriptionColor: document.getElementById('design-header-description-color').value,
+        sectionServices: document.getElementById('design-section-services').value.trim(),
+        sectionMasters: document.getElementById('design-section-masters').value.trim(),
+        sectionBooking: document.getElementById('design-section-booking').value.trim(),
+        sectionLocation: document.getElementById('design-section-location').value.trim(),
+        labelMaster: document.getElementById('design-label-master').value.trim(),
+        optionAnyMaster: document.getElementById('design-option-any-master').value.trim()
       };
 
       try {
@@ -663,7 +725,13 @@
         headerTitleSize: 'normal',
         headerTitleColor: '#ffffff',
         headerDescriptionSize: 'normal',
-        headerDescriptionColor: '#ffffff'
+        headerDescriptionColor: '#ffffff',
+        sectionServices: '',
+        sectionMasters: '',
+        sectionBooking: '',
+        sectionLocation: '',
+        labelMaster: '',
+        optionAnyMaster: ''
       };
       
       applyDesignToForm();

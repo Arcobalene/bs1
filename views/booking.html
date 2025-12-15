@@ -34,11 +34,11 @@
     <div class="grid">
     <!-- Левая колонка: услуги и мастера -->
     <div class="card">
-      <h2>Услуги</h2>
+      <h2 id="section-services-heading">Услуги</h2>
       <p class="description">Выберите услугу, а затем оформите запись в удобное время.</p>
       <div class="services-list" id="services-list"></div>
       <div class="divider"></div>
-      <h2>Мастера</h2>
+      <h2 id="section-masters-heading">Мастера</h2>
       <div class="masters-list" id="masters-list"></div>
       <p class="note">
         После отправки заявки администратор свяжется с вами в мессенджере или по телефону для подтверждения времени.
@@ -48,7 +48,7 @@
     <!-- Правая колонка: форма записи -->
     <div class="card">
       <p id="salon-phone" style="margin-bottom: 16px; font-size: 1.1rem; font-weight: 500; text-align: center; color: #6b7280; display: none;"></p>
-      <h2>Онлайн запись</h2>
+      <h2 id="section-booking-heading">Онлайн запись</h2>
       <p class="description">Заполните форму, мы подтвердим запись в ближайшее время.</p>
 
       <form id="booking-form">
@@ -70,7 +70,7 @@
         </div>
 
         <div>
-          <label for="master">Мастер</label>
+          <label for="master" id="label-master">Мастер</label>
           <select id="master" name="master">
             <option value="">Любой свободный мастер</option>
           </select>
@@ -116,7 +116,7 @@
 <div id="salon-map-section" style="display: none; margin-top: 24px;">
   <div class="container">
     <div class="card">
-      <h2>Как нас найти</h2>
+      <h2 id="section-location-heading">Как нас найти</h2>
       <div id="salon-map" style="width: 100%; height: 300px; border-radius: 10px; margin-top: 8px;"></div>
       <p id="salon-address-text" style="margin-top: 12px; color: #6b7280; font-size: 0.9rem;"></p>
     </div>
@@ -246,6 +246,8 @@
 
       if (salonData.success && salonData.salon) {
         const salon = salonData.salon;
+        // Сохраняем данные салона для использования в других функциях
+        window.currentSalonData = salon;
         // Обновляем заголовок
         const headerTitle = document.getElementById('salon-name-header');
         const headerDesc = document.getElementById('salon-description');
@@ -254,6 +256,7 @@
         // Применяем настройки дизайна
         if (salon.design) {
           applyDesign(salon.design);
+          applySectionTitles(salon.design);
         }
         
         // Устанавливаем название салона из дизайна или из информации о салоне
@@ -335,6 +338,44 @@
         headerDesc.style.display = 'block';
       }
     }
+  }
+
+  // Применение названий секций
+  function applySectionTitles(design) {
+    if (!design) return;
+    
+    // Заголовок "Услуги"
+    const servicesHeading = document.getElementById('section-services-heading');
+    if (servicesHeading && design.sectionServices && design.sectionServices.trim()) {
+      servicesHeading.textContent = design.sectionServices;
+    }
+    
+    // Заголовок "Мастера"
+    const mastersHeading = document.getElementById('section-masters-heading');
+    if (mastersHeading && design.sectionMasters && design.sectionMasters.trim()) {
+      mastersHeading.textContent = design.sectionMasters;
+    }
+    
+    // Заголовок "Онлайн запись"
+    const bookingHeading = document.getElementById('section-booking-heading');
+    if (bookingHeading && design.sectionBooking && design.sectionBooking.trim()) {
+      bookingHeading.textContent = design.sectionBooking;
+    }
+    
+    // Заголовок "Как нас найти"
+    const locationHeading = document.getElementById('section-location-heading');
+    if (locationHeading && design.sectionLocation && design.sectionLocation.trim()) {
+      locationHeading.textContent = design.sectionLocation;
+    }
+    
+    // Label "Мастер"
+    const masterLabel = document.getElementById('label-master');
+    if (masterLabel && design.labelMaster && design.labelMaster.trim()) {
+      masterLabel.textContent = design.labelMaster;
+    }
+    
+    // Опция "Любой свободный мастер" - обновляем при следующем вызове renderServicesAndMasters
+    // Это будет сделано автоматически через window.currentSalonData
   }
 
   // Применение настроек дизайна
@@ -632,7 +673,12 @@
           servicesListEl.appendChild(row);
         });
       } else {
-        servicesListEl.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 20px;">Услуги пока не добавлены</p>';
+        // Получаем название секции из дизайна, если есть
+        const salonData = window.currentSalonData || {};
+        const sectionName = (salonData.design && salonData.design.sectionServices && salonData.design.sectionServices.trim()) 
+          ? salonData.design.sectionServices 
+          : 'Услуги';
+        servicesListEl.innerHTML = `<p style="color: #6b7280; text-align: center; padding: 20px;">${sectionName} пока не добавлены</p>`;
       }
     }
 
@@ -676,7 +722,12 @@
           mastersListEl.appendChild(row);
         });
       } else {
-        mastersListEl.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 20px;">Мастера пока не добавлены</p>';
+        // Получаем название секции из дизайна, если есть
+        const salonData = window.currentSalonData || {};
+        const sectionName = (salonData.design && salonData.design.sectionMasters && salonData.design.sectionMasters.trim()) 
+          ? salonData.design.sectionMasters 
+          : 'Мастера';
+        mastersListEl.innerHTML = `<p style="color: #6b7280; text-align: center; padding: 20px;">${sectionName} пока не добавлены</p>`;
       }
     }
 
@@ -685,7 +736,12 @@
       masterSelect.innerHTML = "";
       const anyOpt = document.createElement("option");
       anyOpt.value = "";
-      anyOpt.textContent = "Любой свободный мастер";
+      // Получаем текст из дизайна, если есть
+      const salonData = window.currentSalonData || {};
+      const anyMasterText = (salonData.design && salonData.design.optionAnyMaster && salonData.design.optionAnyMaster.trim())
+        ? salonData.design.optionAnyMaster
+        : "Любой свободный мастер";
+      anyOpt.textContent = anyMasterText;
       masterSelect.appendChild(anyOpt);
       if (masters && masters.length > 0) {
         masters.forEach((m) => {
@@ -696,6 +752,12 @@
         });
       }
       masterSelect.value = currentMaster || "";
+      
+      // Обновляем label "Мастер", если есть настройка
+      const masterLabel = document.getElementById('label-master');
+      if (masterLabel && salonData.design && salonData.design.labelMaster && salonData.design.labelMaster.trim()) {
+        masterLabel.textContent = salonData.design.labelMaster;
+      }
     }
 
     generateSlots();
@@ -1231,7 +1293,7 @@
 </script>
 
 <!-- Модальное окно для фото мастера -->
-<div id="master-photos-modal" class="modal-overlay hidden" style="z-index: 10000;">
+<div id="master-photos-modal" class="modal-overlay hidden" style="z-index: 99999 !important; position: fixed !important;">
   <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
     <div class="modal-header">
       <div class="modal-title" id="master-photos-modal-title">Фото работ</div>
