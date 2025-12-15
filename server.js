@@ -190,26 +190,46 @@ async function requireAuth(req, res, next) {
       const user = await dbUsers.getById(req.session.userId);
       if (!user) {
         req.session.destroy();
+        // Для API запросов всегда возвращаем JSON
+        if (req.path && req.path.startsWith('/api/')) {
+          return res.status(401).json({ success: false, message: 'Требуется авторизация' });
+        }
         return res.redirect('/login');
       }
       if (user.is_active === false || user.is_active === 0) {
         req.session.destroy();
+        // Для API запросов всегда возвращаем JSON
+        if (req.path && req.path.startsWith('/api/')) {
+          return res.status(401).json({ success: false, message: 'Аккаунт деактивирован' });
+        }
         return res.redirect('/login');
       }
       next();
     } catch (error) {
       console.error('Ошибка проверки авторизации:', error);
-      res.redirect('/login');
+      // Для API запросов всегда возвращаем JSON
+      if (req.path && req.path.startsWith('/api/')) {
+        return res.status(500).json({ success: false, message: 'Ошибка сервера' });
+      }
+      return res.redirect('/login');
     }
   } else {
-    res.redirect('/login');
+    // Для API запросов всегда возвращаем JSON
+    if (req.path && req.path.startsWith('/api/')) {
+      return res.status(401).json({ success: false, message: 'Требуется авторизация' });
+    }
+    return res.redirect('/login');
   }
 }
 
 // Middleware для проверки прав администратора
 async function requireAdmin(req, res, next) {
   if (!req.session.userId) {
-    // Если это HTML запрос, редиректим, иначе возвращаем JSON
+    // Для API запросов всегда возвращаем JSON
+    if (req.path && req.path.startsWith('/api/')) {
+      return res.status(401).json({ success: false, message: 'Требуется авторизация' });
+    }
+    // Если это HTML запрос, редиректим
     if (req.accepts && req.accepts('html')) {
       return res.redirect('/login');
     }
@@ -220,6 +240,10 @@ async function requireAdmin(req, res, next) {
     // Проверяем роль: admin или username === 'admin' (для обратной совместимости)
     const isAdmin = user && (user.role === 'admin' || user.username === 'admin');
     if (!isAdmin) {
+      // Для API запросов всегда возвращаем JSON
+      if (req.path && req.path.startsWith('/api/')) {
+        return res.status(403).json({ success: false, message: 'Доступ запрещен. Требуются права администратора.' });
+      }
       if (req.accepts && req.accepts('html')) {
         return res.status(403).send('Доступ запрещен. Требуются права администратора.');
       }
@@ -228,6 +252,10 @@ async function requireAdmin(req, res, next) {
     next();
   } catch (error) {
     console.error('Ошибка проверки прав администратора:', error);
+    // Для API запросов всегда возвращаем JSON
+    if (req.path && req.path.startsWith('/api/')) {
+      return res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    }
     if (req.accepts && req.accepts('html')) {
       return res.status(500).send('Ошибка сервера');
     }
@@ -1939,7 +1967,12 @@ app.post('/api/telegram/test', requireAuth, requireAdmin, async (req, res) => {
 // Обработка ошибок
 app.use((err, req, res, next) => {
   console.error('Ошибка:', err);
-  res.status(500).json({ success: false, message: 'Внутренняя ошибка сервера' });
+  // Проверяем, является ли это API запросом
+  if (req.path && req.path.startsWith('/api/')) {
+    res.status(500).json({ success: false, message: 'Внутренняя ошибка сервера' });
+  } else {
+    res.status(500).json({ success: false, message: 'Внутренняя ошибка сервера' });
+  }
 });
 
 // 404 обработчик

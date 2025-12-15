@@ -1264,6 +1264,12 @@
     try {
       const response = await fetch('/api/telegram/settings');
       if (response.ok) {
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          console.error('Сервер вернул не JSON при загрузке настроек Telegram:', text.substring(0, 200));
+          return;
+        }
         const data = await response.json();
         if (data.success && data.settings) {
           const settings = data.settings;
@@ -1306,6 +1312,12 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(settings)
         });
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          throw new Error(`Сервер вернул не JSON. Статус: ${response.status}, Ответ: ${text.substring(0, 200)}`);
+        }
         
         const data = await response.json();
         
@@ -1350,6 +1362,12 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ botToken, chatId })
         });
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          throw new Error(`Сервер вернул не JSON. Статус: ${response.status}, Ответ: ${text.substring(0, 200)}`);
+        }
         
         const data = await response.json();
         
@@ -1653,6 +1671,13 @@
       const bookingsRes = await fetch('/api/bookings');
       if (!bookingsRes.ok) {
         console.error('Ошибка получения записей:', bookingsRes.status);
+        return;
+      }
+      
+      const contentType = bookingsRes.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await bookingsRes.text();
+        console.error('Сервер вернул не JSON при проверке записей:', text.substring(0, 200));
         return;
       }
       
