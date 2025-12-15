@@ -424,6 +424,11 @@
     // Устанавливаем минимальную дату
     setMinDate();
     
+    // Проверяем userId еще раз (может быть обновлен в checkAuthAndShowMenu)
+    const currentUrlParams = new URLSearchParams(window.location.search);
+    const currentUserId = currentUrlParams.get('userId') || userId;
+    userId = currentUserId;
+    
     if (!userId) {
       // Если userId не указан, показываем лендинг-страницу
       showLandingPage();
@@ -435,13 +440,9 @@
       return;
     }
     
-    // Показываем страницу записи
+    // ВАЖНО: Показываем страницу записи ПЕРЕД загрузкой данных
+    // Это гарантирует, что страница видна даже если загрузка данных займет время
     showBookingPage();
-    // Показываем заголовок салона на странице записи
-    const salonHeader = document.getElementById('salon-name-header');
-    const salonDescription = document.getElementById('salon-description');
-    if (salonHeader) salonHeader.style.display = 'block';
-    if (salonDescription) salonDescription.style.display = 'block';
 
     try {
       const [servicesRes, mastersRes, salonRes] = await Promise.all([
@@ -501,7 +502,10 @@
         const headerTitle = document.getElementById('salon-name-header');
         const headerDesc = document.getElementById('salon-description');
         const salonPhone = document.getElementById('salon-phone');
-        if (headerTitle) headerTitle.textContent = salon.name || 'Beauty Studio';
+        if (headerTitle) {
+          headerTitle.textContent = salon.name || 'Beauty Studio';
+          headerTitle.style.display = 'block';
+        }
         
         // Применяем настройки дизайна
         if (salon.design) {
@@ -516,7 +520,10 @@
             headerDesc.textContent = salon.design.headerTitle;
           } else if (salon.address) {
             headerDesc.textContent = salon.address;
+          } else {
+            headerDesc.textContent = 'Современный салон красоты в центре города. Запишитесь онлайн за пару кликов.';
           }
+          headerDesc.style.display = 'block';
         }
         // Отображаем телефон, если он есть
         if (salonPhone) {
@@ -538,9 +545,32 @@
           if (addressText) addressText.textContent = `📍 ${salon.address}`;
           if (mapSection) mapSection.style.display = 'block';
         }
+      } else {
+        // Если данные салона не загрузились, показываем дефолтные значения
+        const headerTitle = document.getElementById('salon-name-header');
+        const headerDesc = document.getElementById('salon-description');
+        if (headerTitle) {
+          headerTitle.textContent = 'Beauty Studio';
+          headerTitle.style.display = 'block';
+        }
+        if (headerDesc) {
+          headerDesc.textContent = 'Современный салон красоты в центре города. Запишитесь онлайн за пару кликов.';
+          headerDesc.style.display = 'block';
+        }
       }
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
+      // Даже при ошибке показываем страницу записи с дефолтными значениями
+      const headerTitle = document.getElementById('salon-name-header');
+      const headerDesc = document.getElementById('salon-description');
+      if (headerTitle) {
+        headerTitle.textContent = 'Beauty Studio';
+        headerTitle.style.display = 'block';
+      }
+      if (headerDesc) {
+        headerDesc.textContent = 'Современный салон красоты в центре города. Запишитесь онлайн за пару кликов.';
+        headerDesc.style.display = 'block';
+      }
     }
   }
 
