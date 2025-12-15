@@ -167,21 +167,90 @@
   </div>
 
         <div class="tab-content" id="header-tab" style="display: none;">
-      <div>
-            <label for="design-header-title">Заголовок страницы</label>
+          <h3 style="margin-bottom: 16px;">Настройка заголовков</h3>
+          
+          <div>
+            <label for="design-header-name">Название салона в заголовке</label>
+            <input type="text" id="design-header-name" placeholder="Например: Beauty Studio" />
+            <p class="note">Если не указано, будет использоваться название из информации о салоне</p>
+          </div>
+          
+          <div>
+            <label for="design-header-title">Подзаголовок</label>
             <input type="text" id="design-header-title" placeholder="Например: Добро пожаловать в наш салон" />
-            <p class="note">Текст, который отображается под названием салона</p>
-      </div>
-      <div>
+            <p class="note">Текст, который отображается под названием салона (необязательно)</p>
+          </div>
+          
+          <div>
             <label for="design-header-description">Описание</label>
-            <textarea id="design-header-description" placeholder="Краткое описание вашего салона..."></textarea>
-            <p class="note">Дополнительная информация о салоне</p>
-      </div>
-          <div class="divider" style="margin: 16px 0;"></div>
+            <textarea id="design-header-description" placeholder="Краткое описание вашего салона..." rows="3"></textarea>
+            <p class="note">Основное описание салона, отображается под подзаголовком</p>
+          </div>
+          
+          <div class="divider" style="margin: 24px 0;"></div>
+          
+          <h3 style="margin-bottom: 16px;">Стиль заголовков</h3>
+          
+          <div class="form-row">
+            <div>
+              <label for="design-header-name-size">Размер названия</label>
+              <select id="design-header-name-size">
+                <option value="normal">Обычный</option>
+                <option value="large">Большой</option>
+                <option value="xlarge">Очень большой</option>
+                <option value="small">Маленький</option>
+              </select>
+              <p class="note">Размер шрифта названия салона</p>
+            </div>
+            <div>
+              <label for="design-header-name-color">Цвет названия</label>
+              <input type="color" id="design-header-name-color" value="#ffffff" />
+              <p class="note">Цвет текста названия салона</p>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div>
+              <label for="design-header-title-size">Размер подзаголовка</label>
+              <select id="design-header-title-size">
+                <option value="normal">Обычный</option>
+                <option value="large">Большой</option>
+                <option value="small">Маленький</option>
+              </select>
+              <p class="note">Размер шрифта подзаголовка</p>
+            </div>
+            <div>
+              <label for="design-header-title-color">Цвет подзаголовка</label>
+              <input type="color" id="design-header-title-color" value="#ffffff" />
+              <p class="note">Цвет текста подзаголовка</p>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div>
+              <label for="design-header-description-size">Размер описания</label>
+              <select id="design-header-description-size">
+                <option value="normal">Обычный</option>
+                <option value="large">Большой</option>
+                <option value="small">Маленький</option>
+              </select>
+              <p class="note">Размер шрифта описания</p>
+            </div>
+            <div>
+              <label for="design-header-description-color">Цвет описания</label>
+              <input type="color" id="design-header-description-color" value="#ffffff" />
+              <p class="note">Цвет текста описания</p>
+            </div>
+          </div>
+          
+          <div class="divider" style="margin: 24px 0;"></div>
+          
+          <h3 style="margin-bottom: 16px;">Логотип</h3>
+          
           <div>
             <label for="design-logo">Логотип</label>
             <input type="file" id="design-logo" accept="image/*" />
-            <p class="note">Загрузите логотип вашего салона (PNG, JPG, SVG)</p>
+            <p class="note">Загрузите логотип вашего салона (PNG, JPG, SVG, максимум 2MB)</p>
             <div id="logo-preview" style="margin-top: 12px; display: none;">
               <img id="logo-preview-img" src="" alt="Предпросмотр логотипа" style="max-width: 200px; max-height: 100px; border-radius: 8px; border: 1px solid #e5e7eb;" />
               <button type="button" id="remove-logo-btn" class="btn-secondary" style="margin-left: 8px; margin-top: 8px;">Удалить логотип</button>
@@ -195,8 +264,8 @@
 
         <div class="tab-content" id="preview-tab" style="display: none;">
           <div style="background: linear-gradient(135deg, #f973b6, #a855f7); color: white; padding: 24px; border-radius: 12px; margin-bottom: 16px;">
-            <h3 id="preview-title" style="margin: 0 0 8px 0;">Beauty Studio</h3>
-            <p id="preview-description" style="margin: 0; opacity: 0.9;">Предпросмотр заголовка</p>
+            <h3 id="preview-title" style="margin: 0 0 8px 0; font-size: 2.4rem; color: #ffffff;">Beauty Studio</h3>
+            <p id="preview-description" style="margin: 0; opacity: 0.9; font-size: 1rem; color: #ffffff;">Предпросмотр заголовка</p>
           </div>
           <div style="background: white; padding: 16px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
             <p style="margin: 0; color: #222;">Пример карточки с выбранными цветами</p>
@@ -292,8 +361,15 @@
     pageBgSecondary: '#ffffff',
     pageBgImage: '',
     logo: '',
+    headerName: '',
     headerTitle: '',
-    headerDescription: ''
+    headerDescription: '',
+    headerNameSize: 'normal',
+    headerNameColor: '#ffffff',
+    headerTitleSize: 'normal',
+    headerTitleColor: '#ffffff',
+    headerDescriptionSize: 'normal',
+    headerDescriptionColor: '#ffffff'
   };
 
   // Загрузка настроек дизайна
@@ -323,8 +399,15 @@
     document.getElementById('design-page-bg-type').value = designSettings.pageBgType || 'color';
     document.getElementById('design-page-bg-secondary').value = designSettings.pageBgSecondary || '#ffffff';
     document.getElementById('design-page-bg-image-url').value = designSettings.pageBgImage || '';
+    document.getElementById('design-header-name').value = designSettings.headerName || '';
     document.getElementById('design-header-title').value = designSettings.headerTitle || '';
     document.getElementById('design-header-description').value = designSettings.headerDescription || '';
+    document.getElementById('design-header-name-size').value = designSettings.headerNameSize || 'normal';
+    document.getElementById('design-header-name-color').value = designSettings.headerNameColor || '#ffffff';
+    document.getElementById('design-header-title-size').value = designSettings.headerTitleSize || 'normal';
+    document.getElementById('design-header-title-color').value = designSettings.headerTitleColor || '#ffffff';
+    document.getElementById('design-header-description-size').value = designSettings.headerDescriptionSize || 'normal';
+    document.getElementById('design-header-description-color').value = designSettings.headerDescriptionColor || '#ffffff';
     
     // Показываем/скрываем дополнительные поля в зависимости от типа фона
     updatePageBgFields();
@@ -358,8 +441,12 @@
     const cardBg = document.getElementById('design-card-bg').value;
     const textColor = document.getElementById('design-text-color').value;
     const buttonTextColor = document.getElementById('design-button-text-color').value;
-    const headerTitle = document.getElementById('design-header-title').value || 'Beauty Studio';
+    const headerName = document.getElementById('design-header-name').value || 'Beauty Studio';
+    const headerTitle = document.getElementById('design-header-title').value || '';
     const headerDescription = document.getElementById('design-header-description').value || 'Предпросмотр заголовка';
+    const headerNameColor = document.getElementById('design-header-name-color').value;
+    const headerTitleColor = document.getElementById('design-header-title-color').value;
+    const headerDescriptionColor = document.getElementById('design-header-description-color').value;
 
     const previewHeader = document.querySelector('#preview-tab > div:first-child');
     if (previewHeader) {
@@ -367,10 +454,31 @@
     }
 
     const previewTitle = document.getElementById('preview-title');
-    if (previewTitle) previewTitle.textContent = headerTitle;
+    if (previewTitle) {
+      previewTitle.textContent = headerName;
+      previewTitle.style.color = headerNameColor;
+      const nameSize = document.getElementById('design-header-name-size').value;
+      const sizeMap = {
+        'small': '1.5rem',
+        'normal': '2.4rem',
+        'large': '3rem',
+        'xlarge': '3.5rem'
+      };
+      previewTitle.style.fontSize = sizeMap[nameSize] || sizeMap.normal;
+    }
 
     const previewDesc = document.getElementById('preview-description');
-    if (previewDesc) previewDesc.textContent = headerDescription;
+    if (previewDesc) {
+      previewDesc.textContent = headerDescription || headerTitle || 'Предпросмотр заголовка';
+      previewDesc.style.color = headerDescriptionColor;
+      const descSize = document.getElementById('design-header-description-size').value;
+      const sizeMap = {
+        'small': '0.9rem',
+        'normal': '1rem',
+        'large': '1.2rem'
+      };
+      previewDesc.style.fontSize = sizeMap[descSize] || sizeMap.normal;
+    }
 
     const previewCard = document.querySelector('#preview-tab > div:last-child');
     if (previewCard) {
@@ -443,10 +551,15 @@
   }
 
   // Обновление предпросмотра при изменении цветов
-  ['design-primary-color', 'design-secondary-color', 'design-header-bg', 'design-card-bg', 'design-text-color', 'design-button-text-color', 'design-header-title', 'design-header-description', 'design-page-bg', 'design-page-bg-secondary', 'design-page-bg-image-url'].forEach(id => {
+  ['design-primary-color', 'design-secondary-color', 'design-header-bg', 'design-card-bg', 'design-text-color', 'design-button-text-color', 'design-header-name', 'design-header-title', 'design-header-description', 'design-header-name-size', 'design-header-name-color', 'design-header-title-size', 'design-header-title-color', 'design-header-description-size', 'design-header-description-color', 'design-page-bg', 'design-page-bg-secondary', 'design-page-bg-image-url'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener('input', () => {
+        if (document.getElementById('preview-tab').style.display !== 'none') {
+          updatePreview();
+        }
+      });
+      el.addEventListener('change', () => {
         if (document.getElementById('preview-tab').style.display !== 'none') {
           updatePreview();
         }
@@ -474,8 +587,15 @@
         pageBgSecondary: document.getElementById('design-page-bg-secondary').value,
         pageBgImage: document.getElementById('design-page-bg-image-url').value.trim(),
         logo: designSettings.logo || '',
+        headerName: document.getElementById('design-header-name').value.trim(),
         headerTitle: document.getElementById('design-header-title').value.trim(),
-        headerDescription: document.getElementById('design-header-description').value.trim()
+        headerDescription: document.getElementById('design-header-description').value.trim(),
+        headerNameSize: document.getElementById('design-header-name-size').value,
+        headerNameColor: document.getElementById('design-header-name-color').value,
+        headerTitleSize: document.getElementById('design-header-title-size').value,
+        headerTitleColor: document.getElementById('design-header-title-color').value,
+        headerDescriptionSize: document.getElementById('design-header-description-size').value,
+        headerDescriptionColor: document.getElementById('design-header-description-color').value
       };
 
       try {
@@ -535,8 +655,15 @@
         pageBgSecondary: '#ffffff',
         pageBgImage: '',
         logo: '',
+        headerName: '',
         headerTitle: '',
-        headerDescription: ''
+        headerDescription: '',
+        headerNameSize: 'normal',
+        headerNameColor: '#ffffff',
+        headerTitleSize: 'normal',
+        headerTitleColor: '#ffffff',
+        headerDescriptionSize: 'normal',
+        headerDescriptionColor: '#ffffff'
       };
       
       applyDesignToForm();

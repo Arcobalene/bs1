@@ -21,6 +21,7 @@
     </a>
   </div>
   <h1 id="salon-name-header" style="display: none;">Beauty Studio</h1>
+  <p id="salon-header-title" style="display: none; font-size: 1.1rem; opacity: 0.95; margin-top: 8px;"></p>
   <p id="salon-description" style="display: none;">Современный салон красоты в центре города. Запишитесь онлайн за пару кликов.</p>
   <div class="nav-links" id="nav-links">
     <a href="/login" id="login-link">Вход для владельцев</a>
@@ -167,8 +168,10 @@
       }
       // Скрываем заголовок салона
       const salonHeader = document.getElementById('salon-name-header');
+      const salonSubtitle = document.getElementById('salon-header-title');
       const salonDescription = document.getElementById('salon-description');
       if (salonHeader) salonHeader.style.display = 'none';
+      if (salonSubtitle) salonSubtitle.style.display = 'none';
       if (salonDescription) salonDescription.style.display = 'none';
       return;
     }
@@ -181,8 +184,10 @@
     
     // Показываем заголовок салона
     const salonHeader = document.getElementById('salon-name-header');
+    const salonSubtitle = document.getElementById('salon-header-title');
     const salonDescription = document.getElementById('salon-description');
     if (salonHeader) salonHeader.style.display = 'block';
+    if (salonSubtitle && salonSubtitle.textContent.trim()) salonSubtitle.style.display = 'block';
     if (salonDescription) salonDescription.style.display = 'block';
 
     try {
@@ -245,22 +250,37 @@
         const headerTitle = document.getElementById('salon-name-header');
         const headerDesc = document.getElementById('salon-description');
         const salonPhone = document.getElementById('salon-phone');
-        if (headerTitle) {
-          headerTitle.textContent = salon.name || 'Beauty Studio';
-          headerTitle.style.display = 'block';
-        }
         
         // Применяем настройки дизайна
         if (salon.design) {
           applyDesign(salon.design);
         }
         
+        // Устанавливаем название салона из дизайна или из информации о салоне
+        if (headerTitle) {
+          if (salon.design && salon.design.headerName && salon.design.headerName.trim()) {
+            headerTitle.textContent = salon.design.headerName;
+          } else {
+            headerTitle.textContent = salon.name || 'Beauty Studio';
+          }
+          headerTitle.style.display = 'block';
+        }
+        
+        // Устанавливаем подзаголовок (если есть)
+        const headerSubtitle = document.getElementById('salon-header-title');
+        if (headerSubtitle) {
+          if (salon.design && salon.design.headerTitle && salon.design.headerTitle.trim()) {
+            headerSubtitle.textContent = salon.design.headerTitle;
+            headerSubtitle.style.display = 'block';
+          } else {
+            headerSubtitle.style.display = 'none';
+          }
+        }
+        
         // Устанавливаем описание из дизайна или адрес
         if (headerDesc) {
-          if (salon.design && salon.design.headerDescription) {
+          if (salon.design && salon.design.headerDescription && salon.design.headerDescription.trim()) {
             headerDesc.textContent = salon.design.headerDescription;
-          } else if (salon.design && salon.design.headerTitle) {
-            headerDesc.textContent = salon.design.headerTitle;
           } else if (salon.address) {
             headerDesc.textContent = salon.address;
           } else {
@@ -370,6 +390,55 @@
       if (logoImg) logoImg.remove();
     }
 
+    // Настройки заголовков
+    const headerNameSize = design.headerNameSize || 'normal';
+    const headerNameColor = design.headerNameColor || '#ffffff';
+    const headerTitleSize = design.headerTitleSize || 'normal';
+    const headerTitleColor = design.headerTitleColor || '#ffffff';
+    const headerDescriptionSize = design.headerDescriptionSize || 'normal';
+    const headerDescriptionColor = design.headerDescriptionColor || '#ffffff';
+    
+    // Функция для получения размера шрифта
+    function getFontSize(size) {
+      const sizes = {
+        'small': '1.5rem',
+        'normal': '2.4rem',
+        'large': '3rem',
+        'xlarge': '3.5rem'
+      };
+      return sizes[size] || sizes.normal;
+    }
+    
+    function getSubFontSize(size) {
+      const sizes = {
+        'small': '0.9rem',
+        'normal': '1rem',
+        'large': '1.2rem'
+      };
+      return sizes[size] || sizes.normal;
+    }
+
+    // Применяем стили к заголовкам напрямую
+    const headerTitleEl = document.getElementById('salon-name-header');
+    const headerSubtitleEl = document.getElementById('salon-header-title');
+    const headerDescEl = document.getElementById('salon-description');
+    
+    if (headerTitleEl) {
+      headerTitleEl.style.fontSize = getFontSize(headerNameSize);
+      headerTitleEl.style.color = headerNameColor;
+    }
+    
+    if (headerSubtitleEl) {
+      const subtitleSize = getSubFontSize(headerTitleSize);
+      headerSubtitleEl.style.fontSize = subtitleSize;
+      headerSubtitleEl.style.color = headerTitleColor;
+    }
+    
+    if (headerDescEl) {
+      headerDescEl.style.fontSize = getSubFontSize(headerDescriptionSize);
+      headerDescEl.style.color = headerDescriptionColor;
+    }
+
     // Добавляем CSS для всех элементов через style элемент
     style.textContent = `
       body {
@@ -378,6 +447,18 @@
       header {
         background: linear-gradient(135deg, ${headerBg}, ${secondaryColor}) !important;
         position: relative !important;
+      }
+      #salon-name-header {
+        font-size: ${getFontSize(headerNameSize)} !important;
+        color: ${headerNameColor} !important;
+      }
+      #salon-header-title {
+        font-size: ${getSubFontSize(headerTitleSize)} !important;
+        color: ${headerTitleColor} !important;
+      }
+      #salon-description {
+        font-size: ${getSubFontSize(headerDescriptionSize)} !important;
+        color: ${headerDescriptionColor} !important;
       }
       .card {
         background: ${cardBg} !important;
@@ -993,15 +1074,19 @@
           userId = currentUser.id;
           // Показываем заголовок салона
           const salonHeader = document.getElementById('salon-name-header');
+          const salonSubtitle = document.getElementById('salon-header-title');
           const salonDescription = document.getElementById('salon-description');
           if (salonHeader) salonHeader.style.display = 'block';
+          if (salonSubtitle && salonSubtitle.textContent.trim()) salonSubtitle.style.display = 'block';
           if (salonDescription) salonDescription.style.display = 'block';
           // loadData() будет вызван после завершения checkAuthAndShowMenu()
         } else if (currentUser.id && userId) {
           // Если userId уже есть, показываем заголовок салона
           const salonHeader = document.getElementById('salon-name-header');
+          const salonSubtitle = document.getElementById('salon-header-title');
           const salonDescription = document.getElementById('salon-description');
           if (salonHeader) salonHeader.style.display = 'block';
+          if (salonSubtitle && salonSubtitle.textContent.trim()) salonSubtitle.style.display = 'block';
           if (salonDescription) salonDescription.style.display = 'block';
         }
         
