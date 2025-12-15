@@ -846,7 +846,19 @@
         img.alt = photo.originalName || 'Фото работы';
         img.onerror = function() {
           console.error('Ошибка загрузки фото:', photoUrl);
-          this.style.display = 'none';
+          console.error('Детали фото:', {
+            masterId: master.id,
+            filename: photo.filename,
+            photoUrl: photoUrl,
+            photo: photo
+          });
+          
+          // Показываем placeholder вместо скрытия
+          this.style.display = 'block';
+          this.style.background = '#f3f4f6';
+          this.style.border = '2px dashed #d1d5db';
+          this.alt = 'Фото не загружено';
+          this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5Y2EzYWYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj7QpNC+0L3QtSDQv9GA0L7QtNC+0LvQttC10L3QuNGPPC90ZXh0Pjwvc3ZnPg==';
         };
         
         const deleteBtn = document.createElement('button');

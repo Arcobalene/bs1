@@ -932,11 +932,32 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
         return res.status(500).json({ success: false, message: 'Хранилище фото недоступно' });
       }
       
+      // Проверяем, может ли файл находиться в другой папке (если masterId в имени файла не совпадает)
+      let actualObjectName = objectName;
+      const filenameParts = filename.split('_');
+      if (filenameParts.length > 0) {
+        const fileMasterId = parseInt(filenameParts[0], 10);
+        if (fileMasterId && fileMasterId !== masterId) {
+          // Файл может находиться в папке другого мастера
+          const alternativeObjectName = `master-${fileMasterId}/${filename}`;
+          console.log(`⚠️ MasterId в URL (${masterId}) не совпадает с masterId в имени файла (${fileMasterId})`);
+          console.log(`🔍 Пробуем альтернативный путь: ${alternativeObjectName}`);
+          
+          try {
+            await minioClient.statObject(BUCKET_NAME, alternativeObjectName);
+            actualObjectName = alternativeObjectName;
+            console.log(`✅ Фото найдено по альтернативному пути: ${actualObjectName}`);
+          } catch (altError) {
+            console.log(`❌ Альтернативный путь не найден, используем оригинальный: ${objectName}`);
+          }
+        }
+      }
+      
       // Получаем метаданные объекта для определения Content-Type
       let contentType = 'image/jpeg'; // По умолчанию
       try {
-        const stat = await minioClient.statObject(BUCKET_NAME, objectName);
-        console.log(`✅ Фото найдено в MinIO: ${objectName}, размер: ${stat.size} байт`);
+        const stat = await minioClient.statObject(BUCKET_NAME, actualObjectName);
+        console.log(`✅ Фото найдено в MinIO: ${actualObjectName}, размер: ${stat.size} байт`);
         if (stat.metaData && stat.metaData['content-type']) {
           contentType = stat.metaData['content-type'];
         } else {
@@ -951,32 +972,69 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
           contentType = mimeTypes[ext] || 'image/jpeg';
         }
       } catch (statError) {
-        console.error(`❌ Фото не найдено в MinIO: ${objectName}`, statError.message);
+        console.error(`❌ Фото не найдено в MinIO: ${objectName}`);
+        console.error(`   Ошибка: ${statError.message}`);
+        console.error(`   MasterId: ${masterId}, Filename: ${filename}`);
+        
         // Пробуем найти все объекты в папке мастера для отладки
+        const objectsList = [];
         try {
-          const objectsList = [];
           const stream = minioClient.listObjects(BUCKET_NAME, `master-${masterId}/`, true);
           stream.on('data', (obj) => objectsList.push(obj.name));
-          stream.on('end', () => {
-            console.log(`📁 Объекты в папке master-${masterId}/:`, objectsList);
-            console.log(`🔍 Ищем: ${objectName}`);
-            console.log(`📋 Доступные объекты:`, objectsList.map(o => `  - ${o}`).join('\n'));
+          await new Promise((resolve, reject) => {
+            stream.on('end', resolve);
+            stream.on('error', reject);
           });
-          // Ждем немного, чтобы stream успел обработать данные
-          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          console.log(`📁 Объекты в папке master-${masterId}/:`, objectsList);
+          console.log(`🔍 Ищем: ${objectName}`);
+          
+          // Проверяем, может быть файл находится в другой папке (старый masterId)
+          const filenameParts = filename.split('_');
+          if (filenameParts.length > 0) {
+            const possibleMasterId = parseInt(filenameParts[0], 10);
+            if (possibleMasterId && possibleMasterId !== masterId) {
+              console.warn(`⚠️ Возможно, файл принадлежит другому мастеру (ID: ${possibleMasterId})`);
+              const alternativeObjectName = `master-${possibleMasterId}/${filename}`;
+              try {
+                await minioClient.statObject(BUCKET_NAME, alternativeObjectName);
+                console.log(`✅ Фото найдено по альтернативному пути: ${alternativeObjectName}`);
+                // Перенаправляем на правильный путь
+                objectName = alternativeObjectName;
+                const stat = await minioClient.statObject(BUCKET_NAME, objectName);
+                // Продолжаем обработку с правильным objectName
+              } catch (altError) {
+                console.error(`❌ Альтернативный путь тоже не найден: ${altError.message}`);
+              }
+            }
+          }
         } catch (listError) {
           console.error('Ошибка при получении списка объектов:', listError.message);
         }
+        
+        if (objectsList.length === 0) {
+          return res.status(404).json({ 
+            success: false, 
+            message: 'Фото не найдено. В папке мастера нет файлов.',
+            objectName: objectName,
+            masterId: masterId,
+            filename: filename,
+            availableObjects: []
+          });
+        }
+        
         return res.status(404).json({ 
           success: false, 
           message: 'Фото не найдено',
           objectName: objectName,
           masterId: masterId,
-          filename: filename
+          filename: filename,
+          availableObjects: objectsList,
+          hint: objectsList.length > 0 ? 'Проверьте, возможно файл имеет другое имя' : 'Папка мастера пуста'
         });
       }
       
-      const dataStream = await minioClient.getObject(BUCKET_NAME, objectName);
+      const dataStream = await minioClient.getObject(BUCKET_NAME, actualObjectName);
       const chunks = [];
       
       dataStream.on('data', (chunk) => chunks.push(chunk));
