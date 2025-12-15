@@ -960,7 +960,7 @@
   document.getElementById('logout-link')?.addEventListener('click', async (e) => {
     e.preventDefault();
     await fetch('/api/logout', { method: 'POST' });
-    window.location.href = '/login';
+    window.location.href = '/';
   });
 
   // Обработчики для генерации слотов времени в форме создания записи

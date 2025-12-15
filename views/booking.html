@@ -1040,7 +1040,7 @@
           newLogoutLink.addEventListener('click', async (e) => {
             e.preventDefault();
             await fetch('/api/logout', { method: 'POST' });
-            window.location.reload();
+            window.location.href = '/';
           });
         }
         
