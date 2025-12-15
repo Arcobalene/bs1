@@ -279,6 +279,14 @@ const users = {
         : JSON.stringify(userData.salonDesign);
       values.push(designValue);
     }
+    if (userData.telegramSettings !== undefined) {
+      updates.push(`telegram_settings = $${paramIndex++}::jsonb`);
+      // PostgreSQL JSONB принимает объект напрямую или JSON строку
+      const telegramValue = typeof userData.telegramSettings === 'string' 
+        ? userData.telegramSettings 
+        : JSON.stringify(userData.telegramSettings);
+      values.push(telegramValue);
+    }
 
     if (updates.length === 0) return;
 

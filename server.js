@@ -1952,22 +1952,28 @@ app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =
       notifyChanges: notifyChanges === true
     };
     
-    // Сохраняем настройки в БД
+    console.log('💾 Сохранение настроек Telegram:', {
+      userId: req.session.userId,
+      hasToken: !!settings.botToken,
+      hasChatId: !!settings.chatId,
+      hasPhone: !!settings.phone,
+      enabled: settings.enabled,
+      notifyNewBookings: settings.notifyNewBookings,
+      notifyCancellations: settings.notifyCancellations,
+      notifyChanges: settings.notifyChanges
+    });
+    
+    // Сохраняем настройки в БД через метод users.update
     const DB_TYPE = process.env.DB_TYPE || 'sqlite';
     
     if (DB_TYPE === 'postgres') {
-      const { pool: dbPool } = require('./database');
-      if (!dbPool) {
-        return res.status(500).json({ success: false, message: 'База данных не инициализирована' });
-      }
-      const client = await dbPool.connect();
       try {
-        await client.query(
-          'UPDATE users SET telegram_settings = $1 WHERE id = $2',
-          [JSON.stringify(settings), req.session.userId]
-        );
-      } finally {
-        client.release();
+        await dbUsers.update(req.session.userId, { telegramSettings: settings });
+        console.log('✅ Настройки Telegram сохранены для пользователя', req.session.userId);
+      } catch (updateError) {
+        console.error('❌ Ошибка сохранения настроек Telegram:', updateError);
+        console.error('  Stack:', updateError.stack);
+        return res.status(500).json({ success: false, message: 'Ошибка сохранения настроек в базе данных: ' + updateError.message });
       }
     } else {
       // Для SQLite (если используется)
