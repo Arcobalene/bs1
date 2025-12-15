@@ -1284,6 +1284,52 @@
     viewerModal.classList.remove('hidden');
   }
 
+  // Функция открытия увеличенного фото
+  function openMasterPhotoViewer(photoUrl, photoName) {
+    // Создаем модальное окно для просмотра одного фото
+    let viewerModal = document.getElementById('master-photo-viewer-modal');
+    if (!viewerModal) {
+      viewerModal = document.createElement('div');
+      viewerModal.id = 'master-photo-viewer-modal';
+      viewerModal.className = 'modal-overlay hidden';
+      viewerModal.style.cssText = 'z-index: 999999 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; padding-top: 180px !important; align-items: center !important; justify-content: center !important; overflow-y: auto !important; background: rgba(0, 0, 0, 0.9) !important;';
+      viewerModal.innerHTML = `
+        <div style="max-width: 90vw; max-height: calc(100vh - 200px); margin: 0 auto; position: relative; display: flex; align-items: center; justify-content: center;">
+          <button type="button" class="modal-close" id="master-photo-viewer-close" style="position: absolute; top: -50px; right: 0; background: rgba(255, 255, 255, 0.2); color: white; border: none; font-size: 2rem; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; z-index: 1; transition: background 0.2s;">×</button>
+          <img id="master-photo-viewer-img" src="" alt="Фото мастера" style="max-width: 100%; max-height: calc(100vh - 200px); object-fit: contain; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); cursor: pointer;">
+        </div>
+      `;
+      document.body.appendChild(viewerModal);
+      
+      const closeBtn = document.getElementById('master-photo-viewer-close');
+      if (closeBtn) {
+        closeBtn.onmouseenter = () => {
+          closeBtn.style.background = 'rgba(255, 255, 255, 0.3)';
+        };
+        closeBtn.onmouseleave = () => {
+          closeBtn.style.background = 'rgba(255, 255, 255, 0.2)';
+        };
+        closeBtn.onclick = () => {
+          viewerModal.classList.add('hidden');
+        };
+      }
+      
+      viewerModal.onclick = (e) => {
+        if (e.target.id === 'master-photo-viewer-modal' || e.target.id === 'master-photo-viewer-img') {
+          viewerModal.classList.add('hidden');
+        }
+      };
+    }
+    
+    const img = document.getElementById('master-photo-viewer-img');
+    if (img) {
+      img.src = photoUrl;
+      img.alt = photoName || 'Фото работы';
+    }
+    
+    viewerModal.classList.remove('hidden');
+  }
+
   // Функция открытия модального окна с фото мастера
   function openMasterPhotosModal(master) {
     const modal = document.getElementById('master-photos-modal');
@@ -1337,6 +1383,11 @@
         img.onerror = function() {
           console.error('Ошибка загрузки фото:', photoUrl);
           this.style.display = 'none';
+        };
+        
+        // При клике на фото - открываем увеличенное изображение
+        photoDiv.onclick = () => {
+          openMasterPhotoViewer(photoUrl, photo.originalName || 'Фото работы');
         };
         
         photoDiv.appendChild(img);
