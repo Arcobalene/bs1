@@ -560,7 +560,7 @@ footer {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 99999 !important;
+  z-index: 999999 !important;
 }
 
 .modal {
