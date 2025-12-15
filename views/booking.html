@@ -39,7 +39,6 @@
       <div class="services-list" id="services-list"></div>
       <div class="divider"></div>
       <h2 id="section-masters-heading">Мастера</h2>
-      <p class="description" style="font-size: 0.85rem; color: #6b7280; margin-bottom: 12px;">Нажмите на имя, чтобы увидеть работы</p>
       <div class="masters-list" id="masters-list"></div>
       <p class="note">
         После отправки заявки администратор свяжется с вами в мессенджере или по телефону для подтверждения времени.
@@ -713,63 +712,17 @@
         masters.forEach((m) => {
           const row = document.createElement("div");
           row.className = "master-item";
-          row.style.display = 'flex';
-          row.style.alignItems = 'center';
-          row.style.gap = '12px';
-          
-          // Добавляем фото мастера (50x50px)
-          const photoContainer = document.createElement("div");
-          photoContainer.style.width = '50px';
-          photoContainer.style.height = '50px';
-          photoContainer.style.flexShrink = '0';
-          photoContainer.style.borderRadius = '50%';
-          photoContainer.style.overflow = 'hidden';
-          photoContainer.style.cursor = 'pointer';
-          photoContainer.style.border = '2px solid #e5e7eb';
-          photoContainer.title = 'Нажмите, чтобы увеличить фото';
-          
-          const masterPhoto = document.createElement("img");
-          const photos = m.photos || [];
-          if (photos.length > 0 && photos[0].filename) {
-            masterPhoto.src = `/api/masters/photos/${m.id}/${photos[0].filename}`;
-          } else {
-            // Заглушка, если фото нет
-            masterPhoto.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAiIGhlaWdodD0iNTAiIHZpZXdCb3g9IjAgMCA1MCA1MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yNSAyMEMzMC41MjI4IDIwIDM1IDI0LjQ3NzIgMzUgMzBDMzUgMzUuNTIyOCAzMC41MjI4IDQwIDI1IDQwQzE5LjQ3NzIgNDAgMTUgMzUuNTIyOCAxNSAzMEMxNSAyNC40NzcyIDE5LjQ3NzIgMjAgMjUgMjBaIiBmaWxsPSIjOUNBM0FGIi8+Cjwvc3ZnPgo=';
-          }
-          masterPhoto.style.width = '100%';
-          masterPhoto.style.height = '100%';
-          masterPhoto.style.objectFit = 'cover';
-          masterPhoto.alt = m.name;
-          
-          // При клике на фото - открываем увеличенное изображение
-          photoContainer.onclick = (e) => {
-            e.stopPropagation();
-            openMasterPhotoViewer(m, photos.length > 0 ? photos[0] : null);
-          };
-          
-          photoContainer.appendChild(masterPhoto);
-          row.appendChild(photoContainer);
-          
-          const nameContainer = document.createElement("div");
-          nameContainer.style.flex = '1';
-          nameContainer.style.display = 'flex';
-          nameContainer.style.flexDirection = 'column';
-          nameContainer.style.gap = '4px';
-          
           const nameSpan = document.createElement("span");
           nameSpan.textContent = m.name;
           nameSpan.style.cursor = 'pointer';
           nameSpan.style.textDecoration = 'underline';
           nameSpan.title = 'Нажмите, чтобы посмотреть фото работ';
           nameSpan.onclick = () => openMasterPhotosModal(m);
-          
           const roleSpan = document.createElement("span");
           roleSpan.className = "role";
           roleSpan.textContent = m.role || 'Мастер';
-          
-          nameContainer.appendChild(nameSpan);
-          nameContainer.appendChild(roleSpan);
-          row.appendChild(nameContainer);
+          row.appendChild(nameSpan);
+          row.appendChild(roleSpan);
           mastersListEl.appendChild(row);
         });
       } else {
@@ -1347,12 +1300,27 @@
     if (photos.length === 0) {
       modalContent.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 40px;">Фото работ пока не добавлены</p>';
     } else {
+      // Устанавливаем сетку для фото
+      modalContent.style.display = 'grid';
+      modalContent.style.gridTemplateColumns = 'repeat(auto-fill, minmax(50px, 1fr))';
+      modalContent.style.gap = '12px';
+      
       photos.forEach((photo) => {
         const photoDiv = document.createElement('div');
-        photoDiv.style.marginBottom = '16px';
+        photoDiv.style.width = '50px';
+        photoDiv.style.height = '50px';
         photoDiv.style.borderRadius = '8px';
         photoDiv.style.overflow = 'hidden';
         photoDiv.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+        photoDiv.style.cursor = 'pointer';
+        photoDiv.style.transition = 'transform 0.2s';
+        
+        photoDiv.onmouseenter = () => {
+          photoDiv.style.transform = 'scale(1.1)';
+        };
+        photoDiv.onmouseleave = () => {
+          photoDiv.style.transform = 'scale(1)';
+        };
         
         const img = document.createElement('img');
         // Всегда формируем правильный URL, даже если photo.url уже есть
@@ -1361,7 +1329,8 @@
           : (photo.url || '');
         img.src = photoUrl;
         img.style.width = '100%';
-        img.style.height = 'auto';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
         img.style.display = 'block';
         img.alt = photo.originalName || 'Фото работы';
         img.loading = 'lazy';
