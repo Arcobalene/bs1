@@ -79,7 +79,7 @@
       const userRes = await fetch('/api/user');
       const userResult = await userRes.json();
       if (!userResult.success) {
-        window.location.href = '/login';
+        window.location.href = '/';
         return;
       }
 
@@ -97,7 +97,6 @@
       const salonPageLink = document.getElementById('salon-page-link');
       if (salonPageLink) {
         salonPageLink.href = `/booking?userId=${currentUser.id}`;
-      }
       }
       
       // Показываем ссылку на управление пользователями только для админов
@@ -121,7 +120,7 @@
       await loadClients();
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
-      window.location.href = '/login';
+      window.location.href = '/';
     }
   }
 

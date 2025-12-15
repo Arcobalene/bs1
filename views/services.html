@@ -162,7 +162,7 @@
       const result = await response.json();
       
       if (!result.success) {
-        window.location.href = '/login';
+        window.location.href = '/';
         return;
       }
 
@@ -207,7 +207,7 @@
       renderMasters();
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
-      window.location.href = '/login';
+      window.location.href = '/';
     }
   }
 
@@ -525,17 +525,20 @@
   });
 
   // Выход
-  document.getElementById('logout-link').addEventListener('click', (e) => {
-    e.preventDefault();
-    fetch('/api/logout', { method: 'POST' })
-      .then(() => {
-        window.location.href = '/';
-      })
-      .catch(err => {
-        console.error('Ошибка выхода:', err);
-        window.location.href = '/';
-      });
-  });
+  const logoutLink = document.getElementById('logout-link');
+  if (logoutLink) {
+    logoutLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      fetch('/api/logout', { method: 'POST' })
+        .then(() => {
+          window.location.href = '/';
+        })
+        .catch(err => {
+          console.error('Ошибка выхода:', err);
+          window.location.href = '/';
+        });
+    });
+  }
 
   // Функция применения дизайна
   function applyDesign(design) {
@@ -734,8 +737,10 @@
   }
 
   // Обработчик формы редактирования услуги
-  document.getElementById('edit-service-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
+  const editServiceForm = document.getElementById('edit-service-form');
+  if (editServiceForm) {
+    editServiceForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
     const name = document.getElementById('edit-service-name').value.trim();
     const priceRaw = document.getElementById('edit-service-price').value.trim();
     const durationRaw = document.getElementById('edit-service-duration').value.trim();
@@ -795,7 +800,8 @@
       alert('Ошибка: не выбран элемент для редактирования. Модальное окно будет закрыто.');
       closeEditServiceModal();
     }
-  });
+    });
+  }
 
   // Функции для работы с модальными окнами редактирования мастеров
   function openEditMasterModal(master) {
@@ -822,8 +828,10 @@
   }
 
   // Обработчик формы редактирования мастера
-  document.getElementById('edit-master-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
+  const editMasterForm = document.getElementById('edit-master-form');
+  if (editMasterForm) {
+    editMasterForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
     const name = document.getElementById('edit-master-name').value.trim();
     const role = document.getElementById('edit-master-role').value.trim();
 
@@ -862,7 +870,8 @@
       alert('Ошибка: не выбран элемент для редактирования. Модальное окно будет закрыто.');
       closeEditMasterModal();
     }
-  });
+    });
+  }
 
   // Обработчики закрытия модальных окон
   document.getElementById('close-edit-service-modal')?.addEventListener('click', closeEditServiceModal);

@@ -229,7 +229,7 @@
       const result = await response.json();
       
       if (!result.success) {
-        window.location.href = '/login';
+        window.location.href = '/';
         return;
       }
 
@@ -276,7 +276,7 @@
       }
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
-      window.location.href = '/login';
+      window.location.href = '/';
     }
   }
 
@@ -712,11 +712,14 @@
   }
 
   // Выход
-  document.getElementById('logout-link').addEventListener('click', async (e) => {
-    e.preventDefault();
-    await fetch('/api/logout', { method: 'POST' });
-    window.location.href = '/';
-  });
+  const logoutLink = document.getElementById('logout-link');
+  if (logoutLink) {
+    logoutLink.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await fetch('/api/logout', { method: 'POST' });
+      window.location.href = '/';
+    });
+  }
 
   // Возврат к своему аккаунту
   const restoreBtn = document.getElementById('restore-account');

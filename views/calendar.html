@@ -198,7 +198,7 @@
       const userRes = await fetch('/api/user');
       const userResult = await userRes.json();
       if (!userResult.success) {
-        window.location.href = '/login';
+        window.location.href = '/';
         return;
       }
 
@@ -291,7 +291,7 @@
       renderCalendar();
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
-      window.location.href = '/login';
+      window.location.href = '/';
     }
   }
   
