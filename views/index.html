@@ -1337,12 +1337,13 @@
     }
     
     function updateCarousel() {
-      const track = carousel;
-      track.style.transform = `translateX(-${currentSlide * 100}%)`;
-      
-      // Обновляем активные классы
+      // Обновляем активные классы (без transform, используем только opacity/visibility)
       slides.forEach((slide, index) => {
-        slide.classList.toggle('active', index === currentSlide);
+        if (index === currentSlide) {
+          slide.classList.add('active');
+        } else {
+          slide.classList.remove('active');
+        }
       });
       
       // Обновляем точки

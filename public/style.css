@@ -1683,6 +1683,7 @@ footer {
 
   .landing-carousel-track {
     display: flex;
+    position: relative;
     transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
@@ -1690,11 +1691,18 @@ footer {
     min-width: 100%;
     flex-shrink: 0;
     opacity: 0;
-    transition: opacity 0.5s ease;
+    visibility: hidden;
+    transition: opacity 0.5s ease, visibility 0.5s ease;
+    position: absolute;
+    width: 100%;
+    top: 0;
+    left: 0;
   }
 
   .landing-carousel-slide.active {
     opacity: 1;
+    visibility: visible;
+    position: relative;
   }
 
   .landing-benefit-card-compact {
