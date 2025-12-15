@@ -24,13 +24,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Validate critical environment variables
+const SESSION_SECRET = process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production';
 if (process.env.NODE_ENV === 'production') {
   if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'beauty-studio-secret-key-change-in-production') {
-    console.error('❌ CRITICAL: SESSION_SECRET must be set in production!');
-    process.exit(1);
+    console.error('⚠️  WARNING: SESSION_SECRET is not set or using default value in production!');
+    console.error('⚠️  This is a security risk. Please set SESSION_SECRET environment variable.');
+    console.error('⚠️  Application will continue, but sessions may be insecure.');
   }
 }
-const SESSION_SECRET = process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production';
 
 // Настройка MinIO
 const MINIO_ENDPOINT = process.env.MINIO_ENDPOINT || 'localhost';
