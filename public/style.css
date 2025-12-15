@@ -215,6 +215,16 @@ header p {
   font-size: 0.95rem;
 }
 
+/* Стили для фото мастера в списке */
+.master-item > div:first-child {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.master-item > div:first-child:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
 .service-item span:first-child {
   font-weight: 500;
   flex: 1;
