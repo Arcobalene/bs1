@@ -2,6 +2,8 @@ const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
 const path = require('path');
+const multer = require('multer');
+const Minio = require('minio');
 const { users: dbUsers, services, masters, bookings, migrateFromJSON } = require('./database');
 const { 
   timeToMinutes, 
@@ -17,6 +19,46 @@ const {
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production';
+
+// Настройка MinIO
+const minioClient = new Minio.Client({
+  endPoint: process.env.MINIO_ENDPOINT || 'localhost',
+  port: parseInt(process.env.MINIO_PORT || '9000', 10),
+  useSSL: process.env.MINIO_USE_SSL === 'true',
+  accessKey: process.env.MINIO_ACCESS_KEY || 'minioadmin',
+  secretKey: process.env.MINIO_SECRET_KEY || 'minioadmin'
+});
+
+const BUCKET_NAME = 'master-photos';
+
+// Инициализация bucket в MinIO
+(async () => {
+  try {
+    const exists = await minioClient.bucketExists(BUCKET_NAME);
+    if (!exists) {
+      await minioClient.makeBucket(BUCKET_NAME, 'us-east-1');
+      console.log(`Bucket ${BUCKET_NAME} создан`);
+    }
+  } catch (error) {
+    console.error('Ошибка инициализации MinIO:', error);
+  }
+})();
+
+// Настройка multer для загрузки файлов
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Недопустимый тип файла. Разрешены только изображения (JPEG, PNG, WebP)'));
+    }
+  }
+});
 
 // Middleware
 app.use(express.urlencoded({ extended: true }));
@@ -556,10 +598,207 @@ app.get('/api/masters/:userId', async (req, res) => {
       return res.json({ success: false, masters: [] });
     }
     const userMasters = await masters.getByUserId(user.id);
-    res.json({ success: true, masters: userMasters });
+    // Добавляем полные URL для фото
+    const mastersWithPhotoUrls = userMasters.map(master => ({
+      ...master,
+      photos: (master.photos || []).map(photo => ({
+        ...photo,
+        url: `/api/masters/photos/${master.id}/${photo.filename}`
+      }))
+    }));
+    res.json({ success: true, masters: mastersWithPhotoUrls });
   } catch (error) {
     console.error('Ошибка получения мастеров:', error);
     res.status(500).json({ success: false, masters: [] });
+  }
+});
+
+// API: Загрузить фото мастера
+app.post('/api/masters/:masterId/photos', requireAuth, upload.array('photos', 10), async (req, res) => {
+  try {
+    const masterId = parseInt(req.params.masterId, 10);
+    const user = await dbUsers.getById(req.session.userId);
+    
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Не авторизован' });
+    }
+
+    // Проверяем, что мастер принадлежит пользователю
+    const userMasters = await masters.getByUserId(user.id);
+    const master = userMasters.find(m => m.id === masterId);
+    
+    if (!master) {
+      return res.status(404).json({ success: false, message: 'Мастер не найден' });
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, message: 'Файлы не загружены' });
+    }
+
+    const uploadedPhotos = [];
+    const failedUploads = [];
+    
+    for (const file of req.files) {
+      const filename = `${masterId}_${Date.now()}_${Math.random().toString(36).substring(7)}.${file.mimetype.split('/')[1]}`;
+      const objectName = `master-${masterId}/${filename}`;
+      
+      try {
+        await minioClient.putObject(BUCKET_NAME, objectName, file.buffer, file.size, {
+          'Content-Type': file.mimetype
+        });
+        
+        uploadedPhotos.push({
+          filename: filename,
+          originalName: file.originalname,
+          size: file.size,
+          mimetype: file.mimetype,
+          uploadedAt: new Date().toISOString()
+        });
+      } catch (error) {
+        console.error(`Ошибка загрузки файла ${file.originalname} в MinIO:`, error);
+        failedUploads.push({
+          originalName: file.originalname,
+          error: error.message || 'Неизвестная ошибка'
+        });
+      }
+    }
+
+    // Если ни один файл не был загружен успешно, возвращаем ошибку
+    if (uploadedPhotos.length === 0) {
+      const errorMessage = failedUploads.length > 0 
+        ? `Не удалось загрузить файлы: ${failedUploads.map(f => f.originalName).join(', ')}`
+        : 'Не удалось загрузить файлы';
+      return res.status(500).json({ 
+        success: false, 
+        message: errorMessage,
+        failedFiles: failedUploads
+      });
+    }
+
+    // Обновляем список фото в БД только если есть успешно загруженные фото
+    const currentPhotos = master.photos || [];
+    const updatedPhotos = [...currentPhotos, ...uploadedPhotos];
+    await masters.updatePhotos(masterId, updatedPhotos);
+
+    // Возвращаем успех, но также информируем о неудачных загрузках, если они были
+    const response = { 
+      success: true, 
+      photos: uploadedPhotos.map(photo => ({
+        ...photo,
+        url: `/api/masters/photos/${masterId}/${photo.filename}`
+      }))
+    };
+    
+    if (failedUploads.length > 0) {
+      response.warning = `Загружено ${uploadedPhotos.length} из ${req.files.length} файлов. Некоторые файлы не удалось загрузить.`;
+      response.failedFiles = failedUploads;
+    }
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Ошибка загрузки фото:', error);
+    res.status(500).json({ success: false, message: 'Ошибка загрузки фото' });
+  }
+});
+
+// API: Получить фото мастера
+app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
+  try {
+    const masterId = parseInt(req.params.masterId, 10);
+    const filename = req.params.filename;
+    const objectName = `master-${masterId}/${filename}`;
+    
+    try {
+      // Получаем метаданные объекта для определения Content-Type
+      let contentType = 'image/jpeg'; // По умолчанию
+      try {
+        const stat = await minioClient.statObject(BUCKET_NAME, objectName);
+        if (stat.metaData && stat.metaData['content-type']) {
+          contentType = stat.metaData['content-type'];
+        } else {
+          // Определяем тип по расширению файла
+          const ext = filename.split('.').pop()?.toLowerCase();
+          const mimeTypes = {
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'webp': 'image/webp'
+          };
+          contentType = mimeTypes[ext] || 'image/jpeg';
+        }
+      } catch (statError) {
+        // Если не удалось получить метаданные, определяем по расширению
+        const ext = filename.split('.').pop()?.toLowerCase();
+        const mimeTypes = {
+          'jpg': 'image/jpeg',
+          'jpeg': 'image/jpeg',
+          'png': 'image/png',
+          'webp': 'image/webp'
+        };
+        contentType = mimeTypes[ext] || 'image/jpeg';
+      }
+      
+      const dataStream = await minioClient.getObject(BUCKET_NAME, objectName);
+      const chunks = [];
+      
+      dataStream.on('data', (chunk) => chunks.push(chunk));
+      dataStream.on('end', () => {
+        const buffer = Buffer.concat(chunks);
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Length', buffer.length);
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        res.send(buffer);
+      });
+      dataStream.on('error', (error) => {
+        console.error('Ошибка получения файла из MinIO:', error);
+        res.status(404).json({ success: false, message: 'Фото не найдено' });
+      });
+    } catch (error) {
+      console.error('Ошибка получения файла из MinIO:', error);
+      res.status(404).json({ success: false, message: 'Фото не найдено' });
+    }
+  } catch (error) {
+    console.error('Ошибка получения фото:', error);
+    res.status(500).json({ success: false, message: 'Ошибка получения фото' });
+  }
+});
+
+// API: Удалить фото мастера
+app.delete('/api/masters/:masterId/photos/:filename', requireAuth, async (req, res) => {
+  try {
+    const masterId = parseInt(req.params.masterId, 10);
+    const filename = req.params.filename;
+    const user = await dbUsers.getById(req.session.userId);
+    
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Не авторизован' });
+    }
+
+    // Проверяем, что мастер принадлежит пользователю
+    const userMasters = await masters.getByUserId(user.id);
+    const master = userMasters.find(m => m.id === masterId);
+    
+    if (!master) {
+      return res.status(404).json({ success: false, message: 'Мастер не найден' });
+    }
+
+    const objectName = `master-${masterId}/${filename}`;
+    
+    try {
+      await minioClient.removeObject(BUCKET_NAME, objectName);
+      
+      // Обновляем список фото в БД
+      const currentPhotos = (master.photos || []).filter(p => p.filename !== filename);
+      await masters.updatePhotos(masterId, currentPhotos);
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Ошибка удаления файла из MinIO:', error);
+      res.status(500).json({ success: false, message: 'Ошибка удаления фото' });
+    }
+  } catch (error) {
+    console.error('Ошибка удаления фото:', error);
+    res.status(500).json({ success: false, message: 'Ошибка удаления фото' });
   }
 });
 

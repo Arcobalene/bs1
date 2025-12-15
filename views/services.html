@@ -135,6 +135,12 @@
           <label for="edit-master-role">Специализация</label>
           <input type="text" id="edit-master-role" placeholder="Например: бровист" />
         </div>
+        <div>
+          <label>Фото работ мастера</label>
+          <div id="master-photos-preview" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; margin-top: 8px; margin-bottom: 12px;"></div>
+          <input type="file" id="edit-master-photos" accept="image/jpeg,image/jpg,image/png,image/webp" multiple style="margin-bottom: 8px;" />
+          <p class="note">Можно загрузить до 10 фото. Максимальный размер файла: 10MB</p>
+        </div>
         <div style="display: flex; gap: 12px; margin-top: 20px;">
           <button type="submit" class="btn-primary" style="flex: 1;">Сохранить</button>
           <button type="button" class="btn-secondary" id="cancel-edit-master" style="flex: 1;">Отмена</button>
@@ -807,12 +813,81 @@
     const modal = document.getElementById('edit-master-modal');
     const nameInput = document.getElementById('edit-master-name');
     const roleInput = document.getElementById('edit-master-role');
+    const photosPreview = document.getElementById('master-photos-preview');
+    const photosInput = document.getElementById('edit-master-photos');
     
     if (!modal || !nameInput || !roleInput) return;
     
     nameInput.value = master.name;
     roleInput.value = master.role || '';
     editingMasterId = master.id;
+    
+    // Отображаем существующие фото
+    if (photosPreview) {
+      photosPreview.innerHTML = '';
+      const photos = master.photos || [];
+      photos.forEach((photo, index) => {
+        const photoDiv = document.createElement('div');
+        photoDiv.style.position = 'relative';
+        photoDiv.style.aspectRatio = '1';
+        photoDiv.style.borderRadius = '8px';
+        photoDiv.style.overflow = 'hidden';
+        photoDiv.style.border = '2px solid #e5e7eb';
+        
+        const img = document.createElement('img');
+        img.src = photo.url || `/api/masters/photos/${master.id}/${photo.filename}`;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+        img.alt = photo.originalName || 'Фото работы';
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = '×';
+        deleteBtn.style.position = 'absolute';
+        deleteBtn.style.top = '4px';
+        deleteBtn.style.right = '4px';
+        deleteBtn.style.width = '24px';
+        deleteBtn.style.height = '24px';
+        deleteBtn.style.borderRadius = '50%';
+        deleteBtn.style.background = 'rgba(239, 68, 68, 0.9)';
+        deleteBtn.style.color = 'white';
+        deleteBtn.style.border = 'none';
+        deleteBtn.style.cursor = 'pointer';
+        deleteBtn.style.fontSize = '18px';
+        deleteBtn.style.lineHeight = '1';
+        deleteBtn.onclick = async () => {
+          try {
+            const response = await fetch(`/api/masters/${master.id}/photos/${photo.filename}`, {
+              method: 'DELETE'
+            });
+            const result = await response.json();
+            if (result.success) {
+              // Обновляем список мастеров
+              const m = masters.find(mm => mm.id === master.id);
+              if (m) {
+                m.photos = (m.photos || []).filter(p => p.filename !== photo.filename);
+                await saveMasters();
+                openEditMasterModal(m); // Перезагружаем модальное окно
+              }
+            } else {
+              alert('Ошибка удаления фото');
+            }
+          } catch (error) {
+            console.error('Ошибка удаления фото:', error);
+            alert('Ошибка удаления фото');
+          }
+        };
+        
+        photoDiv.appendChild(img);
+        photoDiv.appendChild(deleteBtn);
+        photosPreview.appendChild(photoDiv);
+      });
+    }
+    
+    if (photosInput) {
+      photosInput.value = '';
+    }
     
     modal.classList.remove('hidden');
   }
@@ -823,6 +898,10 @@
       modal.classList.add('hidden');
       editingMasterId = null;
       document.getElementById('edit-master-form').reset();
+      const photosPreview = document.getElementById('master-photos-preview');
+      if (photosPreview) {
+        photosPreview.innerHTML = '';
+      }
     }
   }
 
@@ -862,6 +941,30 @@
 
       m.name = name;
       m.role = role || m.role;
+      
+      // Загружаем новые фото, если есть
+      const photosInput = document.getElementById('edit-master-photos');
+      if (photosInput && photosInput.files && photosInput.files.length > 0) {
+        const formData = new FormData();
+        for (let i = 0; i < photosInput.files.length; i++) {
+          formData.append('photos', photosInput.files[i]);
+        }
+        
+        try {
+          const uploadResponse = await fetch(`/api/masters/${m.id}/photos`, {
+            method: 'POST',
+            body: formData
+          });
+          const uploadResult = await uploadResponse.json();
+          if (uploadResult.success && uploadResult.photos) {
+            m.photos = [...(m.photos || []), ...uploadResult.photos];
+          }
+        } catch (error) {
+          console.error('Ошибка загрузки фото:', error);
+          alert('Ошибка загрузки фото. Данные мастера сохранены, но фото не загружены.');
+        }
+      }
+      
       await saveMasters();
       renderMasters();
       closeEditMasterModal();

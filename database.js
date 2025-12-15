@@ -92,8 +92,22 @@ async function initDatabase() {
         user_id INTEGER NOT NULL,
         name VARCHAR(100) NOT NULL,
         role VARCHAR(255),
+        photos JSONB DEFAULT '[]'::jsonb,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
+    `);
+    
+    // Добавляем колонку photos, если её нет (для существующих БД)
+    await client.query(`
+      DO $$ 
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'masters' AND column_name = 'photos'
+        ) THEN
+          ALTER TABLE masters ADD COLUMN photos JSONB DEFAULT '[]'::jsonb;
+        END IF;
+      END $$;
     `);
 
     // Таблица записей
@@ -319,8 +333,17 @@ const services = {
 const masters = {
   getByUserId: async (userId) => {
     requirePool();
-    const result = await pool.query('SELECT * FROM masters WHERE user_id = $1 ORDER BY id', [userId]);
-    return result.rows;
+    const result = await pool.query('SELECT *, COALESCE(photos, \'[]\'::jsonb) as photos FROM masters WHERE user_id = $1 ORDER BY id', [userId]);
+    return result.rows.map(row => ({
+      ...row,
+      photos: row.photos && typeof row.photos === 'object' ? row.photos : (Array.isArray(row.photos) ? row.photos : [])
+    }));
+  },
+  
+  updatePhotos: async (masterId, photos) => {
+    requirePool();
+    const photosJson = Array.isArray(photos) ? JSON.stringify(photos) : '[]';
+    await pool.query('UPDATE masters SET photos = $1::jsonb WHERE id = $2', [photosJson, masterId]);
   },
 
   setForUser: async (userId, mastersList) => {
@@ -343,9 +366,10 @@ const masters = {
       await client.query('DELETE FROM masters WHERE user_id = $1', [userId]);
       
       for (const master of mastersList) {
+        const photos = master.photos && Array.isArray(master.photos) ? JSON.stringify(master.photos) : '[]';
         await client.query(
-          'INSERT INTO masters (user_id, name, role) VALUES ($1, $2, $3)',
-          [userId, master.name.trim(), master.role ? master.role.trim() : '']
+          'INSERT INTO masters (user_id, name, role, photos) VALUES ($1, $2, $3, $4::jsonb)',
+          [userId, master.name.trim(), master.role ? master.role.trim() : '', photos]
         );
       }
       

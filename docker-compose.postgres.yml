@@ -20,11 +20,18 @@ services:
       - DB_NAME=${DB_NAME:-beauty_studio}
       - DB_USER=${DB_USER:-beauty_user}
       - DB_PASSWORD=${DB_PASSWORD:-beauty_password}
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_USE_SSL=false
     networks:
       - beauty-network
     depends_on:
       db:
         condition: service_healthy
+      minio:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/"]
       interval: 30s
@@ -62,8 +69,32 @@ services:
       - "com.beauty-studio.description=PostgreSQL Database"
       - "com.beauty-studio.version=15"
 
+  minio:
+    image: minio/minio:latest
+    container_name: beauty-studio-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin}
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    networks:
+      - beauty-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
 volumes:
   postgres-data:
+    driver: local
+  # Том для MinIO хранилища
+  minio-data:
     driver: local
 
 networks:

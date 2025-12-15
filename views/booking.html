@@ -583,6 +583,10 @@
           row.className = "master-item";
           const nameSpan = document.createElement("span");
           nameSpan.textContent = m.name;
+          nameSpan.style.cursor = 'pointer';
+          nameSpan.style.textDecoration = 'underline';
+          nameSpan.title = 'Нажмите, чтобы посмотреть фото работ';
+          nameSpan.onclick = () => openMasterPhotosModal(m);
           const roleSpan = document.createElement("span");
           roleSpan.className = "role";
           roleSpan.textContent = m.role || 'Мастер';
@@ -1071,6 +1075,57 @@
     }
   }
 
+  // Функция открытия модального окна с фото мастера
+  function openMasterPhotosModal(master) {
+    const modal = document.getElementById('master-photos-modal');
+    const modalTitle = document.getElementById('master-photos-modal-title');
+    const modalContent = document.getElementById('master-photos-modal-content');
+    const closeBtn = document.getElementById('master-photos-modal-close');
+    
+    if (!modal || !modalTitle || !modalContent) return;
+    
+    modalTitle.textContent = `Фото работ: ${master.name}`;
+    modalContent.innerHTML = '';
+    
+    const photos = master.photos || [];
+    if (photos.length === 0) {
+      modalContent.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 40px;">Фото работ пока не добавлены</p>';
+    } else {
+      photos.forEach((photo) => {
+        const photoDiv = document.createElement('div');
+        photoDiv.style.marginBottom = '16px';
+        photoDiv.style.borderRadius = '8px';
+        photoDiv.style.overflow = 'hidden';
+        photoDiv.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+        
+        const img = document.createElement('img');
+        img.src = photo.url || `/api/masters/photos/${master.id}/${photo.filename}`;
+        img.style.width = '100%';
+        img.style.height = 'auto';
+        img.style.display = 'block';
+        img.alt = photo.originalName || 'Фото работы';
+        img.loading = 'lazy';
+        
+        photoDiv.appendChild(img);
+        modalContent.appendChild(photoDiv);
+      });
+    }
+    
+    modal.classList.remove('hidden');
+    
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        modal.classList.add('hidden');
+      };
+    }
+    
+    modal.onclick = (e) => {
+      if (e.target.id === 'master-photos-modal') {
+        modal.classList.add('hidden');
+      }
+    };
+  }
+
   // Проверяем авторизацию и показываем меню
   // После проверки авторизации загружаем данные (чтобы использовать правильный userId)
   checkAuthAndShowMenu().then(() => {
@@ -1081,6 +1136,20 @@
     loadData();
   });
 </script>
+
+<!-- Модальное окно для фото мастера -->
+<div id="master-photos-modal" class="modal-overlay hidden" style="z-index: 10000;">
+  <div class="modal" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+    <div class="modal-header">
+      <div class="modal-title" id="master-photos-modal-title">Фото работ</div>
+      <button type="button" class="modal-close" id="master-photos-modal-close">×</button>
+    </div>
+    <div class="modal-body" id="master-photos-modal-content">
+      <!-- Фото будут добавлены динамически -->
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
 
