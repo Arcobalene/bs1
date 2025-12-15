@@ -1317,6 +1317,23 @@ app.post('/api/bookings', async (req, res) => {
       comment: comment ? comment.trim() : ''
     });
 
+    // Отправляем уведомление в Telegram, если настроено
+    try {
+      await sendTelegramNotificationIfEnabled(userIdInt, {
+        name: name.trim(),
+        phone: phone.trim(),
+        service: service.trim(),
+        master: master ? master.trim() : '',
+        date: date.trim(),
+        time: time.trim(),
+        endTime: endTime ? endTime.trim() : null,
+        comment: comment ? comment.trim() : ''
+      }, 'new');
+    } catch (telegramError) {
+      // Не прерываем создание записи, если ошибка отправки в Telegram
+      console.error('Ошибка отправки уведомления в Telegram:', telegramError);
+    }
+
     res.status(201).json({ success: true, booking: { id: bookingId } });
   } catch (error) {
     console.error('Ошибка создания записи:', error);
@@ -1670,6 +1687,92 @@ app.get('/api/clients', requireAuth, async (req, res) => {
   }
 });
 
+// Функция для нормализации номера телефона (удаление пробелов, дефисов, скобок)
+function normalizePhone(phone) {
+  if (!phone) return '';
+  return phone.replace(/[\s\-\(\)]/g, '').trim();
+}
+
+// Функция для проверки соответствия номеров телефонов
+function phoneMatches(phone1, phone2) {
+  if (!phone1 || !phone2) return false;
+  const normalized1 = normalizePhone(phone1);
+  const normalized2 = normalizePhone(phone2);
+  return normalized1 === normalized2;
+}
+
+// Функция для отправки уведомления в Telegram при создании/изменении записи
+async function sendTelegramNotificationIfEnabled(userId, booking, eventType) {
+  try {
+    const user = await dbUsers.getById(userId);
+    if (!user || !user.telegram_settings) return;
+
+    let telegramSettings = null;
+    try {
+      telegramSettings = typeof user.telegram_settings === 'string' 
+        ? JSON.parse(user.telegram_settings) 
+        : user.telegram_settings;
+    } catch (e) {
+      console.error('Ошибка парсинга telegram_settings:', e);
+      return;
+    }
+
+    // Проверяем, включены ли уведомления
+    if (!telegramSettings.enabled) return;
+
+    // Проверяем тип события
+    if (eventType === 'new' && !telegramSettings.notifyNewBookings) return;
+    if (eventType === 'cancellation' && !telegramSettings.notifyCancellations) return;
+    if (eventType === 'change' && !telegramSettings.notifyChanges) return;
+
+    // Проверяем номер телефона, если он указан в настройках
+    if (telegramSettings.phone && telegramSettings.phone.trim()) {
+      const settingsPhone = normalizePhone(telegramSettings.phone);
+      const bookingPhone = normalizePhone(booking.phone);
+      
+      if (settingsPhone && bookingPhone && settingsPhone !== bookingPhone) {
+        // Номер не совпадает - не отправляем уведомление
+        console.log(`Номер телефона не совпадает. Настройки: ${settingsPhone}, Запись: ${bookingPhone}`);
+        return;
+      }
+    }
+
+    // Формируем сообщение
+    let message = '';
+    if (eventType === 'new') {
+      message = `📅 <b>Новая запись</b>\n\n`;
+    } else if (eventType === 'cancellation') {
+      message = `❌ <b>Отмена записи</b>\n\n`;
+    } else if (eventType === 'change') {
+      message = `✏️ <b>Изменение записи</b>\n\n`;
+    }
+
+    message += `👤 <b>Клиент:</b> ${booking.name}\n`;
+    message += `📞 <b>Телефон:</b> ${booking.phone}\n`;
+    message += `💼 <b>Услуга:</b> ${booking.service}\n`;
+    if (booking.master) {
+      message += `👨‍💼 <b>Мастер:</b> ${booking.master}\n`;
+    }
+    message += `📆 <b>Дата:</b> ${booking.date}\n`;
+    message += `🕐 <b>Время:</b> ${booking.time}`;
+    if (booking.endTime) {
+      message += ` - ${booking.endTime}`;
+    }
+    if (booking.comment) {
+      message += `\n💬 <b>Комментарий:</b> ${booking.comment}`;
+    }
+
+    // Отправляем сообщение
+    if (telegramSettings.botToken && telegramSettings.chatId) {
+      await sendTelegramMessage(telegramSettings.botToken, telegramSettings.chatId, message);
+      console.log(`✅ Уведомление в Telegram отправлено для записи ${booking.name}`);
+    }
+  } catch (error) {
+    console.error('Ошибка отправки уведомления в Telegram:', error);
+    // Не пробрасываем ошибку, чтобы не прерывать основной процесс
+  }
+}
+
 // Функция для отправки сообщения в Telegram
 function sendTelegramMessage(botToken, chatId, message) {
   return new Promise((resolve, reject) => {
@@ -1748,6 +1851,7 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
       settings: telegramSettings || {
         botToken: '',
         chatId: '',
+        phone: '',
         enabled: false,
         notifyNewBookings: true,
         notifyCancellations: false,
@@ -1773,6 +1877,7 @@ app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =
     const settings = {
       botToken: botToken || '',
       chatId: chatId || '',
+      phone: req.body.phone || '',
       enabled: enabled === true,
       notifyNewBookings: notifyNewBookings !== false,
       notifyCancellations: notifyCancellations === true,

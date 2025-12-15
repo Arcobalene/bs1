@@ -347,6 +347,12 @@
         </div>
 
         <div>
+          <label for="telegram-phone">Номер телефона для проверки</label>
+          <input type="tel" id="telegram-phone" placeholder="+998XX XXX XX XX" />
+          <p class="note">Уведомления будут отправляться только если номер телефона клиента совпадает с этим номером. Оставьте пустым, чтобы отправлять уведомления для всех записей.</p>
+        </div>
+
+        <div>
           <label>
             <input type="checkbox" id="telegram-enabled" />
             Включить уведомления в Telegram
@@ -1263,6 +1269,7 @@
           const settings = data.settings;
           document.getElementById('telegram-bot-token').value = settings.botToken || '';
           document.getElementById('telegram-chat-id').value = settings.chatId || '';
+          document.getElementById('telegram-phone').value = settings.phone || '';
           document.getElementById('telegram-enabled').checked = settings.enabled || false;
           document.getElementById('telegram-notify-new-bookings').checked = settings.notifyNewBookings || false;
           document.getElementById('telegram-notify-cancellations').checked = settings.notifyCancellations || false;
@@ -1286,6 +1293,7 @@
       const settings = {
         botToken: document.getElementById('telegram-bot-token').value.trim(),
         chatId: document.getElementById('telegram-chat-id').value.trim(),
+        phone: document.getElementById('telegram-phone').value.trim(),
         enabled: document.getElementById('telegram-enabled').checked,
         notifyNewBookings: document.getElementById('telegram-notify-new-bookings').checked,
         notifyCancellations: document.getElementById('telegram-notify-cancellations').checked,
