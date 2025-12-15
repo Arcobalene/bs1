@@ -171,6 +171,14 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
+// Страница лендинга
+app.get('/landing', (req, res) => {
+  if (req.session.userId) {
+    return res.redirect('/admin');
+  }
+  res.sendFile(path.join(__dirname, 'views', 'landing.html'));
+});
+
 // Страница входа
 app.get('/login', (req, res) => {
   if (req.session.userId) {
