@@ -625,9 +625,14 @@ app.get('/api/masters/:userId', async (req, res) => {
     }
     const userMasters = await masters.getByUserId(user.id);
     
+    console.log(`📋 Получение мастеров для пользователя ${user.id}, найдено мастеров: ${userMasters.length}`);
+    
     // Проверяем наличие фото в MinIO для каждого мастера
     const mastersWithPhotoUrls = await Promise.all(userMasters.map(async (master) => {
-      const photos = (master.photos || []).map(photo => {
+      const rawPhotos = master.photos || [];
+      console.log(`📸 Мастер ${master.id} (${master.name}): фото в БД: ${rawPhotos.length}`);
+      
+      const photos = rawPhotos.map(photo => {
         // Убеждаемся, что filename существует и формируем правильный URL
         const photoUrl = photo.filename 
           ? `/api/masters/photos/${master.id}/${photo.filename}`
@@ -639,18 +644,52 @@ app.get('/api/masters/:userId', async (req, res) => {
         };
       }).filter(photo => photo.filename); // Фильтруем фото без filename
       
+      console.log(`   После фильтрации по filename: ${photos.length} фото`);
+      
       // Проверяем, какие фото действительно существуют в MinIO
       if (photos.length > 0) {
         const existingPhotos = [];
         for (const photo of photos) {
+          let photoExists = false;
+          let actualPath = '';
+          const objectName = `master-${master.id}/${photo.filename}`;
+          
+          // Сначала проверяем основной путь
           try {
-            const objectName = `master-${master.id}/${photo.filename}`;
             await minioClient.statObject(BUCKET_NAME, objectName);
-            existingPhotos.push(photo);
+            photoExists = true;
+            actualPath = objectName;
+            console.log(`   ✅ Фото найдено: ${objectName}`);
           } catch (error) {
-            console.warn(`⚠️ Фото не найдено в MinIO для мастера ${master.id}: ${photo.filename}`);
+            // Если не найдено, проверяем альтернативный путь (если masterId в имени файла отличается)
+            const filenameParts = photo.filename.split('_');
+            if (filenameParts.length > 0) {
+              const fileMasterId = parseInt(filenameParts[0], 10);
+              if (fileMasterId && fileMasterId !== master.id) {
+                const alternativeObjectName = `master-${fileMasterId}/${photo.filename}`;
+                try {
+                  await minioClient.statObject(BUCKET_NAME, alternativeObjectName);
+                  photoExists = true;
+                  actualPath = alternativeObjectName;
+                  // Обновляем URL на правильный путь
+                  photo.url = `/api/masters/photos/${fileMasterId}/${photo.filename}`;
+                  console.log(`   ✅ Фото найдено по альтернативному пути: ${alternativeObjectName}`);
+                } catch (altError) {
+                  console.warn(`   ⚠️ Фото не найдено в MinIO для мастера ${master.id}: ${photo.filename} (проверены оба пути)`);
+                }
+              } else {
+                console.warn(`   ⚠️ Фото не найдено в MinIO для мастера ${master.id}: ${photo.filename}`);
+              }
+            } else {
+              console.warn(`   ⚠️ Фото не найдено в MinIO для мастера ${master.id}: ${photo.filename} (неверный формат имени)`);
+            }
+          }
+          
+          if (photoExists) {
+            existingPhotos.push(photo);
           }
         }
+        console.log(`   📊 Итого фото для мастера ${master.id}: ${existingPhotos.length} из ${photos.length}`);
         // Возвращаем только фото, которые существуют в MinIO
         return {
           ...master,
@@ -1034,21 +1073,33 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
         });
       }
       
+      // Получаем файл из MinIO
       const dataStream = await minioClient.getObject(BUCKET_NAME, actualObjectName);
       const chunks = [];
       
       dataStream.on('data', (chunk) => chunks.push(chunk));
+      
       dataStream.on('end', () => {
         const buffer = Buffer.concat(chunks);
+        console.log(`✅ Фото успешно получено из MinIO: ${actualObjectName}, размер: ${buffer.length} байт`);
+        
+        // Устанавливаем заголовки и отправляем изображение
         res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Length', buffer.length);
         res.setHeader('Cache-Control', 'public, max-age=31536000');
+        res.setHeader('Access-Control-Allow-Origin', '*'); // Для CORS
         res.send(buffer);
       });
+      
       dataStream.on('error', (error) => {
-        console.error(`Ошибка получения файла из MinIO: ${objectName}`, error.message);
+        console.error(`❌ Ошибка получения файла из MinIO: ${actualObjectName}`, error.message);
         if (!res.headersSent) {
-          res.status(500).json({ success: false, message: 'Ошибка получения фото' });
+          res.status(500).json({ 
+            success: false, 
+            message: 'Ошибка получения фото', 
+            error: error.message,
+            objectName: actualObjectName
+          });
         }
       });
     } catch (error) {
