@@ -316,8 +316,8 @@
         </p>
       </form>
     </div>
+    </div>
   </div>
-</div>
 
 <div id="salon-map-section" style="display: none; margin-top: 24px;">
   <div class="container">
@@ -455,24 +455,26 @@
       const mastersData = await mastersRes.json();
       const salonData = await salonRes.json();
 
+      // Загружаем услуги
       if (servicesData.success) {
         services = servicesData.services || [];
         rebuildServiceDurations();
-        renderServicesAndMasters();
       } else {
         console.error('Ошибка загрузки услуг:', servicesData);
-        const servicesListEl = document.getElementById("services-list");
-        if (servicesListEl) {
-          servicesListEl.innerHTML = '<p style="color: #ef4444; text-align: center; padding: 20px;">Ошибка загрузки услуг</p>';
-        }
+        services = [];
       }
 
+      // Загружаем мастеров
       if (mastersData.success) {
         masters = mastersData.masters || [];
-        renderServicesAndMasters();
       } else {
         console.error('Ошибка загрузки мастеров:', mastersData);
+        masters = [];
       }
+      
+      // Всегда вызываем renderServicesAndMasters после загрузки данных
+      // Это гарантирует, что данные отобразятся даже если один из запросов не удался
+      renderServicesAndMasters();
 
       // Загружаем актуальные записи из базы для заполнения busyIntervals
       try {
@@ -780,10 +782,23 @@
   }
 
   function renderServicesAndMasters() {
+    // Убеждаемся, что страница записи видна
+    const bookingPage = document.getElementById("booking-page");
+    if (bookingPage && bookingPage.style.display === 'none') {
+      bookingPage.style.display = 'block';
+    }
+    
     const servicesListEl = document.getElementById("services-list");
     const mastersListEl = document.getElementById("masters-list");
     const serviceSelect = document.getElementById("service");
     const masterSelect = document.getElementById("master");
+    
+    // Если элементы не найдены, логируем ошибку, но продолжаем выполнение
+    // чтобы generateSlots() мог быть вызван
+    if (!servicesListEl || !mastersListEl) {
+      console.error('Элементы services-list или masters-list не найдены в DOM');
+      // Не делаем return, продолжаем выполнение для generateSlots()
+    }
 
     if (servicesListEl) {
       servicesListEl.innerHTML = "";
@@ -812,12 +827,14 @@
       baseOpt.value = "";
       baseOpt.textContent = "Выберите услугу";
       serviceSelect.appendChild(baseOpt);
-      services.forEach((s) => {
-        const opt = document.createElement("option");
-        opt.value = s.name;
-        opt.textContent = s.name;
-        serviceSelect.appendChild(opt);
-      });
+      if (services && services.length > 0) {
+        services.forEach((s) => {
+          const opt = document.createElement("option");
+          opt.value = s.name;
+          opt.textContent = s.name;
+          serviceSelect.appendChild(opt);
+        });
+      }
       if (currentValue && serviceDurations[currentValue]) {
         serviceSelect.value = currentValue;
       }
@@ -825,18 +842,22 @@
 
     if (mastersListEl) {
       mastersListEl.innerHTML = "";
-      masters.forEach((m) => {
-        const row = document.createElement("div");
-        row.className = "master-item";
-        const nameSpan = document.createElement("span");
-        nameSpan.textContent = m.name;
-        const roleSpan = document.createElement("span");
-        roleSpan.className = "role";
-        roleSpan.textContent = m.role;
-        row.appendChild(nameSpan);
-        row.appendChild(roleSpan);
-        mastersListEl.appendChild(row);
-      });
+      if (masters && masters.length > 0) {
+        masters.forEach((m) => {
+          const row = document.createElement("div");
+          row.className = "master-item";
+          const nameSpan = document.createElement("span");
+          nameSpan.textContent = m.name;
+          const roleSpan = document.createElement("span");
+          roleSpan.className = "role";
+          roleSpan.textContent = m.role || 'Мастер';
+          row.appendChild(nameSpan);
+          row.appendChild(roleSpan);
+          mastersListEl.appendChild(row);
+        });
+      } else {
+        mastersListEl.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 20px;">Мастера пока не добавлены</p>';
+      }
     }
 
     if (masterSelect) {
@@ -846,12 +867,14 @@
       anyOpt.value = "";
       anyOpt.textContent = "Любой свободный мастер";
       masterSelect.appendChild(anyOpt);
-      masters.forEach((m) => {
-        const opt = document.createElement("option");
-        opt.value = m.name;
-        opt.textContent = m.name;
-        masterSelect.appendChild(opt);
-      });
+      if (masters && masters.length > 0) {
+        masters.forEach((m) => {
+          const opt = document.createElement("option");
+          opt.value = m.name;
+          opt.textContent = m.name;
+          masterSelect.appendChild(opt);
+        });
+      }
       masterSelect.value = currentMaster || "";
     }
 
