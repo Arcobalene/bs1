@@ -172,6 +172,25 @@ async function initDatabase() {
       console.log('Поле salon_design уже существует или ошибка миграции:', error.message);
     }
 
+    // Миграция: добавление поля telegram_id для связи с Telegram пользователем
+    try {
+      await client.query(`
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'users' AND column_name = 'telegram_id'
+          ) THEN
+            ALTER TABLE users ADD COLUMN telegram_id BIGINT UNIQUE;
+            CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id) WHERE telegram_id IS NOT NULL;
+          END IF;
+        END $$;
+      `);
+      console.log('Миграция telegram_id выполнена');
+    } catch (error) {
+      console.log('Поле telegram_id уже существует или ошибка миграции:', error.message);
+    }
+
     console.log('База данных PostgreSQL инициализирована');
   } catch (error) {
     console.error('Ошибка инициализации БД:', error);
@@ -192,6 +211,41 @@ const users = {
   getById: async (id) => {
     requirePool();
     const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+
+  getByTelegramId: async (telegramId) => {
+    requirePool();
+    const result = await pool.query('SELECT * FROM users WHERE telegram_id = $1', [telegramId]);
+    return result.rows[0] || null;
+  },
+
+  getByPhone: async (phone) => {
+    requirePool();
+    if (!phone) return null;
+    
+    // Нормализуем номер: удаляем все нецифровые символы, кроме +
+    const normalizedPhone = phone.replace(/[^\d+]/g, '');
+    const phoneDigits = normalizedPhone.replace(/\D/g, '');
+    
+    // Ищем точное совпадение или совпадение без префикса +7/7/8
+    const patterns = [
+      phoneDigits,
+      phoneDigits.substring(phoneDigits.length - 10), // последние 10 цифр
+      phoneDigits.startsWith('7') ? phoneDigits.substring(1) : null,
+      phoneDigits.startsWith('8') ? phoneDigits.substring(1) : null
+    ].filter(p => p && p.length >= 9);
+    
+    const conditions = patterns.map((_, i) => 
+      `REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(salon_phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') = $${i + 1}`
+    ).join(' OR ');
+    
+    if (!conditions) return null;
+    
+    const result = await pool.query(
+      `SELECT * FROM users WHERE ${conditions} LIMIT 1`,
+      patterns
+    );
     return result.rows[0] || null;
   },
 

@@ -17,6 +17,7 @@ const {
   validateEmail,
   validateId,
   sanitizeString,
+  normalizeToE164,
   formatBooking 
 } = require('./utils');
 
@@ -1405,10 +1406,10 @@ app.post('/api/bookings', async (req, res) => {
       comment: comment ? sanitizeString(comment, 1000) : ''
     });
 
-    // Отправляем уведомление в Telegram, если настроено
+    // Отправляем уведомление владельцу салона в Telegram
     try {
-      console.log(`📨 Попытка отправить Telegram уведомление для записи: ${name.trim()}, телефон: ${phone.trim()}`);
-      await sendTelegramNotificationIfEnabled(idValidation.id, {
+      console.log(`📨 Попытка отправить Telegram уведомление владельцу салона (userId=${idValidation.id})`);
+      await sendTelegramNotificationToOwner(idValidation.id, {
         name: name.trim(),
         phone: phone.trim(),
         service: service.trim(),
@@ -1419,7 +1420,6 @@ app.post('/api/bookings', async (req, res) => {
         comment: comment ? comment.trim() : ''
       }, 'new');
     } catch (telegramError) {
-      // Не прерываем создание записи, если ошибка отправки в Telegram
       console.error('❌ Ошибка отправки уведомления в Telegram:', telegramError);
       console.error('  Stack:', telegramError.stack);
     }
@@ -1549,6 +1549,22 @@ app.put('/api/bookings/:id', requireAuth, async (req, res) => {
     
     await bookings.update(bookingId, updateData);
 
+    // Отправляем уведомление владельцу салона об изменении записи
+    try {
+      await sendTelegramNotificationToOwner(existingBooking.user_id, {
+        name: updateData.name || existingBooking.name,
+        phone: updateData.phone || existingBooking.phone,
+        service: updateData.service || existingBooking.service,
+        master: updateData.master !== undefined ? updateData.master : existingBooking.master,
+        date: updateData.date || existingBooking.date,
+        time: updateData.time || existingBooking.time,
+        endTime: updateData.endTime !== undefined ? updateData.endTime : existingBooking.end_time,
+        comment: updateData.comment !== undefined ? updateData.comment : existingBooking.comment
+      }, 'change');
+    } catch (telegramError) {
+      console.error('❌ Ошибка отправки уведомления об изменении:', telegramError);
+    }
+
     res.json({ success: true, message: 'Запись обновлена' });
   } catch (error) {
     console.error('Ошибка обновления записи:', error);
@@ -1565,10 +1581,6 @@ app.delete('/api/bookings/:id', requireAuth, async (req, res) => {
     }
     const bookingId = idValidation.id;
 
-    if (isNaN(bookingId)) {
-      return res.status(400).json({ success: false, message: 'Некорректный ID записи' });
-    }
-
     // Проверяем, что запись существует и принадлежит текущему пользователю
     const existingBooking = await bookings.getById(bookingId);
     if (!existingBooking) {
@@ -1579,7 +1591,26 @@ app.delete('/api/bookings/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Нет доступа к этой записи' });
     }
 
+    const salonOwnerId = existingBooking.user_id;
+
     await bookings.delete(bookingId);
+
+    // Отправляем уведомление владельцу салона об отмене записи
+    try {
+      await sendTelegramNotificationToOwner(salonOwnerId, {
+        name: existingBooking.name,
+        phone: existingBooking.phone,
+        service: existingBooking.service,
+        master: existingBooking.master || '',
+        date: existingBooking.date,
+        time: existingBooking.time,
+        endTime: existingBooking.end_time,
+        comment: existingBooking.comment || ''
+      }, 'cancellation');
+    } catch (telegramError) {
+      console.error('❌ Ошибка отправки уведомления об отмене:', telegramError);
+    }
+
     res.json({ success: true, message: 'Запись удалена' });
   } catch (error) {
     console.error('Ошибка удаления записи:', error);
@@ -1797,75 +1828,59 @@ function phoneMatches(phone1, phone2) {
 }
 
 // Функция для отправки уведомления в Telegram при создании/изменении записи
-async function sendTelegramNotificationIfEnabled(userId, booking, eventType) {
+// Отправка уведомления владельцу салона через telegram_id
+async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType) {
   try {
-    console.log(`🔔 Проверка отправки Telegram уведомления: userId=${userId}, eventType=${eventType}`);
-    const user = await dbUsers.getById(userId);
-    if (!user) {
-      console.log('❌ Пользователь не найден');
-      return;
-    }
-    if (!user.telegram_settings) {
-      console.log('❌ Настройки Telegram не найдены');
+    console.log(`🔔 Отправка Telegram уведомления владельцу салона: salonOwnerId=${salonOwnerId}, eventType=${eventType}`);
+    
+    const salonOwner = await dbUsers.getById(salonOwnerId);
+    if (!salonOwner) {
+      console.log('❌ Владелец салона не найден');
       return;
     }
 
+    // Проверяем наличие telegram_id
+    if (!salonOwner.telegram_id) {
+      console.log('ℹ️ У владельца салона не привязан Telegram (telegram_id отсутствует)');
+      return;
+    }
+
+    // Загружаем настройки Telegram для получения botToken
     let telegramSettings = null;
-    try {
-      telegramSettings = typeof user.telegram_settings === 'string' 
-        ? JSON.parse(user.telegram_settings) 
-        : user.telegram_settings;
-      console.log('✅ Настройки Telegram загружены:', { enabled: telegramSettings.enabled, hasToken: !!telegramSettings.botToken, hasChatId: !!telegramSettings.chatId });
-    } catch (e) {
-      console.error('❌ Ошибка парсинга telegram_settings:', e);
+    if (salonOwner.telegram_settings) {
+      try {
+        telegramSettings = typeof salonOwner.telegram_settings === 'string' 
+          ? JSON.parse(salonOwner.telegram_settings) 
+          : salonOwner.telegram_settings;
+      } catch (e) {
+        console.error('❌ Ошибка парсинга telegram_settings:', e);
+        return;
+      }
+    }
+
+    if (!telegramSettings || !telegramSettings.botToken) {
+      console.log('❌ Токен бота не настроен');
       return;
     }
 
     // Проверяем, включены ли уведомления
-    if (!telegramSettings.enabled) {
-      console.log('❌ Уведомления Telegram отключены');
+    if (telegramSettings.enabled === false) {
+      console.log('ℹ️ Уведомления Telegram отключены в настройках');
       return;
     }
 
     // Проверяем тип события
-    // Для новых записей: по умолчанию true, если явно не установлено false
     if (eventType === 'new') {
       if (telegramSettings.notifyNewBookings === false) {
-        console.log('❌ Уведомления о новых записях отключены');
+        console.log('ℹ️ Уведомления о новых записях отключены');
         return;
       }
-      // Если undefined/null, считаем что включено (по умолчанию)
-    }
-    // Для отмен: по умолчанию false, нужно явно включить
-    if (eventType === 'cancellation' && !telegramSettings.notifyCancellations) {
-      console.log('❌ Уведомления об отменах отключены');
+    } else if (eventType === 'cancellation' && !telegramSettings.notifyCancellations) {
+      console.log('ℹ️ Уведомления об отменах отключены');
       return;
-    }
-    // Для изменений: по умолчанию false, нужно явно включить
-    if (eventType === 'change' && !telegramSettings.notifyChanges) {
-      console.log('❌ Уведомления об изменениях отключены');
+    } else if (eventType === 'change' && !telegramSettings.notifyChanges) {
+      console.log('ℹ️ Уведомления об изменениях отключены');
       return;
-    }
-
-    // Проверяем номер телефона, если он указан в настройках
-    // Если номер указан, отправляем уведомления только для записей с этим номером
-    if (telegramSettings.phone && telegramSettings.phone.trim()) {
-      const settingsPhone = normalizePhone(telegramSettings.phone);
-      const bookingPhone = normalizePhone(booking.phone);
-      
-      console.log(`📞 Проверка номера телефона: настройки="${settingsPhone}", запись="${bookingPhone}"`);
-      
-      if (!settingsPhone || !bookingPhone) {
-        console.log('⚠️ Один из номеров пуст - пропускаем проверку');
-      } else if (settingsPhone !== bookingPhone) {
-        // Номер не совпадает - не отправляем уведомление
-        console.log(`❌ Номер телефона не совпадает. Настройки: ${settingsPhone}, Запись: ${bookingPhone}. Уведомление не отправлено.`);
-        return;
-      } else {
-        console.log('✅ Номер телефона совпадает');
-      }
-    } else {
-      console.log('ℹ️ Номер телефона не указан в настройках - отправляем для всех записей');
     }
 
     const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (m) => ({
@@ -1900,20 +1915,13 @@ async function sendTelegramNotificationIfEnabled(userId, booking, eventType) {
       message += `\n💬 <b>Комментарий:</b> ${escapeHtml(booking.comment)}`;
     }
 
-    // Отправляем сообщение
-    if (telegramSettings.botToken && telegramSettings.chatId) {
-      console.log(`📤 Отправка сообщения в Telegram...`);
-      await sendTelegramMessage(telegramSettings.botToken, telegramSettings.chatId, message);
-      console.log(`✅ Уведомление в Telegram отправлено для записи ${booking.name}`);
-    } else {
-      console.log('❌ Токен бота или Chat ID не указаны');
-      if (!telegramSettings.botToken) console.log('  - Токен бота отсутствует');
-      if (!telegramSettings.chatId) console.log('  - Chat ID отсутствует');
-    }
+    // Отправляем сообщение на telegram_id владельца
+    console.log(`📤 Отправка сообщения в Telegram на telegram_id=${salonOwner.telegram_id}...`);
+    await sendTelegramMessage(telegramSettings.botToken, salonOwner.telegram_id, message);
+    console.log(`✅ Уведомление отправлено владельцу салона (telegram_id=${salonOwner.telegram_id})`);
   } catch (error) {
-    console.error('❌ Ошибка отправки уведомления в Telegram:', error);
+    console.error('❌ Ошибка отправки уведомления владельцу салона:', error);
     console.error('  Stack:', error.stack);
-    // Не пробрасываем ошибку, чтобы не прерывать основной процесс
   }
 }
 
@@ -2000,7 +2008,8 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
         notifyNewBookings: true,
         notifyCancellations: false,
         notifyChanges: false
-      }
+      },
+      telegramId: user.telegram_id || null
     });
   } catch (error) {
     console.error('Ошибка получения настроек Telegram:', error);
@@ -2119,6 +2128,72 @@ app.post('/api/telegram/test', requireAuth, requireAdmin, async (req, res) => {
       success: false, 
       message: error.message || 'Ошибка отправки сообщения. Проверьте токен бота и Chat ID.' 
     });
+  }
+});
+
+// API: Привязать Telegram аккаунт (для Telegram бота)
+app.post('/api/telegram/link', async (req, res) => {
+  try {
+    const { telegramId, phone, contactUserId } = req.body;
+    
+    if (!telegramId || !phone) {
+      return res.status(400).json({ success: false, message: 'telegramId и phone обязательны' });
+    }
+
+    const telegramIdNum = parseInt(telegramId, 10);
+    if (isNaN(telegramIdNum) || telegramIdNum <= 0) {
+      return res.status(400).json({ success: false, message: 'Некорректный telegramId' });
+    }
+
+    // Валидация: contactUserId должен совпадать с telegramId (защита от подмены)
+    if (contactUserId) {
+      const contactUserIdNum = parseInt(contactUserId, 10);
+      if (contactUserIdNum !== telegramIdNum) {
+        return res.status(403).json({ success: false, message: 'Несоответствие идентификаторов Telegram' });
+      }
+    }
+
+    // Нормализуем номер телефона в E.164
+    const normalizedPhone = normalizeToE164(phone);
+    
+    // Ищем пользователя по номеру телефона
+    const user = await dbUsers.getByPhone(normalizedPhone);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Пользователь с таким номером телефона не найден' });
+    }
+
+    // Проверяем, что telegram_id еще не занят другим пользователем
+    const existingUser = await dbUsers.getByTelegramId(telegramIdNum);
+    if (existingUser && existingUser.id !== user.id) {
+      return res.status(409).json({ success: false, message: 'Этот Telegram аккаунт уже привязан к другому пользователю' });
+    }
+
+    // Обновляем telegram_id
+    await dbUsers.update(user.id, { telegramId: telegramIdNum });
+    
+    console.log(`✅ Telegram аккаунт привязан: userId=${user.id}, telegramId=${telegramIdNum}, phone=${normalizedPhone}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Telegram аккаунт успешно привязан',
+      userId: user.id,
+      username: user.username
+    });
+  } catch (error) {
+    console.error('Ошибка привязки Telegram аккаунта:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера при привязке аккаунта' });
+  }
+});
+
+// API: Отвязать Telegram аккаунт
+app.post('/api/telegram/unlink', requireAuth, async (req, res) => {
+  try {
+    await dbUsers.update(req.session.userId, { telegramId: null });
+    console.log(`✅ Telegram аккаунт отвязан: userId=${req.session.userId}`);
+    res.json({ success: true, message: 'Telegram аккаунт отвязан' });
+  } catch (error) {
+    console.error('Ошибка отвязки Telegram аккаунта:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
 

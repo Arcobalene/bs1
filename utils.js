@@ -102,6 +102,22 @@ function validateId(id, paramName = 'ID') {
   return { valid: true, id: num };
 }
 
+// Нормализация номера телефона в формат E.164
+function normalizeToE164(phone) {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('8') && digits.length === 11) {
+    return '+7' + digits.substring(1);
+  }
+  if (digits.startsWith('7') && digits.length === 11) {
+    return '+' + digits;
+  }
+  if (!digits.startsWith('+') && digits.length >= 10) {
+    return '+' + digits;
+  }
+  return phone.startsWith('+') ? phone : '+' + digits;
+}
+
 // Форматирование booking для ответа API
 function formatBooking(booking) {
   return {
@@ -130,6 +146,7 @@ module.exports = {
   validateEmail,
   validateId,
   sanitizeString,
+  normalizeToE164,
   formatBooking
 };
 
