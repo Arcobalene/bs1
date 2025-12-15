@@ -1545,11 +1545,145 @@ footer {
     font-weight: 500;
   }
 
+  .landing-features-section {
+    margin-bottom: 100px;
+  }
+
+  .landing-section-subtitle {
+    font-size: 1.2rem;
+    color: #64748b;
+    margin-bottom: 50px;
+    text-align: center;
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
   .landing-features {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 30px;
+    margin-bottom: 0;
+  }
+
+  /* Секция доверия и статистики */
+  .landing-trust-section {
+    text-align: center;
+    margin-bottom: 100px;
+    padding: 60px 20px;
+    background: linear-gradient(135deg, rgba(249, 115, 182, 0.05), rgba(168, 85, 247, 0.05));
+    border-radius: 24px;
+  }
+
+  .landing-trust-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 40px;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .landing-trust-stat {
+    text-align: center;
+  }
+
+  .landing-trust-number {
+    font-size: 3.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #f973b6, #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+    line-height: 1;
+  }
+
+  .landing-trust-label {
+    font-size: 1.1rem;
+    color: #64748b;
+    font-weight: 500;
+  }
+
+  /* Секция преимуществ по категориям */
+  .landing-benefits-section {
+    margin-bottom: 100px;
+  }
+
+  .landing-benefit-block {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 60px;
+    align-items: center;
     margin-bottom: 80px;
+    padding: 40px;
+    background: white;
+    border-radius: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  }
+
+  .landing-benefit-block:last-child {
+    margin-bottom: 0;
+  }
+
+  .landing-benefit-reverse {
+    direction: rtl;
+  }
+
+  .landing-benefit-reverse > * {
+    direction: ltr;
+  }
+
+  .landing-benefit-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .landing-benefit-title {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 20px;
+    line-height: 1.2;
+  }
+
+  .landing-benefit-text {
+    font-size: 1.15rem;
+    color: #64748b;
+    line-height: 1.7;
+    margin-bottom: 24px;
+  }
+
+  .landing-benefit-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .landing-benefit-list li {
+    font-size: 1.1rem;
+    color: #475569;
+    margin-bottom: 12px;
+    padding-left: 0;
+    line-height: 1.6;
+  }
+
+  .landing-benefit-icon-large {
+    width: 200px;
+    height: 200px;
+    margin: 0 auto;
+    padding: 40px;
+    background: linear-gradient(135deg, rgba(249, 115, 182, 0.1), rgba(168, 85, 247, 0.1));
+    border-radius: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .landing-benefit-icon-large svg {
+    width: 100%;
+    height: 100%;
+    stroke: #f973b6;
   }
 
   .landing-feature-card {
@@ -1763,19 +1897,57 @@ footer {
     line-height: 1.6;
   }
 
-  .landing-cta-section .btn-primary {
+  .landing-cta-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .landing-cta-button-primary,
+  .landing-cta-button-secondary {
     position: relative;
     z-index: 1;
+    font-size: 1.2rem;
+    padding: 18px 40px;
+    border-radius: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    display: inline-block;
+  }
+
+  .landing-cta-button-primary {
     background: white;
     color: #a855f7;
-    font-weight: 700;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
   }
 
-  .landing-cta-section .btn-primary:hover {
+  .landing-cta-button-primary:hover {
     background: rgba(255, 255, 255, 0.95);
     transform: translateY(-2px);
     box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+  }
+
+  .landing-cta-button-secondary {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .landing-cta-button-secondary:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-2px);
+  }
+
+  .landing-cta-note {
+    position: relative;
+    z-index: 1;
+    font-size: 1rem;
+    opacity: 0.9;
+    margin-top: 20px;
   }
 
   @media (max-width: 768px) {
@@ -1794,6 +1966,10 @@ footer {
 
     .landing-section-title {
       font-size: 2rem;
+    }
+
+    .landing-section-subtitle {
+      font-size: 1rem;
     }
 
     .landing-features {
@@ -1830,6 +2006,54 @@ footer {
 
     .landing-cta-text {
       font-size: 1.1rem;
+    }
+
+    .landing-trust-section {
+      padding: 40px 20px;
+    }
+
+    .landing-trust-stats {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 30px;
+    }
+
+    .landing-trust-number {
+      font-size: 2.5rem;
+    }
+
+    .landing-benefit-block {
+      grid-template-columns: 1fr;
+      gap: 40px;
+      padding: 30px 20px;
+    }
+
+    .landing-benefit-reverse {
+      direction: ltr;
+    }
+
+    .landing-benefit-title {
+      font-size: 1.8rem;
+    }
+
+    .landing-benefit-text {
+      font-size: 1rem;
+    }
+
+    .landing-benefit-icon-large {
+      width: 150px;
+      height: 150px;
+      padding: 30px;
+    }
+
+    .landing-cta-buttons {
+      width: 100%;
+    }
+
+    .landing-cta-button-primary,
+    .landing-cta-button-secondary {
+      width: 100%;
+      font-size: 1.1rem;
+      padding: 16px 24px;
     }
   }
 
