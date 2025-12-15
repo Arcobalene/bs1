@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <title>Beauty Studio — Онлайн запись</title>
+  <title>Система онлайн-записи для салонов красоты</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="/style.css" />
 </head>
@@ -20,15 +20,98 @@
       </svg>
     </a>
   </div>
-  <h1 id="salon-name-header">Beauty Studio</h1>
-  <p id="salon-description">Современный салон красоты в центре города. Запишитесь онлайн за пару кликов.</p>
+  <h1 id="salon-name-header" style="display: none;">Beauty Studio</h1>
+  <p id="salon-description" style="display: none;">Современный салон красоты в центре города. Запишитесь онлайн за пару кликов.</p>
   <div class="nav-links" id="nav-links">
     <a href="/login" id="login-link">Вход для владельцев</a>
   </div>
 </header>
 
 <div class="container">
-  <div class="grid">
+  <!-- Лендинг-страница (показывается когда нет userId) -->
+  <div id="landing-page" style="display: none;">
+    <!-- Герой-секция -->
+    <div class="landing-hero">
+      <h1 class="landing-title">Система онлайн-записи для салонов красоты</h1>
+      <p class="landing-subtitle">Управляйте записями клиентов, расписанием мастеров и услугами в одном месте</p>
+      <div class="landing-cta">
+        <a href="/register" class="btn-primary" style="font-size: 1.1rem; padding: 14px 28px;">Начать бесплатно</a>
+        <a href="/login" class="btn-secondary" style="font-size: 1.1rem; padding: 14px 28px; margin-left: 12px;">Войти</a>
+      </div>
+    </div>
+
+    <!-- Преимущества -->
+    <div class="landing-features">
+      <div class="landing-feature-card">
+        <div class="landing-feature-icon">📅</div>
+        <h3>Онлайн-календарь</h3>
+        <p>Удобное расписание с визуализацией занятых и свободных слотов. Клиенты видят доступное время и могут записаться самостоятельно.</p>
+      </div>
+      <div class="landing-feature-card">
+        <div class="landing-feature-icon">👥</div>
+        <h3>Управление мастерами</h3>
+        <p>Добавляйте мастеров, назначайте им услуги и отслеживайте их загруженность. Каждый мастер имеет свой календарь.</p>
+      </div>
+      <div class="landing-feature-card">
+        <div class="landing-feature-icon">💅</div>
+        <h3>Каталог услуг</h3>
+        <p>Создавайте услуги с ценами и длительностью. Клиенты видят полный список и могут выбрать нужную услугу при записи.</p>
+      </div>
+      <div class="landing-feature-card">
+        <div class="landing-feature-icon">📱</div>
+        <h3>Уведомления</h3>
+        <p>Получайте мгновенные уведомления о новых записях. Клиенты получают подтверждение после отправки заявки.</p>
+      </div>
+      <div class="landing-feature-card">
+        <div class="landing-feature-icon">🎨</div>
+        <h3>Кастомизация</h3>
+        <p>Настраивайте цвета, логотип и дизайн страницы записи под бренд вашего салона. Создайте уникальный стиль.</p>
+      </div>
+      <div class="landing-feature-card">
+        <div class="landing-feature-icon">📊</div>
+        <h3>База клиентов</h3>
+        <p>Ведите учет всех клиентов, их записей и истории посещений. Удобный поиск и фильтрация по различным параметрам.</p>
+      </div>
+    </div>
+
+    <!-- Как это работает -->
+    <div class="landing-how-it-works">
+      <h2 class="landing-section-title">Как это работает</h2>
+      <div class="landing-steps">
+        <div class="landing-step">
+          <div class="landing-step-number">1</div>
+          <h3>Регистрация</h3>
+          <p>Создайте аккаунт и настройте информацию о вашем салоне</p>
+        </div>
+        <div class="landing-step">
+          <div class="landing-step-number">2</div>
+          <h3>Настройка</h3>
+          <p>Добавьте услуги, мастеров и настройте дизайн страницы</p>
+        </div>
+        <div class="landing-step">
+          <div class="landing-step-number">3</div>
+          <h3>Публикация</h3>
+          <p>Получите персональную ссылку для записи и поделитесь с клиентами</p>
+        </div>
+        <div class="landing-step">
+          <div class="landing-step-number">4</div>
+          <h3>Работа</h3>
+          <p>Принимайте записи онлайн и управляйте расписанием в удобном календаре</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Призыв к действию -->
+    <div class="landing-cta-section">
+      <h2 class="landing-section-title">Готовы начать?</h2>
+      <p class="landing-cta-text">Присоединяйтесь к салонам красоты, которые уже используют нашу систему</p>
+      <a href="/register" class="btn-primary" style="font-size: 1.2rem; padding: 16px 32px; margin-top: 20px;">Зарегистрироваться бесплатно</a>
+    </div>
+  </div>
+
+  <!-- Страница записи (показывается когда есть userId) -->
+  <div id="booking-page" style="display: none;">
+    <div class="grid">
     <!-- Левая колонка: услуги и мастера -->
     <div class="card">
       <h2>Услуги</h2>
@@ -146,32 +229,55 @@
     }
   }
 
+  // Показ лендинг-страницы
+  function showLandingPage() {
+    const landingPage = document.getElementById('landing-page');
+    const bookingPage = document.getElementById('booking-page');
+    
+    if (landingPage) {
+      landingPage.style.display = 'block';
+    }
+    if (bookingPage) {
+      bookingPage.style.display = 'none';
+    }
+  }
+
+  // Скрытие лендинг-страницы и показ страницы записи
+  function showBookingPage() {
+    const landingPage = document.getElementById('landing-page');
+    const bookingPage = document.getElementById('booking-page');
+    
+    if (landingPage) {
+      landingPage.style.display = 'none';
+    }
+    if (bookingPage) {
+      bookingPage.style.display = 'block';
+    }
+  }
+
   // Загрузка услуг и мастеров
   async function loadData() {
     // Устанавливаем минимальную дату
     setMinDate();
     
     if (!userId) {
-      // Если userId не указан, показываем сообщение
-      const servicesListEl = document.getElementById("services-list");
-      const mastersListEl = document.getElementById("masters-list");
-      const form = document.getElementById("booking-form");
-      
-      if (servicesListEl) {
-        servicesListEl.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 20px;">Пожалуйста, используйте ссылку от салона для записи.</p>';
-      }
-      if (mastersListEl) {
-        mastersListEl.innerHTML = '';
-      }
-      if (form) {
-        form.style.display = 'none';
-        const card = form.closest('.card');
-        if (card) {
-          card.innerHTML = '<h2>Онлайн запись</h2><p class="description">Для записи используйте персональную ссылку от вашего салона.</p>';
-        }
-      }
+      // Если userId не указан, показываем лендинг-страницу
+      showLandingPage();
+      // Скрываем заголовок салона на лендинге
+      const salonHeader = document.getElementById('salon-name-header');
+      const salonDescription = document.getElementById('salon-description');
+      if (salonHeader) salonHeader.style.display = 'none';
+      if (salonDescription) salonDescription.style.display = 'none';
       return;
     }
+    
+    // Показываем страницу записи
+    showBookingPage();
+    // Показываем заголовок салона на странице записи
+    const salonHeader = document.getElementById('salon-name-header');
+    const salonDescription = document.getElementById('salon-description');
+    if (salonHeader) salonHeader.style.display = 'block';
+    if (salonDescription) salonDescription.style.display = 'block';
 
     try {
       const [servicesRes, mastersRes, salonRes] = await Promise.all([
