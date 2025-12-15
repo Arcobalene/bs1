@@ -835,11 +835,19 @@
         photoDiv.style.border = '2px solid #e5e7eb';
         
         const img = document.createElement('img');
-        img.src = photo.url || `/api/masters/photos/${master.id}/${photo.filename}`;
+        // Всегда формируем правильный URL, даже если photo.url уже есть
+        const photoUrl = photo.filename 
+          ? `/api/masters/photos/${master.id}/${photo.filename}`
+          : (photo.url || '');
+        img.src = photoUrl;
         img.style.width = '100%';
         img.style.height = '100%';
         img.style.objectFit = 'cover';
         img.alt = photo.originalName || 'Фото работы';
+        img.onerror = function() {
+          console.error('Ошибка загрузки фото:', photoUrl);
+          this.style.display = 'none';
+        };
         
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';

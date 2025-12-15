@@ -34,13 +34,20 @@ const BUCKET_NAME = 'master-photos';
 // Инициализация bucket в MinIO
 (async () => {
   try {
+    // Ждем немного, чтобы MinIO успел запуститься
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
     const exists = await minioClient.bucketExists(BUCKET_NAME);
     if (!exists) {
       await minioClient.makeBucket(BUCKET_NAME, 'us-east-1');
-      console.log(`Bucket ${BUCKET_NAME} создан`);
+      console.log(`✅ Bucket ${BUCKET_NAME} создан в MinIO`);
+    } else {
+      console.log(`✅ Bucket ${BUCKET_NAME} уже существует в MinIO`);
     }
   } catch (error) {
-    console.error('Ошибка инициализации MinIO:', error);
+    console.error('❌ Ошибка инициализации MinIO:', error.message);
+    console.error('Убедитесь, что MinIO запущен и доступен по адресу:', 
+      `${process.env.MINIO_ENDPOINT || 'localhost'}:${process.env.MINIO_PORT || '9000'}`);
   }
 })();
 
@@ -598,13 +605,20 @@ app.get('/api/masters/:userId', async (req, res) => {
       return res.json({ success: false, masters: [] });
     }
     const userMasters = await masters.getByUserId(user.id);
-    // Добавляем полные URL для фото
+    // Добавляем полные URL для фото (всегда формируем правильный URL)
     const mastersWithPhotoUrls = userMasters.map(master => ({
       ...master,
-      photos: (master.photos || []).map(photo => ({
-        ...photo,
-        url: `/api/masters/photos/${master.id}/${photo.filename}`
-      }))
+      photos: (master.photos || []).map(photo => {
+        // Убеждаемся, что filename существует и формируем правильный URL
+        const photoUrl = photo.filename 
+          ? `/api/masters/photos/${master.id}/${photo.filename}`
+          : (photo.url || '');
+        return {
+          ...photo,
+          url: photoUrl,
+          filename: photo.filename || photo.url?.split('/').pop() || ''
+        };
+      }).filter(photo => photo.filename) // Фильтруем фото без filename
     }));
     res.json({ success: true, masters: mastersWithPhotoUrls });
   } catch (error) {
@@ -706,6 +720,11 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
   try {
     const masterId = parseInt(req.params.masterId, 10);
     const filename = req.params.filename;
+    
+    if (!filename || !masterId) {
+      return res.status(400).json({ success: false, message: 'Неверные параметры запроса' });
+    }
+    
     const objectName = `master-${masterId}/${filename}`;
     
     try {
@@ -738,6 +757,14 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
         contentType = mimeTypes[ext] || 'image/jpeg';
       }
       
+      // Проверяем существование объекта перед получением
+      try {
+        await minioClient.statObject(BUCKET_NAME, objectName);
+      } catch (statError) {
+        console.error(`Фото не найдено в MinIO: ${objectName}`, statError.message);
+        return res.status(404).json({ success: false, message: 'Фото не найдено' });
+      }
+      
       const dataStream = await minioClient.getObject(BUCKET_NAME, objectName);
       const chunks = [];
       
@@ -750,12 +777,16 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
         res.send(buffer);
       });
       dataStream.on('error', (error) => {
-        console.error('Ошибка получения файла из MinIO:', error);
-        res.status(404).json({ success: false, message: 'Фото не найдено' });
+        console.error(`Ошибка получения файла из MinIO: ${objectName}`, error.message);
+        if (!res.headersSent) {
+          res.status(500).json({ success: false, message: 'Ошибка получения фото' });
+        }
       });
     } catch (error) {
-      console.error('Ошибка получения файла из MinIO:', error);
-      res.status(404).json({ success: false, message: 'Фото не найдено' });
+      console.error(`Ошибка получения файла из MinIO: ${objectName}`, error.message);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Ошибка получения фото' });
+      }
     }
   } catch (error) {
     console.error('Ошибка получения фото:', error);

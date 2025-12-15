@@ -1099,12 +1099,20 @@
         photoDiv.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
         
         const img = document.createElement('img');
-        img.src = photo.url || `/api/masters/photos/${master.id}/${photo.filename}`;
+        // Всегда формируем правильный URL, даже если photo.url уже есть
+        const photoUrl = photo.filename 
+          ? `/api/masters/photos/${master.id}/${photo.filename}`
+          : (photo.url || '');
+        img.src = photoUrl;
         img.style.width = '100%';
         img.style.height = 'auto';
         img.style.display = 'block';
         img.alt = photo.originalName || 'Фото работы';
         img.loading = 'lazy';
+        img.onerror = function() {
+          console.error('Ошибка загрузки фото:', photoUrl);
+          this.style.display = 'none';
+        };
         
         photoDiv.appendChild(img);
         modalContent.appendChild(photoDiv);
