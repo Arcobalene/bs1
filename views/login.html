@@ -2,17 +2,91 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <title>Вход — Beauty Studio</title>
+  <title>Вход / Регистрация — Beauty Studio</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="/style.css" />
+  <style>
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+    }
+    .modal.active {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background-color: #ffffff;
+      padding: 32px;
+      border-radius: 12px;
+      max-width: 400px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      position: relative;
+    }
+    .modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #6b7280;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      transition: background-color 0.2s;
+    }
+    .modal-close:hover {
+      background-color: #f3f4f6;
+    }
+    .modal-header {
+      margin-bottom: 24px;
+    }
+    .modal-header h2 {
+      margin: 0 0 8px 0;
+      color: #111827;
+    }
+    .modal-header p {
+      margin: 0;
+      color: #6b7280;
+      font-size: 0.9rem;
+    }
+    .switch-link {
+      text-align: center;
+      margin-top: 16px;
+      color: #6b7280;
+      font-size: 0.9rem;
+    }
+    .switch-link a {
+      color: #a855f7;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .switch-link a:hover {
+      text-decoration: underline;
+    }
+  </style>
 </head>
 <body>
 <header>
   <h1>Beauty Studio</h1>
   <p>Вход для владельцев салона</p>
   <div class="nav-links">
-    <a href="/booking">Страница салона</a>
-    <a href="/register">Регистрация</a>
+    <a href="/">На главную</a>
   </div>
 </header>
 
@@ -38,7 +112,44 @@
     </form>
 
     <p class="note" style="margin-top: 16px; text-align: center;">
-      Нет аккаунта? <a href="/register" style="color: #a855f7;">Зарегистрируйтесь</a>
+      Нет аккаунта? <a href="#" id="open-register-modal" style="color: #a855f7;">Зарегистрируйтесь</a>
+    </p>
+  </div>
+</div>
+
+<!-- Модальное окно регистрации -->
+<div id="register-modal" class="modal">
+  <div class="modal-content">
+    <button class="modal-close" id="close-register-modal" aria-label="Закрыть">&times;</button>
+    <div class="modal-header">
+      <h2>Регистрация</h2>
+      <p>Создайте аккаунт для управления услугами, мастерами и записями.</p>
+    </div>
+
+    <form id="register-form">
+      <div>
+        <label for="register-username">Логин *</label>
+        <input type="text" id="register-username" name="username" required autocomplete="username" placeholder="Придумайте логин" />
+      </div>
+
+      <div>
+        <label for="register-email">Email (необязательно)</label>
+        <input type="email" id="register-email" name="email" autocomplete="email" placeholder="your@email.com" />
+      </div>
+
+      <div>
+        <label for="register-password">Пароль *</label>
+        <input type="password" id="register-password" name="password" required autocomplete="new-password" placeholder="Минимум 6 символов" />
+      </div>
+
+      <button type="submit" class="btn-primary">Зарегистрироваться</button>
+
+      <div id="register-alert-success" class="alert alert-success"></div>
+      <div id="register-alert-error" class="alert alert-error"></div>
+    </form>
+
+    <p class="switch-link">
+      Уже есть аккаунт? <a href="#" id="close-and-show-login">Войдите</a>
     </p>
   </div>
 </div>
@@ -48,14 +159,51 @@
 </footer>
 
 <script>
-  const form = document.getElementById('login-form');
-  const errorAlert = document.getElementById('alert-error');
+  // Элементы модального окна
+  const registerModal = document.getElementById('register-modal');
+  const openRegisterModal = document.getElementById('open-register-modal');
+  const closeRegisterModal = document.getElementById('close-register-modal');
+  const closeAndShowLogin = document.getElementById('close-and-show-login');
 
-  form.addEventListener('submit', async (e) => {
+  // Открытие модального окна
+  openRegisterModal.addEventListener('click', (e) => {
     e.preventDefault();
-    errorAlert.style.display = 'none';
+    registerModal.classList.add('active');
+  });
 
-    const formData = new FormData(form);
+  // Закрытие модального окна
+  closeRegisterModal.addEventListener('click', () => {
+    registerModal.classList.remove('active');
+  });
+
+  closeAndShowLogin.addEventListener('click', (e) => {
+    e.preventDefault();
+    registerModal.classList.remove('active');
+  });
+
+  // Закрытие при клике вне модального окна
+  registerModal.addEventListener('click', (e) => {
+    if (e.target === registerModal) {
+      registerModal.classList.remove('active');
+    }
+  });
+
+  // Закрытие по Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && registerModal.classList.contains('active')) {
+      registerModal.classList.remove('active');
+    }
+  });
+
+  // Форма входа
+  const loginForm = document.getElementById('login-form');
+  const loginErrorAlert = document.getElementById('alert-error');
+
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    loginErrorAlert.style.display = 'none';
+
+    const formData = new FormData(loginForm);
     const data = {
       username: formData.get('username'),
       password: formData.get('password')
@@ -72,15 +220,78 @@
       if (result.success) {
         window.location.href = '/admin';
       } else {
-        errorAlert.textContent = result.message || 'Ошибка входа';
-        errorAlert.style.display = 'block';
+        loginErrorAlert.textContent = result.message || 'Ошибка входа';
+        loginErrorAlert.style.display = 'block';
       }
     } catch (error) {
-      errorAlert.textContent = 'Ошибка соединения. Попробуйте позже.';
-      errorAlert.style.display = 'block';
+      loginErrorAlert.textContent = 'Ошибка соединения. Попробуйте позже.';
+      loginErrorAlert.style.display = 'block';
     }
   });
+
+  // Форма регистрации
+  const registerForm = document.getElementById('register-form');
+  const registerSuccessAlert = document.getElementById('register-alert-success');
+  const registerErrorAlert = document.getElementById('register-alert-error');
+
+  registerForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    registerSuccessAlert.style.display = 'none';
+    registerErrorAlert.style.display = 'none';
+
+    const formData = new FormData(registerForm);
+    const data = {
+      username: formData.get('username'),
+      email: formData.get('email'),
+      password: formData.get('password')
+    };
+
+    if (data.username.length < 3 || data.username.length > 30) {
+      registerErrorAlert.textContent = 'Логин должен быть от 3 до 30 символов';
+      registerErrorAlert.style.display = 'block';
+      return;
+    }
+
+    if (data.password.length < 6) {
+      registerErrorAlert.textContent = 'Пароль должен содержать минимум 6 символов';
+      registerErrorAlert.style.display = 'block';
+      return;
+    }
+
+    if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+      registerErrorAlert.textContent = 'Некорректный формат email';
+      registerErrorAlert.style.display = 'block';
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        registerSuccessAlert.textContent = 'Регистрация успешна! Перенаправление...';
+        registerSuccessAlert.style.display = 'block';
+        setTimeout(() => {
+          window.location.href = '/admin';
+        }, 1000);
+      } else {
+        registerErrorAlert.textContent = result.message || 'Ошибка регистрации';
+        registerErrorAlert.style.display = 'block';
+      }
+    } catch (error) {
+      registerErrorAlert.textContent = 'Ошибка соединения. Попробуйте позже.';
+      registerErrorAlert.style.display = 'block';
+    }
+  });
+
+  // Если открыта страница /register, сразу показываем модальное окно
+  if (window.location.pathname === '/register') {
+    registerModal.classList.add('active');
+  }
 </script>
 </body>
 </html>
-
