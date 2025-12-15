@@ -134,7 +134,7 @@
   let services = [];
   let masters = [];
   let serviceDurations = {};
-  const busyIntervals = {};
+  let busyIntervals = {};
 
   // Установка минимальной даты (сегодня)
   function setMinDate() {
@@ -921,7 +921,6 @@
         const currentUser = result.user;
         const headerTopLinks = document.getElementById('header-top-links');
         const navLinks = document.getElementById('nav-links');
-        const loginLink = document.getElementById('login-link');
         
         // Показываем верхние ссылки (иконки пользователя и выхода)
         if (headerTopLinks) {
@@ -959,21 +958,29 @@
         // Обработчик выхода
         const logoutLink = document.getElementById('logout-link');
         if (logoutLink) {
-          logoutLink.addEventListener('click', async (e) => {
+          // Удаляем старый обработчик, если есть, заменяя элемент
+          const newLogoutLink = logoutLink.cloneNode(true);
+          logoutLink.parentNode.replaceChild(newLogoutLink, logoutLink);
+          
+          newLogoutLink.addEventListener('click', async (e) => {
             e.preventDefault();
             await fetch('/api/logout', { method: 'POST' });
             window.location.reload();
           });
         }
         
-        // Подсвечиваем активную страницу
-        highlightActivePage();
+        // Подсвечиваем активную страницу после создания меню
+        setTimeout(() => {
+          highlightActivePage();
+        }, 0);
       } else {
         // Если не залогинен, скрываем верхние ссылки
         const headerTopLinks = document.getElementById('header-top-links');
         if (headerTopLinks) {
           headerTopLinks.style.display = 'none';
         }
+        // Для неавторизованных пользователей тоже подсвечиваем активную страницу
+        highlightActivePage();
       }
     } catch (error) {
       console.error('Ошибка проверки авторизации:', error);
@@ -989,10 +996,8 @@
   loadData();
   
   // Проверяем авторизацию и показываем меню
+  // highlightActivePage() вызывается внутри checkAuthAndShowMenu() после обновления меню
   checkAuthAndShowMenu();
-  
-  // Подсвечиваем активную страницу
-  highlightActivePage();
 </script>
 </body>
 </html>

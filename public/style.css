@@ -342,10 +342,14 @@ textarea {
   box-shadow: 0 15px 30px rgba(107, 114, 128, 0.55);
 }
 
-.btn-primary:active,
-.btn-secondary:active {
+.btn-primary:active {
   transform: translateY(0);
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.4);
+}
+
+.btn-secondary:active {
+  transform: translateY(0);
+  box-shadow: 0 8px 18px rgba(107, 114, 128, 0.4);
 }
 
 .note {
