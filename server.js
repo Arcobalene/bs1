@@ -671,6 +671,45 @@ app.get('/api/masters/:userId', async (req, res) => {
   }
 });
 
+// API: Проверка подключения к MinIO (для диагностики)
+app.get('/api/minio/health', async (req, res) => {
+  try {
+    const bucketExists = await minioClient.bucketExists(BUCKET_NAME);
+    const testObjectName = `test-${Date.now()}.txt`;
+    
+    // Пробуем загрузить тестовый объект
+    let testUploadSuccess = false;
+    try {
+      await minioClient.putObject(BUCKET_NAME, testObjectName, Buffer.from('test'), 4, {
+        'Content-Type': 'text/plain'
+      });
+      testUploadSuccess = true;
+      
+      // Удаляем тестовый объект
+      await minioClient.removeObject(BUCKET_NAME, testObjectName);
+    } catch (testError) {
+      console.error('Ошибка тестовой загрузки:', testError.message);
+    }
+    
+    res.json({
+      success: true,
+      minioEndpoint: `${MINIO_ENDPOINT}:${MINIO_PORT}`,
+      bucketExists: bucketExists,
+      bucketName: BUCKET_NAME,
+      testUploadSuccess: testUploadSuccess,
+      connectionStatus: testUploadSuccess ? 'OK' : 'FAILED'
+    });
+  } catch (error) {
+    console.error('Ошибка проверки MinIO:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+      minioEndpoint: `${MINIO_ENDPOINT}:${MINIO_PORT}`,
+      bucketName: BUCKET_NAME
+    });
+  }
+});
+
 // API: Загрузить фото мастера
 app.post('/api/masters/:masterId/photos', requireAuth, upload.array('photos', 10), async (req, res) => {
   try {
@@ -693,6 +732,38 @@ app.post('/api/masters/:masterId/photos', requireAuth, upload.array('photos', 10
       return res.status(400).json({ success: false, message: 'Файлы не загружены' });
     }
 
+    // Проверяем подключение к MinIO перед загрузкой
+    let minioAvailable = false;
+    try {
+      minioAvailable = await minioClient.bucketExists(BUCKET_NAME);
+      if (!minioAvailable) {
+        // Пробуем создать bucket
+        try {
+          await minioClient.makeBucket(BUCKET_NAME, 'us-east-1');
+          minioAvailable = true;
+          console.log(`✅ Bucket ${BUCKET_NAME} создан перед загрузкой фото`);
+        } catch (makeBucketError) {
+          console.error(`❌ Не удалось создать bucket ${BUCKET_NAME}:`, makeBucketError.message);
+        }
+      }
+    } catch (minioError) {
+      console.error(`❌ MinIO недоступен:`, minioError.message);
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Хранилище фото недоступно. Проверьте подключение к MinIO.',
+        error: minioError.message
+      });
+    }
+
+    if (!minioAvailable) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Bucket не существует и не может быть создан. Проверьте настройки MinIO.'
+      });
+    }
+
+    console.log(`📤 Начало загрузки ${req.files.length} файлов для мастера ${masterId}`);
+
     const uploadedPhotos = [];
     const failedUploads = [];
     
@@ -707,18 +778,19 @@ app.post('/api/masters/:masterId/photos', requireAuth, upload.array('photos', 10
       const objectName = `master-${masterId}/${filename}`;
       
       try {
-        // Проверяем, что bucket существует
-        const bucketExists = await minioClient.bucketExists(BUCKET_NAME);
-        if (!bucketExists) {
-          await minioClient.makeBucket(BUCKET_NAME, 'us-east-1');
-          console.log(`✅ Bucket ${BUCKET_NAME} создан при загрузке фото`);
-        }
+        console.log(`📤 Загрузка файла: ${file.originalname} (${file.size} байт) -> ${objectName}`);
         
         await minioClient.putObject(BUCKET_NAME, objectName, file.buffer, file.size, {
           'Content-Type': file.mimetype
         });
         
-        console.log(`✅ Фото загружено в MinIO: ${objectName}`);
+        // Проверяем, что файл действительно загружен
+        try {
+          const stat = await minioClient.statObject(BUCKET_NAME, objectName);
+          console.log(`✅ Фото загружено в MinIO: ${objectName} (${stat.size} байт)`);
+        } catch (verifyError) {
+          console.error(`⚠️ Фото загружено, но не удалось проверить: ${verifyError.message}`);
+        }
         
         uploadedPhotos.push({
           filename: filename,
@@ -728,11 +800,19 @@ app.post('/api/masters/:masterId/photos', requireAuth, upload.array('photos', 10
           uploadedAt: new Date().toISOString()
         });
       } catch (error) {
-        console.error(`❌ Ошибка загрузки файла ${file.originalname} в MinIO:`, error.message);
-        console.error(`   ObjectName: ${objectName}, Bucket: ${BUCKET_NAME}`);
+        console.error(`❌ Ошибка загрузки файла ${file.originalname} в MinIO:`);
+        console.error(`   ObjectName: ${objectName}`);
+        console.error(`   Bucket: ${BUCKET_NAME}`);
+        console.error(`   Размер файла: ${file.size} байт`);
+        console.error(`   MIME тип: ${file.mimetype}`);
+        console.error(`   Ошибка: ${error.message}`);
+        console.error(`   Stack: ${error.stack}`);
+        
         failedUploads.push({
           originalName: file.originalname,
-          error: error.message || 'Неизвестная ошибка'
+          error: error.message || 'Неизвестная ошибка',
+          code: error.code,
+          objectName: objectName
         });
       }
     }
