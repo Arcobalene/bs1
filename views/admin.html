@@ -1663,7 +1663,7 @@
   
   // Проверка новых записей каждые 30 секунд
   let knownBookingIds = new Set(); // Множество ID записей, которые мы уже видели
-  let lastBookingCheck = Date.now();
+  let lastBookingCheck = 0; // Инициализируем как 0, чтобы первая проверка не показывала уведомления
   
   async function checkNewBookings() {
     try {
@@ -1698,13 +1698,13 @@
         
         // Показываем уведомления только для действительно новых записей
         // и только если прошло больше 2 секунд с последней проверки (чтобы не показывать при первой загрузке)
-        const timeSinceLastCheck = Date.now() - lastBookingCheck;
+        const timeSinceLastCheck = lastBookingCheck > 0 ? Date.now() - lastBookingCheck : 0;
         if (newBookings.length > 0 && timeSinceLastCheck > 2000) {
-          console.log(`Найдено ${newBookings.length} новых записей`);
+          console.log(`✅ Найдено ${newBookings.length} новых записей (прошло ${timeSinceLastCheck}мс)`);
           newBookings.forEach(booking => {
             const date = new Date(booking.date);
             const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-            console.log('Показываем уведомление для записи:', booking.id, booking.name);
+            console.log('📢 Показываем уведомление для записи:', booking.id, booking.name);
             if (typeof showNotification === 'function') {
               showNotification(
                 'Новая запись!',
@@ -1713,11 +1713,13 @@
                 booking.id // Передаем ID записи
               );
             } else {
-              console.error('Функция showNotification не найдена!');
+              console.error('❌ Функция showNotification не найдена!');
             }
           });
         } else if (newBookings.length > 0) {
-          console.log(`Найдено ${newBookings.length} новых записей, но прошло только ${timeSinceLastCheck}мс с последней проверки (нужно > 2000мс)`);
+          console.log(`ℹ️ Найдено ${newBookings.length} новых записей, но прошло только ${timeSinceLastCheck}мс с последней проверки (нужно > 2000мс)`);
+        } else {
+          console.log(`ℹ️ Новых записей не найдено (всего записей: ${currentBookings.length}, известных: ${knownBookingIds.size})`);
         }
         
         lastBookingCheck = Date.now();
@@ -1734,9 +1736,27 @@
   
   async function initNotificationCheck() {
     try {
+      console.log('🔔 Инициализация проверки новых записей...');
       const bookingsRes = await fetch('/api/bookings');
       if (!bookingsRes.ok) {
-        console.error('Ошибка получения записей при инициализации:', bookingsRes.status);
+        console.error('❌ Ошибка получения записей при инициализации:', bookingsRes.status);
+        // Все равно запускаем проверку при ошибке
+        if (!notificationCheckInterval) {
+          notificationCheckInterval = setInterval(checkNewBookings, 30000);
+          console.log('⚠️ Проверка новых записей запущена (после ошибки получения записей)');
+        }
+        return;
+      }
+      
+      const contentType = bookingsRes.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await bookingsRes.text();
+        console.error('❌ Сервер вернул не JSON при инициализации:', text.substring(0, 200));
+        // Все равно запускаем проверку
+        if (!notificationCheckInterval) {
+          notificationCheckInterval = setInterval(checkNewBookings, 30000);
+          console.log('⚠️ Проверка новых записей запущена (после ошибки формата ответа)');
+        }
         return;
       }
       
@@ -1752,13 +1772,16 @@
           clearInterval(notificationCheckInterval);
         }
         
+        // Устанавливаем lastBookingCheck, чтобы первая проверка не показывала уведомления
+        lastBookingCheck = Date.now();
+        
         // Проверяем новые записи каждые 30 секунд
         notificationCheckInterval = setInterval(checkNewBookings, 30000);
-        console.log(`Проверка новых записей инициализирована (${knownBookingIds.size} известных записей, интервал: 30 секунд)`);
+        console.log(`✅ Проверка новых записей инициализирована (${knownBookingIds.size} известных записей, интервал: 30 секунд)`);
         
         // Первая проверка через 5 секунд после инициализации
         setTimeout(() => {
-          console.log('Выполняется первая проверка новых записей...');
+          console.log('🔍 Выполняется первая проверка новых записей...');
           checkNewBookings();
         }, 5000);
       } else {
