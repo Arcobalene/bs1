@@ -1668,22 +1668,147 @@ footer {
     line-height: 1.6;
   }
 
-  .landing-benefit-icon-large {
-    width: 200px;
-    height: 200px;
+  /* Карусель преимуществ */
+  .landing-carousel-container {
+    position: relative;
+    max-width: 800px;
     margin: 0 auto;
+    padding: 0 60px;
+  }
+
+  .landing-carousel-wrapper {
+    overflow: hidden;
+    border-radius: 20px;
+  }
+
+  .landing-carousel-track {
+    display: flex;
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .landing-carousel-slide {
+    min-width: 100%;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+
+  .landing-carousel-slide.active {
+    opacity: 1;
+  }
+
+  .landing-benefit-card-compact {
+    background: white;
     padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    text-align: center;
+    border: 1px solid rgba(0, 0, 0, 0.04);
+  }
+
+  .landing-benefit-icon-compact {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 24px;
+    padding: 20px;
     background: linear-gradient(135deg, rgba(249, 115, 182, 0.1), rgba(168, 85, 247, 0.1));
-    border-radius: 24px;
+    border-radius: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: all 0.3s ease;
   }
 
-  .landing-benefit-icon-large svg {
+  .landing-benefit-icon-compact svg {
     width: 100%;
     height: 100%;
     stroke: #f973b6;
+  }
+
+  .landing-benefit-card-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 16px;
+  }
+
+  .landing-benefit-card-text {
+    font-size: 1.05rem;
+    color: #64748b;
+    line-height: 1.7;
+    margin-bottom: 20px;
+  }
+
+  .landing-benefit-card-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+    display: inline-block;
+  }
+
+  .landing-benefit-card-list li {
+    font-size: 1rem;
+    color: #475569;
+    margin-bottom: 10px;
+    padding-left: 0;
+  }
+
+  .landing-carousel-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 30px;
+  }
+
+  .landing-carousel-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid #e2e8f0;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #64748b;
+  }
+
+  .landing-carousel-btn:hover {
+    border-color: #f973b6;
+    background: linear-gradient(135deg, rgba(249, 115, 182, 0.1), rgba(168, 85, 247, 0.1));
+    color: #f973b6;
+    transform: scale(1.1);
+  }
+
+  .landing-carousel-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .landing-carousel-dots {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .landing-carousel-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 0;
+  }
+
+  .landing-carousel-dot.active {
+    background: #f973b6;
+    width: 30px;
+    border-radius: 5px;
   }
 
   .landing-feature-card {
@@ -1722,12 +1847,12 @@ footer {
   }
 
   .landing-feature-icon {
-    width: 64px;
-    height: 64px;
-    margin: 0 auto 24px;
-    padding: 16px;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 20px;
+    padding: 14px;
     background: linear-gradient(135deg, rgba(249, 115, 182, 0.1), rgba(168, 85, 247, 0.1));
-    border-radius: 16px;
+    border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2039,10 +2164,28 @@ footer {
       font-size: 1rem;
     }
 
-    .landing-benefit-icon-large {
-      width: 150px;
-      height: 150px;
-      padding: 30px;
+    .landing-carousel-container {
+      padding: 0 20px;
+    }
+
+    .landing-benefit-card-compact {
+      padding: 30px 20px;
+    }
+
+    .landing-benefit-icon-compact {
+      width: 60px;
+      height: 60px;
+      padding: 15px;
+    }
+
+    .landing-carousel-btn {
+      width: 36px;
+      height: 36px;
+    }
+
+    .landing-carousel-btn svg {
+      width: 16px;
+      height: 16px;
     }
 
     .landing-cta-buttons {
