@@ -563,6 +563,25 @@ footer {
   z-index: 999999 !important;
 }
 
+/* Модальное окно с фото мастера - всегда поверх хедера */
+#master-photos-modal {
+  z-index: 999999 !important;
+  padding-top: 180px !important;
+  align-items: flex-start !important;
+  overflow-y: auto !important;
+}
+
+#master-photos-modal .modal {
+  max-height: calc(100vh - 200px) !important;
+  position: relative !important;
+  margin-top: 0 !important;
+}
+
+/* Убеждаемся, что хедер не перекрывает модальное окно */
+header {
+  z-index: 1000 !important;
+}
+
 .modal {
   background: #ffffff;
   border-radius: 16px;
