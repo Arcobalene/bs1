@@ -929,19 +929,15 @@
         
         // Заменяем меню навигации
         if (navLinks) {
+          // Сразу создаем ссылку с правильным userId
+          const salonPageUrl = currentUser.id ? `/?userId=${currentUser.id}` : '/';
           navLinks.innerHTML = `
-            <a href="/" id="salon-page-link">Страница салона</a>
+            <a href="${salonPageUrl}" id="salon-page-link">Страница салона</a>
             <a href="/admin">Админ-панель</a>
             <a href="/calendar">Календарь</a>
             <a href="/services">Услуги и мастера</a>
             <a href="/clients">Клиенты</a>
           `;
-          
-          // Обновляем ссылку на страницу салона
-          const salonPageLink = document.getElementById('salon-page-link');
-          if (salonPageLink && currentUser.id) {
-            salonPageLink.href = `/?userId=${currentUser.id}`;
-          }
         }
         
         // Показываем ссылку на управление пользователями только для админов
