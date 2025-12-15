@@ -913,6 +913,7 @@
 
   // Проверка авторизации и отображение меню для владельцев
   async function checkAuthAndShowMenu() {
+    // Функция возвращает Promise для возможности использования .then()
     try {
       const response = await fetch('/api/user');
       const result = await response.json();
@@ -921,6 +922,15 @@
         const currentUser = result.user;
         const headerTopLinks = document.getElementById('header-top-links');
         const navLinks = document.getElementById('nav-links');
+        
+        // Если пользователь залогинен, но в URL нет userId, обновляем URL
+        if (currentUser.id && !userId && window.location.pathname === '/') {
+          const newUrl = `/?userId=${currentUser.id}`;
+          window.history.replaceState({}, '', newUrl);
+          // Обновляем переменную userId для дальнейшего использования
+          userId = currentUser.id;
+          // loadData() будет вызван после завершения checkAuthAndShowMenu()
+        }
         
         // Показываем верхние ссылки (иконки пользователя и выхода)
         if (headerTopLinks) {
@@ -985,15 +995,22 @@
       if (headerTopLinks) {
         headerTopLinks.style.display = 'none';
       }
+      // Подсвечиваем активную страницу даже при ошибке
+      highlightActivePage();
+      // Пробрасываем ошибку дальше, чтобы .catch() мог обработать её
+      throw error;
     }
   }
 
-  // Загружаем данные при загрузке страницы
-  loadData();
-  
   // Проверяем авторизацию и показываем меню
-  // highlightActivePage() вызывается внутри checkAuthAndShowMenu() после обновления меню
-  checkAuthAndShowMenu();
+  // После проверки авторизации загружаем данные (чтобы использовать правильный userId)
+  checkAuthAndShowMenu().then(() => {
+    // Загружаем данные после проверки авторизации
+    loadData();
+  }).catch(() => {
+    // Если проверка авторизации не удалась, все равно загружаем данные
+    loadData();
+  });
 </script>
 </body>
 </html>
