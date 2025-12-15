@@ -372,6 +372,7 @@
     const headerBg = design.headerBg || '#f973b6';
     const cardBg = design.cardBg || '#ffffff';
     const textColor = design.textColor || '#222222';
+    const buttonTextColor = design.buttonTextColor || '#ffffff';
     const pageBg = design.pageBg || '#f7f7fb';
     const pageBgType = design.pageBgType || 'color';
     const pageBgSecondary = design.pageBgSecondary || '#ffffff';
@@ -436,12 +437,12 @@
       }
       .btn-primary {
         background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}) !important;
-        color: white !important;
+        color: ${buttonTextColor} !important;
       }
       .btn-primary:hover {
         background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}) !important;
         filter: brightness(1.1);
-        color: white !important;
+        color: ${buttonTextColor} !important;
       }
       input:focus, select:focus, textarea:focus {
         border-color: ${primaryColor} !important;

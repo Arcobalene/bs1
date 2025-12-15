@@ -136,6 +136,11 @@
             <p class="note">Основной цвет текста</p>
           </div>
           <div>
+            <label for="design-button-text-color">Цвет текста в кнопках</label>
+            <input type="color" id="design-button-text-color" value="#ffffff" />
+            <p class="note">Цвет текста в кнопках (по умолчанию белый)</p>
+          </div>
+          <div>
             <label for="design-page-bg">Фон страницы</label>
             <input type="color" id="design-page-bg" value="#f7f7fb" />
             <p class="note">Цвет фона всей страницы</p>
@@ -281,6 +286,7 @@
     headerBg: '#f973b6',
     cardBg: '#ffffff',
     textColor: '#222222',
+    buttonTextColor: '#ffffff',
     pageBg: '#f7f7fb',
     pageBgType: 'color',
     pageBgSecondary: '#ffffff',
@@ -312,6 +318,7 @@
     document.getElementById('design-header-bg').value = designSettings.headerBg || '#f973b6';
     document.getElementById('design-card-bg').value = designSettings.cardBg || '#ffffff';
     document.getElementById('design-text-color').value = designSettings.textColor || '#222222';
+    document.getElementById('design-button-text-color').value = designSettings.buttonTextColor || '#ffffff';
     document.getElementById('design-page-bg').value = designSettings.pageBg || '#f7f7fb';
     document.getElementById('design-page-bg-type').value = designSettings.pageBgType || 'color';
     document.getElementById('design-page-bg-secondary').value = designSettings.pageBgSecondary || '#ffffff';
@@ -350,6 +357,7 @@
     const headerBg = document.getElementById('design-header-bg').value;
     const cardBg = document.getElementById('design-card-bg').value;
     const textColor = document.getElementById('design-text-color').value;
+    const buttonTextColor = document.getElementById('design-button-text-color').value;
     const headerTitle = document.getElementById('design-header-title').value || 'Beauty Studio';
     const headerDescription = document.getElementById('design-header-description').value || 'Предпросмотр заголовка';
 
@@ -373,6 +381,7 @@
     const previewButton = document.getElementById('preview-button');
     if (previewButton) {
       previewButton.style.background = `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`;
+      previewButton.style.color = buttonTextColor;
     }
   }
 
@@ -434,7 +443,7 @@
   }
 
   // Обновление предпросмотра при изменении цветов
-  ['design-primary-color', 'design-secondary-color', 'design-header-bg', 'design-card-bg', 'design-text-color', 'design-header-title', 'design-header-description', 'design-page-bg', 'design-page-bg-secondary', 'design-page-bg-image-url'].forEach(id => {
+  ['design-primary-color', 'design-secondary-color', 'design-header-bg', 'design-card-bg', 'design-text-color', 'design-button-text-color', 'design-header-title', 'design-header-description', 'design-page-bg', 'design-page-bg-secondary', 'design-page-bg-image-url'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener('input', () => {
@@ -459,6 +468,7 @@
         headerBg: document.getElementById('design-header-bg').value,
         cardBg: document.getElementById('design-card-bg').value,
         textColor: document.getElementById('design-text-color').value,
+        buttonTextColor: document.getElementById('design-button-text-color').value,
         pageBg: document.getElementById('design-page-bg').value,
         pageBgType: document.getElementById('design-page-bg-type').value,
         pageBgSecondary: document.getElementById('design-page-bg-secondary').value,
@@ -519,6 +529,7 @@
         headerBg: '#f973b6',
         cardBg: '#ffffff',
         textColor: '#222222',
+        buttonTextColor: '#ffffff',
         pageBg: '#f7f7fb',
         pageBgType: 'color',
         pageBgSecondary: '#ffffff',
@@ -548,6 +559,7 @@
     const headerBg = design.headerBg || '#f973b6';
     const cardBg = design.cardBg || '#ffffff';
     const textColor = design.textColor || '#222222';
+    const buttonTextColor = design.buttonTextColor || '#ffffff';
     const pageBg = design.pageBg || '#f7f7fb';
     const pageBgType = design.pageBgType || 'color';
     const pageBgSecondary = design.pageBgSecondary || '#ffffff';
@@ -623,12 +635,12 @@
       }
       .btn-primary {
         background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}) !important;
-        color: white !important;
+        color: ${buttonTextColor} !important;
       }
       .btn-primary:hover {
         background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}) !important;
         filter: brightness(1.1);
-        color: white !important;
+        color: ${buttonTextColor} !important;
       }
       .service-item span.price {
         color: ${primaryColor} !important;
