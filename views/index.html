@@ -32,43 +32,91 @@
   <div id="landing-page" style="display: none;">
     <!-- Герой-секция -->
     <div class="landing-hero">
+      <div class="landing-hero-badge">✨ Профессиональное решение для вашего бизнеса</div>
       <h1 class="landing-title">Система онлайн-записи для салонов красоты</h1>
-      <p class="landing-subtitle">Управляйте записями клиентов, расписанием мастеров и услугами в одном месте</p>
+      <p class="landing-subtitle">Управляйте записями клиентов, расписанием мастеров и услугами в одном месте. Экономьте время и увеличивайте количество клиентов.</p>
       <div class="landing-cta">
-        <a href="/register" class="btn-primary" style="font-size: 1.1rem; padding: 14px 28px;">Начать бесплатно</a>
-        <a href="/login" class="btn-secondary" style="font-size: 1.1rem; padding: 14px 28px; margin-left: 12px;">Войти</a>
+        <a href="/register" class="btn-primary landing-cta-primary">Начать бесплатно</a>
+        <a href="/login" class="btn-secondary landing-cta-secondary">Войти</a>
+      </div>
+      <div class="landing-hero-stats">
+        <div class="landing-stat">
+          <div class="landing-stat-number">100%</div>
+          <div class="landing-stat-label">Бесплатно</div>
+        </div>
+        <div class="landing-stat">
+          <div class="landing-stat-number">5 мин</div>
+          <div class="landing-stat-label">Настройка</div>
+        </div>
+        <div class="landing-stat">
+          <div class="landing-stat-number">24/7</div>
+          <div class="landing-stat-label">Доступность</div>
+        </div>
       </div>
     </div>
 
     <!-- Преимущества -->
     <div class="landing-features">
       <div class="landing-feature-card">
-        <div class="landing-feature-icon">📅</div>
+        <div class="landing-feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
         <h3>Онлайн-календарь</h3>
         <p>Удобное расписание с визуализацией занятых и свободных слотов. Клиенты видят доступное время и могут записаться самостоятельно.</p>
       </div>
       <div class="landing-feature-card">
-        <div class="landing-feature-icon">👥</div>
+        <div class="landing-feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
         <h3>Управление мастерами</h3>
         <p>Добавляйте мастеров, назначайте им услуги и отслеживайте их загруженность. Каждый мастер имеет свой календарь.</p>
       </div>
       <div class="landing-feature-card">
-        <div class="landing-feature-icon">💅</div>
+        <div class="landing-feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 7h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
         <h3>Каталог услуг</h3>
         <p>Создавайте услуги с ценами и длительностью. Клиенты видят полный список и могут выбрать нужную услугу при записи.</p>
       </div>
       <div class="landing-feature-card">
-        <div class="landing-feature-icon">📱</div>
+        <div class="landing-feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="6" cy="8" r="1" fill="currentColor"/>
+          </svg>
+        </div>
         <h3>Уведомления</h3>
         <p>Получайте мгновенные уведомления о новых записях. Клиенты получают подтверждение после отправки заявки.</p>
       </div>
       <div class="landing-feature-card">
-        <div class="landing-feature-icon">🎨</div>
+        <div class="landing-feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
         <h3>Кастомизация</h3>
         <p>Настраивайте цвета, логотип и дизайн страницы записи под бренд вашего салона. Создайте уникальный стиль.</p>
       </div>
       <div class="landing-feature-card">
-        <div class="landing-feature-icon">📊</div>
+        <div class="landing-feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <line x1="18" y1="20" x2="18" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="12" y1="20" x2="12" y2="4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="6" y1="20" x2="6" y2="14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
         <h3>База клиентов</h3>
         <p>Ведите учет всех клиентов, их записей и истории посещений. Удобный поиск и фильтрация по различным параметрам.</p>
       </div>
