@@ -166,17 +166,17 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-// Главная страница (форма записи)
+// Главная страница (лендинг)
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'index.html'));
-});
-
-// Страница лендинга
-app.get('/landing', (req, res) => {
   if (req.session.userId) {
     return res.redirect('/admin');
   }
   res.sendFile(path.join(__dirname, 'views', 'landing.html'));
+});
+
+// Страница записи салона
+app.get('/booking', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
 // Страница входа
