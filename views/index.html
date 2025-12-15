@@ -8,10 +8,22 @@
 </head>
 <body>
 <header>
+  <div class="header-top-links" id="header-top-links" style="display: none;">
+    <a href="/users" id="users-link" class="header-top-link" title="Пользователи">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+      </svg>
+    </a>
+    <a href="#" id="logout-link" class="logout-link" title="Выход">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16 17v-3h-5v-4h5V7l5 5-5 5zM14 2a2 2 0 012 2v2h-2V4H5v16h11v-2h2v2a2 2 0 01-2 2H5a2 2 0 01-2-2V4a2 2 0 012-2h9z"/>
+      </svg>
+    </a>
+  </div>
   <h1 id="salon-name-header">Beauty Studio</h1>
   <p id="salon-description">Современный салон красоты в центре города. Запишитесь онлайн за пару кликов.</p>
-  <div class="nav-links">
-    <a href="/login">Вход для владельцев</a>
+  <div class="nav-links" id="nav-links">
+    <a href="/login" id="login-link">Вход для владельцев</a>
   </div>
 </header>
 
@@ -899,8 +911,85 @@
     });
   }
 
+  // Проверка авторизации и отображение меню для владельцев
+  async function checkAuthAndShowMenu() {
+    try {
+      const response = await fetch('/api/user');
+      const result = await response.json();
+      
+      if (result.success && result.user) {
+        const currentUser = result.user;
+        const headerTopLinks = document.getElementById('header-top-links');
+        const navLinks = document.getElementById('nav-links');
+        const loginLink = document.getElementById('login-link');
+        
+        // Показываем верхние ссылки (иконки пользователя и выхода)
+        if (headerTopLinks) {
+          headerTopLinks.style.display = 'block';
+        }
+        
+        // Заменяем меню навигации
+        if (navLinks) {
+          navLinks.innerHTML = `
+            <a href="/" id="salon-page-link">Страница салона</a>
+            <a href="/admin">Админ-панель</a>
+            <a href="/calendar">Календарь</a>
+            <a href="/services">Услуги и мастера</a>
+            <a href="/clients">Клиенты</a>
+          `;
+          
+          // Обновляем ссылку на страницу салона
+          const salonPageLink = document.getElementById('salon-page-link');
+          if (salonPageLink && currentUser.id) {
+            salonPageLink.href = `/?userId=${currentUser.id}`;
+          }
+        }
+        
+        // Показываем ссылку на управление пользователями только для админов
+        const usersLink = document.getElementById('users-link');
+        const isAdmin = currentUser.role === 'admin' || currentUser.username === 'admin';
+        if (usersLink) {
+          if (isAdmin) {
+            usersLink.classList.add('show');
+          } else {
+            usersLink.classList.remove('show');
+          }
+        }
+        
+        // Обработчик выхода
+        const logoutLink = document.getElementById('logout-link');
+        if (logoutLink) {
+          logoutLink.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.reload();
+          });
+        }
+        
+        // Подсвечиваем активную страницу
+        highlightActivePage();
+      } else {
+        // Если не залогинен, скрываем верхние ссылки
+        const headerTopLinks = document.getElementById('header-top-links');
+        if (headerTopLinks) {
+          headerTopLinks.style.display = 'none';
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка проверки авторизации:', error);
+      // В случае ошибки скрываем меню
+      const headerTopLinks = document.getElementById('header-top-links');
+      if (headerTopLinks) {
+        headerTopLinks.style.display = 'none';
+      }
+    }
+  }
+
   // Загружаем данные при загрузке страницы
   loadData();
+  
+  // Проверяем авторизацию и показываем меню
+  checkAuthAndShowMenu();
   
   // Подсвечиваем активную страницу
   highlightActivePage();
