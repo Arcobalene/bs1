@@ -298,20 +298,18 @@ async function setWebhook(webhookUrl) {
   console.log(`🔗 Установка webhook: ${webhookUrl}`);
   
   try {
+    // makeTelegramRequest возвращает result, если ok=true, иначе выбрасывает ошибку
+    // Поэтому если функция не выбросила ошибку, значит webhook установлен успешно
     const result = await makeTelegramRequest(botToken, 'setWebhook', {
       url: webhookUrl
     });
     
-    if (result.ok) {
-      console.log(`✅ Webhook успешно установлен: ${webhookUrl}`);
-      return { success: true, message: 'Webhook установлен' };
-    } else {
-      console.error(`❌ Ошибка установки webhook: ${result.description || 'Неизвестная ошибка'}`);
-      return { success: false, message: result.description || 'Ошибка установки webhook' };
-    }
+    // Если дошли сюда, значит запрос успешен (makeTelegramRequest выбрасывает ошибку при ok=false)
+    console.log(`✅ Webhook успешно установлен: ${webhookUrl}`);
+    return { success: true, message: 'Webhook установлен' };
   } catch (error) {
     console.error(`❌ Ошибка при установке webhook:`, error.message);
-    throw error;
+    return { success: false, message: error.message };
   }
 }
 
