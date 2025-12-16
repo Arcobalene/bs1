@@ -2512,10 +2512,20 @@ app.get('/api/telegram/connect-link', requireAuth, async (req, res) => {
   }
 });
 
+// Тестовый эндпоинт для проверки доступности webhook
+app.get('/api/telegram/webhook', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'Webhook endpoint доступен',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Вебхук для обработки сообщений от Telegram бота (проксирование в микросервис)
 app.post('/api/telegram/webhook', express.json(), async (req, res) => {
   try {
     console.log('📨 Получен webhook запрос от Telegram на основном сервере');
+    console.log('   Headers:', JSON.stringify(req.headers, null, 2));
     console.log('   Body:', JSON.stringify(req.body, null, 2));
     
     const response = await callTelegramBotApi('/api/bot/webhook', {
