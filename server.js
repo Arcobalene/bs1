@@ -2205,6 +2205,64 @@ app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =
   }
 });
 
+// Функция для вызова API микросервиса Telegram бота
+async function callTelegramBotApi(endpoint, options = {}) {
+  const telegramBotUrl = process.env.TELEGRAM_BOT_URL || 'http://telegram-bot:3001';
+  const url = `${telegramBotUrl}${endpoint}`;
+  
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const isHttps = urlObj.protocol === 'https:';
+    const httpModule = isHttps ? https : http;
+    
+    const requestOptions = {
+      hostname: urlObj.hostname,
+      port: urlObj.port || (isHttps ? 443 : 80),
+      path: urlObj.pathname + urlObj.search,
+      method: options.method || 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      timeout: 10000
+    };
+    
+    const req = httpModule.request(requestOptions, (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        try {
+          const jsonData = JSON.parse(data);
+          resolve({ status: res.statusCode, data: jsonData });
+        } catch (error) {
+          resolve({ status: res.statusCode, data: { success: false, message: data } });
+        }
+      });
+    });
+    
+    req.on('error', (error) => {
+      reject(error);
+    });
+    
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Таймаут при обращении к микросервису Telegram бота'));
+    });
+    
+    req.setTimeout(10000);
+    
+    if (options.body) {
+      req.write(JSON.stringify(options.body));
+    }
+    
+    req.end();
+  });
+}
+
 // Функция для отправки сообщения ботом с кнопкой request_contact
 async function sendTelegramMessageWithContactButton(chatId, message) {
   const botToken = await getTelegramBotToken();
