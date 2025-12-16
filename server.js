@@ -2081,9 +2081,18 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
     
     // Проверяем, есть ли токен в БД у текущего пользователя (если он админ)
     let botTokenInDb = false;
+    let botTokenLength = 0;
     if (user.bot_token && user.bot_token.trim()) {
       botTokenInDb = true;
+      botTokenLength = user.bot_token.trim().length;
     }
+    
+    console.log('📋 Получение настроек Telegram:', {
+      userId: req.session.userId,
+      botTokenInDb: botTokenInDb,
+      botTokenLength: botTokenLength,
+      hasBotTokenFromFunction: hasBotToken
+    });
     
     res.json({ 
       success: true, 
@@ -2095,7 +2104,9 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
       },
       telegramId: user.telegram_id || null,
       hasBotToken: hasBotToken,
-      botTokenConfigured: botTokenInDb || hasBotToken
+      botTokenConfigured: botTokenInDb || hasBotToken,
+      botTokenInDb: botTokenInDb,
+      botTokenLength: botTokenLength
     });
   } catch (error) {
     console.error('Ошибка получения настроек Telegram:', error);
@@ -2138,7 +2149,8 @@ app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =
       notifyNewBookings: settings.notifyNewBookings,
       notifyCancellations: settings.notifyCancellations,
       notifyChanges: settings.notifyChanges,
-      hasBotToken: !!botToken
+      botTokenProvided: botToken !== undefined,
+      botTokenValue: botToken ? `[${botToken.length} символов]` : 'не указан'
     });
     
     // Сохраняем настройки в БД через метод users.update
@@ -2151,16 +2163,26 @@ app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =
         // Сохраняем bot token только если он передан (только для админа)
         if (botToken !== undefined) {
           if (botToken && botToken.trim()) {
-            updateData.botToken = botToken.trim();
-            console.log('💾 Сохранение bot token для админа');
+            const trimmedToken = botToken.trim();
+            updateData.botToken = trimmedToken;
+            console.log('💾 Сохранение bot token для админа (длина:', trimmedToken.length, 'символов)');
           } else {
             // Если передан пустой токен, удаляем его
             updateData.botToken = null;
             console.log('💾 Удаление bot token');
           }
+        } else {
+          console.log('ℹ️ botToken не передан в запросе, оставляем текущее значение');
         }
         
         await dbUsers.update(req.session.userId, updateData);
+        
+        // Сбрасываем кэш токена при сохранении нового токена
+        if (botToken !== undefined) {
+          clearBotTokenCache();
+          console.log('🔄 Кэш токена бота сброшен');
+        }
+        
         console.log('✅ Настройки Telegram сохранены для пользователя', req.session.userId);
       } catch (updateError) {
         console.error('❌ Ошибка сохранения настроек Telegram:', updateError);

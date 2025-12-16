@@ -363,6 +363,10 @@ const users = {
       updates.push(`telegram_id = $${paramIndex++}`);
       values.push(userData.telegramId);
     }
+    if (userData.botToken !== undefined) {
+      updates.push(`bot_token = $${paramIndex++}`);
+      values.push(userData.botToken);
+    }
 
     if (updates.length === 0) return;
 

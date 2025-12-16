@@ -1372,9 +1372,13 @@
         enabled: document.getElementById('telegram-enabled').checked,
         notifyNewBookings: document.getElementById('telegram-notify-new-bookings').checked,
         notifyCancellations: document.getElementById('telegram-notify-cancellations').checked,
-        notifyChanges: document.getElementById('telegram-notify-changes').checked,
-        botToken: botToken || undefined // Отправляем только если указан
+        notifyChanges: document.getElementById('telegram-notify-changes').checked
       };
+      
+      // Всегда отправляем botToken (даже если пустой, чтобы можно было удалить)
+      if (botTokenInput) {
+        settings.botToken = botToken;
+      }
       
       try {
         const response = await fetch('/api/telegram/settings', {
