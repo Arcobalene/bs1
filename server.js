@@ -175,23 +175,42 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public', { maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0 }));
 
+// Определяем режим разработки (должно быть до использования)
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
 // Настройка сессий
+// Определяем, используется ли HTTPS
+// ВАЖНО: secure: true только для HTTPS, иначе cookie не установится в браузере
+const isHttps = process.env.HTTPS_ENABLED === 'true';
+const cookieSecure = isHttps; // secure: true только для HTTPS
+
 app.use(session({
   secret: SESSION_SECRET,
   resave: true, // Сохранять сессию при каждом запросе
   saveUninitialized: false, // Не сохранять пустые сессии
   name: 'beauty.studio.sid', // Явное имя cookie
   cookie: { 
-    secure: process.env.NODE_ENV === 'production' && process.env.HTTPS_ENABLED === 'true',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'lax',
-    path: '/'
+    secure: cookieSecure, // true только для HTTPS, иначе cookie не установится
+    httpOnly: true, // Защита от XSS
+    maxAge: 24 * 60 * 60 * 1000, // 24 часа
+    sameSite: 'lax', // Защита от CSRF, но позволяет отправку cookies при переходе по ссылкам
+    path: '/' // Cookie доступна для всех путей
   }
 }));
 
-// Логирование только в режиме разработки
-const isDevelopment = process.env.NODE_ENV !== 'production';
+// Логирование настроек сессии (только в режиме разработки)
+if (isDevelopment) {
+  console.log('🔐 Настройки сессии:', {
+    secure: cookieSecure,
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: '24 часа',
+    name: 'beauty.studio.sid',
+    isHttps: isHttps,
+    NODE_ENV: process.env.NODE_ENV || 'development',
+    HTTPS_ENABLED: process.env.HTTPS_ENABLED || 'не установлено'
+  });
+}
 if (isDevelopment) {
   app.use((req, res, next) => {
     if (req.path.startsWith('/api/login') || req.path.startsWith('/admin')) {
@@ -268,10 +287,23 @@ async function initDemoAccount() {
 
 // Middleware для проверки авторизации
 async function requireAuth(req, res, next) {
+  // Логирование для диагностики (только в режиме разработки)
+  if (isDevelopment && req.path && req.path.startsWith('/api/')) {
+    console.log(`[requireAuth] ${req.method} ${req.path}`, {
+      sessionId: req.sessionID,
+      userId: req.session.userId || 'не установлен',
+      hasCookie: !!req.headers.cookie,
+      cookieHeader: req.headers.cookie ? req.headers.cookie.substring(0, 50) + '...' : 'нет'
+    });
+  }
+  
   if (req.session.userId) {
     try {
       const user = await dbUsers.getById(req.session.userId);
       if (!user) {
+        if (isDevelopment) {
+          console.log(`[requireAuth] Пользователь не найден: userId=${req.session.userId}`);
+        }
         req.session.destroy();
         // Для API запросов всегда возвращаем JSON
         if (req.path && req.path.startsWith('/api/')) {
@@ -280,6 +312,9 @@ async function requireAuth(req, res, next) {
         return res.redirect('/login');
       }
       if (user.is_active === false || user.is_active === 0) {
+        if (isDevelopment) {
+          console.log(`[requireAuth] Аккаунт деактивирован: userId=${req.session.userId}`);
+        }
         req.session.destroy();
         // Для API запросов всегда возвращаем JSON
         if (req.path && req.path.startsWith('/api/')) {
@@ -299,6 +334,9 @@ async function requireAuth(req, res, next) {
   } else {
     // Для API запросов всегда возвращаем JSON
     if (req.path && req.path.startsWith('/api/')) {
+      if (isDevelopment) {
+        console.log(`[requireAuth] Сессия не найдена для ${req.method} ${req.path}`);
+      }
       return res.status(401).json({ success: false, message: 'Требуется авторизация' });
     }
     return res.redirect('/login');
