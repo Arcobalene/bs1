@@ -330,72 +330,78 @@
   <!-- Вкладка: Интеграция Telegram (только для админов) -->
   <div class="main-tab-content" id="telegram-integration-tab" style="display: none;">
     <div class="card">
-      <h2>Интеграция с Telegram ботом</h2>
-      <p class="description">Настройте интеграцию с Telegram ботом для получения уведомлений о новых записях.</p>
+      <h2>Уведомления Telegram</h2>
+      <p class="description">Подключите Telegram для получения уведомлений о новых записях, изменениях и отменах.</p>
+
+      <div id="telegram-status-section" style="margin-bottom: 24px;">
+        <div style="padding: 20px; background: #f3f4f6; border-radius: 8px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <div>
+              <strong style="font-size: 1.1rem;">Статус подключения:</strong>
+              <span id="telegram-status-text" style="margin-left: 8px; font-weight: normal;">Проверка...</span>
+            </div>
+            <div id="telegram-status-badge" style="padding: 6px 16px; border-radius: 16px; font-size: 0.875rem; font-weight: 500; background: #9ca3af; color: #fff;">
+              Загрузка...
+            </div>
+          </div>
+          <div id="telegram-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" class="btn-primary" id="telegram-connect-btn" style="display: none;">Подключить Telegram</button>
+            <button type="button" class="btn-secondary" id="telegram-reconnect-btn" style="display: none;">Переподключить</button>
+            <button type="button" class="btn-secondary" id="telegram-disconnect-btn" style="display: none;">Отключить</button>
+          </div>
+        </div>
+      </div>
 
       <form id="telegram-form">
-        <div>
-          <label for="telegram-bot-token">Токен Telegram бота</label>
-          <input type="text" id="telegram-bot-token" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz" />
-          <p class="note">Получите токен у @BotFather в Telegram. Создайте бота командой /newbot</p>
-        </div>
-
-        <div>
-          <label for="telegram-chat-id">Chat ID для уведомлений</label>
-          <input type="text" id="telegram-chat-id" placeholder="123456789 или @channel_name" />
-          <p class="note">ID чата или канала, куда будут отправляться уведомления. Узнайте у @userinfobot</p>
-        </div>
-
-        <div>
-          <label for="telegram-phone">Номер телефона для проверки</label>
-          <input type="tel" id="telegram-phone" placeholder="+998XX XXX XX XX" />
-          <p class="note">Уведомления будут отправляться только если номер телефона клиента совпадает с этим номером. Оставьте пустым, чтобы отправлять уведомления для всех записей.</p>
-        </div>
-
-        <div>
-          <label>
-            <input type="checkbox" id="telegram-enabled" />
-            Включить уведомления в Telegram
+        <h3 style="margin-bottom: 16px; font-size: 1.1rem;">Настройки уведомлений</h3>
+        
+        <div style="margin-bottom: 16px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="telegram-enabled" style="width: 18px; height: 18px; cursor: pointer;" />
+            <span>Включить уведомления в Telegram</span>
           </label>
-          <p class="note">При включении уведомления будут отправляться при каждой новой записи</p>
+          <p class="note" style="margin-left: 26px; margin-top: 4px;">При включении уведомления будут отправляться при каждой новой записи</p>
         </div>
 
-        <div>
-          <label>
-            <input type="checkbox" id="telegram-notify-new-bookings" />
-            Уведомлять о новых записях
+        <div style="margin-bottom: 16px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="telegram-notify-new-bookings" style="width: 18px; height: 18px; cursor: pointer;" />
+            <span>Уведомлять о новых записях</span>
           </label>
         </div>
 
-        <div>
-          <label>
-            <input type="checkbox" id="telegram-notify-cancellations" />
-            Уведомлять об отменах записей
+        <div style="margin-bottom: 16px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="telegram-notify-cancellations" style="width: 18px; height: 18px; cursor: pointer;" />
+            <span>Уведомлять об отменах записей</span>
           </label>
         </div>
 
-        <div>
-          <label>
-            <input type="checkbox" id="telegram-notify-changes" />
-            Уведомлять об изменениях в записях
+        <div style="margin-bottom: 20px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="telegram-notify-changes" style="width: 18px; height: 18px; cursor: pointer;" />
+            <span>Уведомлять об изменениях в записях</span>
           </label>
         </div>
 
-        <button type="button" class="btn-secondary" id="test-telegram-btn" style="margin-right: 8px;">Тестовая отправка</button>
         <button type="submit" class="btn-primary">Сохранить настройки</button>
-        <div id="telegram-alert" class="alert" style="display: none;"></div>
+        <div id="telegram-alert" class="alert" style="display: none; margin-top: 16px;"></div>
       </form>
 
-      <div style="margin-top: 24px; padding: 16px; background: #f3f4f6; border-radius: 8px;">
-        <h3 style="margin-bottom: 12px; font-size: 1rem;">Инструкция по настройке:</h3>
-        <ol style="margin-left: 20px; line-height: 1.8;">
-          <li>Откройте Telegram и найдите бота <strong>@BotFather</strong></li>
-          <li>Отправьте команду <code>/newbot</code> и следуйте инструкциям</li>
-          <li>Скопируйте полученный токен и вставьте в поле "Токен Telegram бота"</li>
-          <li>Для получения Chat ID найдите бота <strong>@userinfobot</strong> и отправьте ему любое сообщение</li>
-          <li>Скопируйте ваш ID (число) и вставьте в поле "Chat ID для уведомлений"</li>
-          <li>Для каналов: добавьте бота в канал как администратора, затем отправьте сообщение в канал и получите ID через @userinfobot</li>
+      <div style="margin-top: 24px; padding: 20px; background: #f3f4f6; border-radius: 8px;">
+        <h3 style="margin-bottom: 16px; font-size: 1.1rem;">Как подключить Telegram:</h3>
+        <ol style="margin-left: 20px; line-height: 2; color: #374151;">
+          <li>Убедитесь, что в настройках салона (вкладка "Информация о салоне") указан ваш номер телефона</li>
+          <li>Нажмите кнопку "Подключить Telegram" выше</li>
+          <li>Откроется Telegram с ботом - нажмите кнопку "📱 Отправить контакт"</li>
+          <li>Подтвердите отправку вашего номера телефона</li>
+          <li>После успешной привязки вы будете получать уведомления о записях</li>
         </ol>
+        <div style="margin-top: 16px; padding: 12px; background: #fff; border-radius: 6px; border-left: 4px solid #3b82f6;">
+          <p style="margin: 0; color: #1f2937; font-size: 0.875rem;">
+            <strong>Важно:</strong> Номер телефона в Telegram должен совпадать с номером, указанным в настройках салона. Если номер не совпадает, привязка не будет выполнена.
+          </p>
+        </div>
       </div>
     </div>
   </div>
@@ -1299,15 +1305,40 @@
           return;
         }
         const data = await response.json();
-        if (data.success && data.settings) {
-          const settings = data.settings;
-          document.getElementById('telegram-bot-token').value = settings.botToken || '';
-          document.getElementById('telegram-chat-id').value = settings.chatId || '';
-          document.getElementById('telegram-phone').value = settings.phone || '';
-          document.getElementById('telegram-enabled').checked = settings.enabled || false;
-          document.getElementById('telegram-notify-new-bookings').checked = settings.notifyNewBookings || false;
-          document.getElementById('telegram-notify-cancellations').checked = settings.notifyCancellations || false;
-          document.getElementById('telegram-notify-changes').checked = settings.notifyChanges || false;
+        if (data.success) {
+          const settings = data.settings || {};
+          const isConnected = data.telegramId !== null && data.telegramId !== undefined;
+          
+          // Обновляем статус подключения
+          const statusText = document.getElementById('telegram-status-text');
+          const statusBadge = document.getElementById('telegram-status-badge');
+          const connectBtn = document.getElementById('telegram-connect-btn');
+          const reconnectBtn = document.getElementById('telegram-reconnect-btn');
+          const disconnectBtn = document.getElementById('telegram-disconnect-btn');
+          
+          if (isConnected) {
+            statusText.textContent = 'Подключено';
+            statusBadge.textContent = 'Подключено';
+            statusBadge.style.background = '#10b981';
+            statusBadge.style.color = '#fff';
+            connectBtn.style.display = 'none';
+            reconnectBtn.style.display = 'inline-block';
+            disconnectBtn.style.display = 'inline-block';
+          } else {
+            statusText.textContent = 'Не подключено';
+            statusBadge.textContent = 'Не подключено';
+            statusBadge.style.background = '#ef4444';
+            statusBadge.style.color = '#fff';
+            connectBtn.style.display = 'inline-block';
+            reconnectBtn.style.display = 'none';
+            disconnectBtn.style.display = 'none';
+          }
+          
+          // Обновляем чекбоксы настроек
+          document.getElementById('telegram-enabled').checked = settings.enabled !== false;
+          document.getElementById('telegram-notify-new-bookings').checked = settings.notifyNewBookings !== false;
+          document.getElementById('telegram-notify-cancellations').checked = settings.notifyCancellations === true;
+          document.getElementById('telegram-notify-changes').checked = settings.notifyChanges === true;
         }
       }
     } catch (error) {
@@ -1325,9 +1356,6 @@
       alertDiv.style.display = 'none';
       
       const settings = {
-        botToken: document.getElementById('telegram-bot-token').value.trim(),
-        chatId: document.getElementById('telegram-chat-id').value.trim(),
-        phone: document.getElementById('telegram-phone').value.trim(),
         enabled: document.getElementById('telegram-enabled').checked,
         notifyNewBookings: document.getElementById('telegram-notify-new-bookings').checked,
         notifyCancellations: document.getElementById('telegram-notify-cancellations').checked,
@@ -1367,55 +1395,105 @@
     });
   }
 
-  // Тестовая отправка сообщения в Telegram
-  const testTelegramBtn = document.getElementById('test-telegram-btn');
-  if (testTelegramBtn) {
-    testTelegramBtn.addEventListener('click', async () => {
-      const alertDiv = document.getElementById('telegram-alert');
-      alertDiv.style.display = 'none';
-      
-      const botToken = document.getElementById('telegram-bot-token').value.trim();
-      const chatId = document.getElementById('telegram-chat-id').value.trim();
-      
-      if (!botToken || !chatId) {
+  // Кнопка подключения Telegram
+  const telegramConnectBtn = document.getElementById('telegram-connect-btn');
+  if (telegramConnectBtn) {
+    telegramConnectBtn.addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/telegram/connect-link');
+        const data = await response.json();
+        
+        if (data.success && data.botUsername) {
+          // Открываем Telegram бота
+          window.open(`https://t.me/${data.botUsername}?start=connect`, '_blank');
+          const alertDiv = document.getElementById('telegram-alert');
+          alertDiv.className = 'alert info';
+          alertDiv.textContent = 'Откройте Telegram и нажмите кнопку "Отправить контакт" в боте';
+          alertDiv.style.display = 'block';
+        } else {
+          const alertDiv = document.getElementById('telegram-alert');
+          alertDiv.className = 'alert error';
+          alertDiv.textContent = data.message || 'Ошибка получения ссылки на бота';
+          alertDiv.style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Ошибка подключения Telegram:', error);
+        const alertDiv = document.getElementById('telegram-alert');
         alertDiv.className = 'alert error';
-        alertDiv.textContent = 'Заполните токен бота и Chat ID перед тестированием';
+        alertDiv.textContent = 'Ошибка подключения Telegram';
         alertDiv.style.display = 'block';
+      }
+    });
+  }
+
+  // Кнопка переподключения Telegram
+  const telegramReconnectBtn = document.getElementById('telegram-reconnect-btn');
+  if (telegramReconnectBtn) {
+    telegramReconnectBtn.addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/telegram/connect-link');
+        const data = await response.json();
+        
+        if (data.success && data.botUsername) {
+          window.open(`https://t.me/${data.botUsername}?start=connect`, '_blank');
+          const alertDiv = document.getElementById('telegram-alert');
+          alertDiv.className = 'alert info';
+          alertDiv.textContent = 'Откройте Telegram и нажмите кнопку "Отправить контакт" в боте';
+          alertDiv.style.display = 'block';
+        } else {
+          const alertDiv = document.getElementById('telegram-alert');
+          alertDiv.className = 'alert error';
+          alertDiv.textContent = data.message || 'Ошибка получения ссылки на бота';
+          alertDiv.style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Ошибка переподключения Telegram:', error);
+        const alertDiv = document.getElementById('telegram-alert');
+        alertDiv.className = 'alert error';
+        alertDiv.textContent = 'Ошибка переподключения Telegram';
+        alertDiv.style.display = 'block';
+      }
+    });
+  }
+
+  // Кнопка отключения Telegram
+  const telegramDisconnectBtn = document.getElementById('telegram-disconnect-btn');
+  if (telegramDisconnectBtn) {
+    telegramDisconnectBtn.addEventListener('click', async () => {
+      if (!confirm('Вы уверены, что хотите отключить Telegram? Вы перестанете получать уведомления.')) {
         return;
       }
       
       try {
-        const response = await fetch('/api/telegram/test', {
+        const response = await fetch('/api/telegram/unlink', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ botToken, chatId })
+          headers: { 'Content-Type': 'application/json' }
         });
-        
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          const text = await response.text();
-          throw new Error(`Сервер вернул не JSON. Статус: ${response.status}, Ответ: ${text.substring(0, 200)}`);
-        }
         
         const data = await response.json();
         
         if (data.success) {
+          const alertDiv = document.getElementById('telegram-alert');
           alertDiv.className = 'alert success';
-          alertDiv.textContent = 'Тестовое сообщение успешно отправлено! Проверьте Telegram.';
+          alertDiv.textContent = 'Telegram успешно отключен';
           alertDiv.style.display = 'block';
+          loadTelegramSettings(); // Обновляем статус
         } else {
+          const alertDiv = document.getElementById('telegram-alert');
           alertDiv.className = 'alert error';
-          alertDiv.textContent = data.message || 'Ошибка отправки тестового сообщения';
+          alertDiv.textContent = data.message || 'Ошибка отключения Telegram';
           alertDiv.style.display = 'block';
         }
       } catch (error) {
+        console.error('Ошибка отключения Telegram:', error);
+        const alertDiv = document.getElementById('telegram-alert');
         alertDiv.className = 'alert error';
-        alertDiv.textContent = 'Ошибка при отправке тестового сообщения';
+        alertDiv.textContent = 'Ошибка отключения Telegram';
         alertDiv.style.display = 'block';
-        console.error('Ошибка тестовой отправки Telegram:', error);
       }
     });
   }
+
 
   // Загружаем настройки Telegram при загрузке страницы (только для админов)
   loadUserData().then(() => {

@@ -341,6 +341,10 @@ const users = {
         : JSON.stringify(userData.telegramSettings);
       values.push(telegramValue);
     }
+    if (userData.telegramId !== undefined) {
+      updates.push(`telegram_id = $${paramIndex++}`);
+      values.push(userData.telegramId);
+    }
 
     if (updates.length === 0) return;
 
