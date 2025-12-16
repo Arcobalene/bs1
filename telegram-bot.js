@@ -244,6 +244,49 @@ async function getBotInfo() {
   return await makeTelegramRequest(botToken, 'getMe');
 }
 
+// Функция для установки webhook
+async function setWebhook(webhookUrl) {
+  const botToken = await getTelegramBotToken();
+  if (!botToken) {
+    throw new Error('Токен бота не найден');
+  }
+
+  console.log(`🔗 Установка webhook: ${webhookUrl}`);
+  
+  try {
+    const result = await makeTelegramRequest(botToken, 'setWebhook', {
+      url: webhookUrl
+    });
+    
+    if (result.ok) {
+      console.log(`✅ Webhook успешно установлен: ${webhookUrl}`);
+      return { success: true, message: 'Webhook установлен' };
+    } else {
+      console.error(`❌ Ошибка установки webhook: ${result.description || 'Неизвестная ошибка'}`);
+      return { success: false, message: result.description || 'Ошибка установки webhook' };
+    }
+  } catch (error) {
+    console.error(`❌ Ошибка при установке webhook:`, error.message);
+    throw error;
+  }
+}
+
+// Функция для получения информации о текущем webhook
+async function getWebhookInfo() {
+  const botToken = await getTelegramBotToken();
+  if (!botToken) {
+    throw new Error('Токен бота не найден');
+  }
+
+  try {
+    const result = await makeTelegramRequest(botToken, 'getWebhookInfo');
+    return result;
+  } catch (error) {
+    console.error(`❌ Ошибка при получении информации о webhook:`, error.message);
+    throw error;
+  }
+}
+
 // API: Получить информацию о боте
 app.get('/api/bot/info', async (req, res) => {
   try {
@@ -323,12 +366,16 @@ function validateTelegramUpdate(update) {
 // Вебхук для обработки сообщений от Telegram бота
 app.post('/api/bot/webhook', async (req, res) => {
   try {
+    console.log('📨 Получен webhook запрос от Telegram');
+    
     const botToken = await getTelegramBotToken();
     if (!botToken) {
+      console.error('❌ Токен бота не найден');
       return res.status(503).json({ success: false, message: 'Telegram бот не настроен' });
     }
 
     const update = req.body;
+    console.log('📋 Update от Telegram:', JSON.stringify(update, null, 2));
     
     // Валидация структуры update
     const updateValidation = validateTelegramUpdate(update);
@@ -343,35 +390,48 @@ app.post('/api/bot/webhook', async (req, res) => {
       const telegramId = from.id;
       const text = update.message.text;
       
+      console.log(`📝 Обработка команды /start: telegramId=${telegramId}, text="${text}"`);
+      
       // Валидация telegramId
       const telegramIdValidation = validateTelegramId(telegramId);
       if (!telegramIdValidation.valid) {
-        console.error('Некорректный telegramId в команде /start:', telegramId);
+        console.error('❌ Некорректный telegramId в команде /start:', telegramId);
+        try {
+          await sendTelegramMessage(botToken, telegramId, '❌ Ошибка: Некорректный Telegram ID.');
+        } catch (error) {
+          console.error('Ошибка отправки сообщения об ошибке:', error.message);
+        }
         return res.status(400).json({ success: false, message: 'Некорректный идентификатор пользователя' });
       }
       
       // Если команда /start connect, отправляем сообщение с кнопкой запроса контакта
       if (text.includes('connect')) {
+        console.log(`🔗 Обработка команды /start connect для telegramId=${telegramIdValidation.id}`);
         try {
           await sendTelegramMessageWithContactButton(telegramIdValidation.id, 
             '👋 Привет! Для подключения уведомлений о записях в салоне, пожалуйста, отправьте ваш контакт.\n\n' +
             '📱 Нажмите кнопку ниже, чтобы отправить ваш номер телефона.\n\n' +
             '⚠️ Важно: номер телефона должен совпадать с номером, указанным в настройках вашего салона.');
+          console.log(`✅ Запрос контакта отправлен на telegramId=${telegramIdValidation.id}`);
           return res.json({ success: true, message: 'Запрос контакта отправлен' });
         } catch (error) {
-          console.error('Ошибка отправки сообщения с кнопкой контакта:', error.message);
+          console.error('❌ Ошибка отправки сообщения с кнопкой контакта:', error.message);
+          console.error('  Stack:', error.stack);
           return res.status(500).json({ success: false, message: 'Ошибка отправки сообщения' });
         }
       }
       
       // Обычная команда /start
+      console.log(`👋 Обработка обычной команды /start для telegramId=${telegramIdValidation.id}`);
       try {
         await sendTelegramMessage(botToken, telegramIdValidation.id, 
           '👋 Привет! Я бот для уведомлений о записях в салоне.\n\n' +
           'Для подключения уведомлений перейдите в настройки салона и нажмите "Подключить Telegram".');
+        console.log(`✅ Приветствие отправлено на telegramId=${telegramIdValidation.id}`);
         return res.json({ success: true, message: 'Приветствие отправлено' });
       } catch (error) {
-        console.error('Ошибка отправки приветствия:', error.message);
+        console.error('❌ Ошибка отправки приветствия:', error.message);
+        console.error('  Stack:', error.stack);
         return res.status(500).json({ success: false, message: 'Ошибка отправки сообщения' });
       }
     }
@@ -554,10 +614,52 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, message: 'Внутренняя ошибка сервера' });
 });
 
+// Инициализация webhook при запуске
+async function initializeWebhook() {
+  try {
+    const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
+    if (!webhookUrl) {
+      console.warn('⚠️  TELEGRAM_WEBHOOK_URL не установлен. Webhook не будет установлен автоматически.');
+      console.warn('   Установите переменную окружения TELEGRAM_WEBHOOK_URL для автоматической установки webhook.');
+      console.warn('   Пример: https://yourdomain.com/api/telegram/webhook');
+      
+      // Показываем текущий статус webhook
+      try {
+        const webhookInfo = await getWebhookInfo();
+        if (webhookInfo.url) {
+          console.log(`ℹ️  Текущий webhook: ${webhookInfo.url}`);
+        } else {
+          console.log('ℹ️  Webhook не установлен. Используйте setWebhook для установки.');
+        }
+      } catch (error) {
+        console.error('❌ Не удалось получить информацию о webhook:', error.message);
+      }
+      return;
+    }
+
+    console.log(`🔗 Попытка установки webhook: ${webhookUrl}`);
+    const result = await setWebhook(webhookUrl);
+    if (result.success) {
+      console.log('✅ Webhook успешно установлен');
+    } else {
+      console.error(`❌ Не удалось установить webhook: ${result.message}`);
+    }
+  } catch (error) {
+    console.error('❌ Ошибка инициализации webhook:', error.message);
+    console.error('   Убедитесь, что токен бота настроен и URL webhook доступен извне.');
+  }
+}
+
 // Запуск сервера
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🤖 Telegram Bot Service запущен на порту ${PORT}`);
   console.log(`📡 Ожидание webhook запросов от Telegram...`);
+  
+  // Инициализируем webhook после запуска сервера
+  // Даем серверу немного времени на запуск
+  setTimeout(async () => {
+    await initializeWebhook();
+  }, 2000);
 });
 
 // Graceful shutdown
