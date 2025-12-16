@@ -66,10 +66,14 @@ async function getTelegramBotToken() {
     return cachedBotToken;
   }
   
+  // Сбрасываем кэш
+  cachedBotToken = null;
+  
   // Сначала проверяем переменные окружения
   if (TELEGRAM_BOT_TOKEN) {
     cachedBotToken = TELEGRAM_BOT_TOKEN;
     tokenCacheTime = now;
+    console.log('📝 Используется токен из переменных окружения');
   }
   
   try {
@@ -80,18 +84,27 @@ async function getTelegramBotToken() {
       // Токен из БД имеет приоритет
       cachedBotToken = admin.bot_token.trim();
       tokenCacheTime = now;
+      console.log(`📝 Используется токен из БД (админ: ${admin.username})`);
       return cachedBotToken;
+    } else {
+      console.log('ℹ️ Токен бота не найден в БД у админа');
     }
   } catch (error) {
-    console.error('Ошибка получения токена из БД:', error);
+    console.error('❌ Ошибка получения токена из БД:', error);
     // Если ошибка при обращении к БД, используем токен из env (если есть)
     if (TELEGRAM_BOT_TOKEN) {
+      console.log('📝 Используется токен из переменных окружения (fallback)');
       return TELEGRAM_BOT_TOKEN;
     }
   }
   
   // Возвращаем токен из переменных окружения или null
-  return cachedBotToken;
+  if (cachedBotToken) {
+    return cachedBotToken;
+  }
+  
+  console.log('⚠️ Токен бота не найден ни в БД, ни в переменных окружения');
+  return null;
 }
 
 // Функция для сброса кэша токена (вызывается при сохранении нового токена)
@@ -2291,11 +2304,13 @@ async function getBotInfo() {
 // API: Получить ссылку на бота для подключения
 app.get('/api/telegram/connect-link', requireAuth, async (req, res) => {
   try {
+    console.log('🔗 Запрос на получение ссылки для подключения Telegram бота');
     let botToken;
     try {
       botToken = await getTelegramBotToken();
+      console.log(`📝 Токен бота получен: ${botToken ? 'найден' : 'не найден'}`);
     } catch (error) {
-      console.error('Ошибка получения токена бота:', error);
+      console.error('❌ Ошибка получения токена бота:', error);
       return res.status(503).json({ 
         success: false, 
         message: 'Ошибка получения токена бота. Проверьте настройки.' 
@@ -2303,9 +2318,10 @@ app.get('/api/telegram/connect-link', requireAuth, async (req, res) => {
     }
     
     if (!botToken) {
+      console.log('⚠️ Токен бота не настроен');
       return res.status(503).json({ 
         success: false, 
-        message: 'Telegram бот не настроен. Укажите токен бота в настройках Telegram или установите переменную окружения TELEGRAM_BOT_TOKEN.' 
+        message: 'Telegram бот не настроен. Укажите токен бота в настройках Telegram (вкладка "Интеграция Telegram") или установите переменную окружения TELEGRAM_BOT_TOKEN.' 
       });
     }
     

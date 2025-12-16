@@ -1413,6 +1413,9 @@
   const telegramConnectBtn = document.getElementById('telegram-connect-btn');
   if (telegramConnectBtn) {
     telegramConnectBtn.addEventListener('click', async () => {
+      const alertDiv = document.getElementById('telegram-alert');
+      alertDiv.style.display = 'none';
+      
       try {
         const response = await fetch('/api/telegram/connect-link');
         const data = await response.json();
@@ -1420,21 +1423,23 @@
         if (data.success && data.botUsername) {
           // Открываем Telegram бота
           window.open(`https://t.me/${data.botUsername}?start=connect`, '_blank');
-          const alertDiv = document.getElementById('telegram-alert');
           alertDiv.className = 'alert info';
-          alertDiv.textContent = 'Откройте Telegram и нажмите кнопку "Отправить контакт" в боте';
+          alertDiv.textContent = 'Откройте Telegram и нажмите кнопку "📱 Отправить контакт" в боте';
           alertDiv.style.display = 'block';
         } else {
-          const alertDiv = document.getElementById('telegram-alert');
           alertDiv.className = 'alert error';
           alertDiv.textContent = data.message || 'Ошибка получения ссылки на бота';
           alertDiv.style.display = 'block';
+          
+          // Если токен не настроен, показываем подсказку
+          if (response.status === 503 && data.message && data.message.includes('не настроен')) {
+            alertDiv.innerHTML = data.message + '<br><br><strong>Как настроить:</strong><br>1. Перейдите в настройки Telegram (вкладка выше)<br>2. Введите токен бота в поле "Токен Telegram бота"<br>3. Нажмите "Сохранить настройки"<br>4. Токен можно получить у @BotFather в Telegram';
+          }
         }
       } catch (error) {
         console.error('Ошибка подключения Telegram:', error);
-        const alertDiv = document.getElementById('telegram-alert');
         alertDiv.className = 'alert error';
-        alertDiv.textContent = 'Ошибка подключения Telegram';
+        alertDiv.textContent = 'Ошибка подключения Telegram. Проверьте соединение с сервером.';
         alertDiv.style.display = 'block';
       }
     });
