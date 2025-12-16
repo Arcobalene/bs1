@@ -437,11 +437,11 @@ app.post('/api/bot/webhook', async (req, res) => {
       return res.status(400).json({ success: false, message: updateValidation.message });
     }
     
-    // Обрабатываем команду /start connect
+    // Обрабатываем команду /start или /start_connect
     if (update.message && update.message.text && update.message.text.startsWith('/start')) {
       const from = update.message.from;
       const telegramId = from.id;
-      const text = update.message.text;
+      const text = update.message.text.trim();
       
       console.log(`📝 Обработка команды /start: telegramId=${telegramId}, text="${text}"`);
       
@@ -457,9 +457,9 @@ app.post('/api/bot/webhook', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Некорректный идентификатор пользователя' });
       }
       
-      // Если команда /start connect, отправляем сообщение с кнопкой запроса контакта
-      if (text.includes('connect')) {
-        console.log(`🔗 Обработка команды /start connect для telegramId=${telegramIdValidation.id}`);
+      // Если команда /start_connect, отправляем сообщение с кнопкой запроса контакта
+      if (text === '/start_connect' || text.startsWith('/start_connect ')) {
+        console.log(`🔗 Обработка команды /start_connect для telegramId=${telegramIdValidation.id}`);
         try {
           const result = await sendTelegramMessageWithContactButton(telegramIdValidation.id, 
             '👋 Привет! Для подключения уведомлений о записях в салоне, пожалуйста, отправьте ваш контакт.\n\n' +

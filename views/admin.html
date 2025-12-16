@@ -1473,7 +1473,7 @@
         
         if (data.success && data.botUsername) {
           // Открываем Telegram бота
-          window.open(`https://t.me/${data.botUsername}?start=connect`, '_blank');
+          window.open(`https://t.me/${data.botUsername}?start=start_connect`, '_blank');
           alertDiv.className = 'alert info';
           alertDiv.textContent = 'Откройте Telegram и нажмите кнопку "📱 Отправить контакт" в боте';
           alertDiv.style.display = 'block';
@@ -1507,7 +1507,7 @@
         const data = await response.json();
         
         if (data.success && data.botUsername) {
-          window.open(`https://t.me/${data.botUsername}?start=connect`, '_blank');
+          window.open(`https://t.me/${data.botUsername}?start=start_connect`, '_blank');
           const alertDiv = document.getElementById('telegram-alert');
           alertDiv.className = 'alert info';
           alertDiv.textContent = 'Откройте Telegram и нажмите кнопку "Отправить контакт" в боте';
