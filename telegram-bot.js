@@ -457,8 +457,9 @@ app.post('/api/bot/webhook', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Некорректный идентификатор пользователя' });
       }
       
-      // Если команда /start_connect, отправляем сообщение с кнопкой запроса контакта
-      if (text === '/start_connect' || text.startsWith('/start_connect ')) {
+      // Если команда /start_connect или /start start_connect, отправляем сообщение с кнопкой запроса контакта
+      // Telegram отправляет параметры после /start как часть текста: /start start_connect
+      if (text === '/start_connect' || text.startsWith('/start_connect ') || text === '/start start_connect' || text.startsWith('/start start_connect ')) {
         console.log(`🔗 Обработка команды /start_connect для telegramId=${telegramIdValidation.id}`);
         try {
           const result = await sendTelegramMessageWithContactButton(telegramIdValidation.id, 
