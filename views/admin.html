@@ -353,6 +353,16 @@
       </div>
 
       <form id="telegram-form">
+        <h3 style="margin-bottom: 16px; font-size: 1.1rem;">Настройки бота</h3>
+        
+        <div style="margin-bottom: 20px;">
+          <label for="telegram-bot-token">Токен Telegram бота</label>
+          <input type="password" id="telegram-bot-token" placeholder="Введите токен бота (например: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz)" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-family: monospace;" />
+          <p class="note">Токен можно получить у @BotFather в Telegram. Если не указан, будет использоваться токен из переменных окружения.</p>
+        </div>
+
+        <div class="divider" style="margin: 24px 0;"></div>
+        
         <h3 style="margin-bottom: 16px; font-size: 1.1rem;">Настройки уведомлений</h3>
         
         <div style="margin-bottom: 16px;">
@@ -1355,11 +1365,15 @@
       const alertDiv = document.getElementById('telegram-alert');
       alertDiv.style.display = 'none';
       
+      const botTokenInput = document.getElementById('telegram-bot-token');
+      const botToken = botTokenInput ? botTokenInput.value.trim() : '';
+      
       const settings = {
         enabled: document.getElementById('telegram-enabled').checked,
         notifyNewBookings: document.getElementById('telegram-notify-new-bookings').checked,
         notifyCancellations: document.getElementById('telegram-notify-cancellations').checked,
-        notifyChanges: document.getElementById('telegram-notify-changes').checked
+        notifyChanges: document.getElementById('telegram-notify-changes').checked,
+        botToken: botToken || undefined // Отправляем только если указан
       };
       
       try {
