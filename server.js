@@ -1400,8 +1400,12 @@ app.post('/api/bookings', async (req, res) => {
       });
     }
 
+    // ownerId - это ID владельца салона, которому принадлежит страница бронирования /booking?userId=<ownerId>
+    const ownerId = idValidation.id;
+    
+    // Создаем запись, привязывая её к владельцу салона через user_id
     const bookingId = await bookings.create({
-      userId: idValidation.id,
+      userId: ownerId,
       name: sanitizeString(name, 255),
       phone: phone.trim(),
       service: sanitizeString(service, 255),
@@ -1412,10 +1416,9 @@ app.post('/api/bookings', async (req, res) => {
       comment: comment ? sanitizeString(comment, 1000) : ''
     });
 
-    // Отправляем уведомление владельцу салона в Telegram
+    // Отправляем уведомление ТОЛЬКО владельцу салона, которому принадлежит эта запись
     try {
-      console.log(`📨 Попытка отправить Telegram уведомление владельцу салона (userId=${idValidation.id})`);
-      await sendTelegramNotificationToOwner(idValidation.id, {
+      await sendTelegramNotificationToOwner(ownerId, {
         name: name.trim(),
         phone: phone.trim(),
         service: service.trim(),
@@ -1427,7 +1430,6 @@ app.post('/api/bookings', async (req, res) => {
       }, 'new');
     } catch (telegramError) {
       console.error('❌ Ошибка отправки уведомления в Telegram:', telegramError);
-      console.error('  Stack:', telegramError.stack);
     }
 
     res.status(201).json({ success: true, booking: { id: bookingId } });
@@ -1555,9 +1557,11 @@ app.put('/api/bookings/:id', requireAuth, async (req, res) => {
     
     await bookings.update(bookingId, updateData);
 
-    // Отправляем уведомление владельцу салона об изменении записи
+    // Отправляем уведомление ТОЛЬКО владельцу салона, которому принадлежит эта запись
+    // existingBooking.user_id - это ownerId владельца салона
+    const ownerId = existingBooking.user_id;
     try {
-      await sendTelegramNotificationToOwner(existingBooking.user_id, {
+      await sendTelegramNotificationToOwner(ownerId, {
         name: updateData.name || existingBooking.name,
         phone: updateData.phone || existingBooking.phone,
         service: updateData.service || existingBooking.service,
@@ -1597,13 +1601,14 @@ app.delete('/api/bookings/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Нет доступа к этой записи' });
     }
 
-    const salonOwnerId = existingBooking.user_id;
+    // existingBooking.user_id - это ownerId владельца салона
+    const ownerId = existingBooking.user_id;
 
     await bookings.delete(bookingId);
 
-    // Отправляем уведомление владельцу салона об отмене записи
+    // Отправляем уведомление ТОЛЬКО владельцу салона, которому принадлежит эта запись
     try {
-      await sendTelegramNotificationToOwner(salonOwnerId, {
+      await sendTelegramNotificationToOwner(ownerId, {
         name: existingBooking.name,
         phone: existingBooking.phone,
         service: existingBooking.service,
@@ -1833,13 +1838,20 @@ function phoneMatches(phone1, phone2) {
   return normalized1 === normalized2;
 }
 
-// Функция для отправки уведомления в Telegram при создании/изменении записи
-// Отправка уведомления владельцу салона через telegram_id
+// Отправка уведомления в Telegram владельцу салона
+// salonOwnerId - ID владельца салона (ownerId), которому принадлежит запись
+// Уведомление отправляется ТОЛЬКО на telegram_id этого владельца
+// Изоляция гарантируется: каждый владелец получает уведомления только о своих записях
+// booking.user_id всегда равен salonOwnerId, что гарантирует правильную привязку
 async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType) {
   try {
+    if (!salonOwnerId || typeof salonOwnerId !== 'number') {
+      console.error('❌ Некорректный salonOwnerId:', salonOwnerId);
+      return;
+    }
+    
     console.log(`🔔 Отправка Telegram уведомления владельцу салона: salonOwnerId=${salonOwnerId}, eventType=${eventType}`);
     
-    // Проверяем наличие глобального токена бота
     if (!TELEGRAM_BOT_TOKEN) {
       console.log('ℹ️ Токен Telegram бота не настроен (TELEGRAM_BOT_TOKEN не установлен)');
       return;
@@ -1847,13 +1859,12 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
     
     const salonOwner = await dbUsers.getById(salonOwnerId);
     if (!salonOwner) {
-      console.log('❌ Владелец салона не найден');
+      console.log(`❌ Владелец салона не найден: salonOwnerId=${salonOwnerId}`);
       return;
     }
 
-    // Проверяем наличие telegram_id
     if (!salonOwner.telegram_id) {
-      console.log('ℹ️ У владельца салона не привязан Telegram (telegram_id отсутствует)');
+      console.log(`ℹ️ У владельца салона не привязан Telegram: salonOwnerId=${salonOwnerId}`);
       return;
     }
 
@@ -1922,10 +1933,11 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
       message += `\n💬 <b>Комментарий:</b> ${escapeHtml(booking.comment)}`;
     }
 
-    // Отправляем сообщение на telegram_id владельца используя глобальный токен
-    console.log(`📤 Отправка сообщения в Telegram на telegram_id=${salonOwner.telegram_id}...`);
+    // Отправляем сообщение ТОЛЬКО на telegram_id владельца салона, которому принадлежит запись
+    // Используем глобальный токен бота, telegram_id берется из записи владельца
+    console.log(`📤 Отправка сообщения в Telegram на telegram_id=${salonOwner.telegram_id} для владельца salonOwnerId=${salonOwnerId}...`);
     await sendTelegramMessage(TELEGRAM_BOT_TOKEN, salonOwner.telegram_id, message);
-    console.log(`✅ Уведомление отправлено владельцу салона (telegram_id=${salonOwner.telegram_id})`);
+    console.log(`✅ Уведомление отправлено владельцу салона (salonOwnerId=${salonOwnerId}, telegram_id=${salonOwner.telegram_id})`);
   } catch (error) {
     console.error('❌ Ошибка отправки уведомления владельцу салона:', error);
     console.error('  Stack:', error.stack);
@@ -2283,32 +2295,33 @@ app.post('/api/telegram/webhook', express.json(), async (req, res) => {
       // Нормализуем номер телефона в E.164
       const normalizedPhone = normalizeToE164(phone);
       
-      // Ищем пользователя по номеру телефона
-      const user = await dbUsers.getByPhone(normalizedPhone);
-      if (!user) {
+      // Ищем владельца салона по номеру телефона
+      const owner = await dbUsers.getByPhone(normalizedPhone);
+      if (!owner) {
         await sendTelegramMessage(TELEGRAM_BOT_TOKEN, telegramId, 
-          `❌ Пользователь с номером ${normalizedPhone} не найден.\n\n` +
+          `❌ Владелец салона с номером ${normalizedPhone} не найден.\n\n` +
           'Убедитесь, что номер телефона указан в настройках салона (вкладка "Информация о салоне").');
-        return res.json({ success: false, message: 'Пользователь не найден' });
+        return res.json({ success: false, message: 'Владелец салона не найден' });
       }
 
-      // Проверяем, что telegram_id еще не занят другим пользователем
-      const existingUser = await dbUsers.getByTelegramId(telegramId);
-      if (existingUser && existingUser.id !== user.id) {
+      // Проверяем, что telegram_id еще не занят другим владельцем
+      const existingOwner = await dbUsers.getByTelegramId(telegramId);
+      if (existingOwner && existingOwner.id !== owner.id) {
         await sendTelegramMessage(TELEGRAM_BOT_TOKEN, telegramId, 
-          '❌ Этот Telegram аккаунт уже привязан к другому пользователю.');
+          '❌ Этот Telegram аккаунт уже привязан к другому владельцу салона.');
         return res.json({ success: false, message: 'Telegram аккаунт уже привязан' });
       }
 
-      // Обновляем telegram_id
-      await dbUsers.update(user.id, { telegramId: telegramId });
+      // Сохраняем telegram_id на запись владельца салона
+      await dbUsers.update(owner.id, { telegramId: telegramId });
       
-      console.log(`✅ Telegram аккаунт привязан: userId=${user.id}, telegramId=${telegramId}, phone=${normalizedPhone}`);
+      console.log(`✅ Telegram аккаунт привязан к владельцу салона: ownerId=${owner.id}, telegramId=${telegramId}, phone=${normalizedPhone}`);
       
-      // Отправляем подтверждение пользователю
+      // Отправляем подтверждение владельцу
       await sendTelegramMessage(TELEGRAM_BOT_TOKEN, telegramId, 
         `✅ Telegram успешно подключен!\n\n` +
-        `Вы будете получать уведомления о новых записях в салоне "${user.salon_name || 'Beauty Studio'}".\n\n` +
+        `Вы будете получать уведомления о записях в салоне "${owner.salon_name || 'Beauty Studio'}".\n\n` +
+        `Уведомления будут приходить только для записей на странице: /booking?userId=${owner.id}\n\n` +
         `Вы можете настроить типы уведомлений в панели администратора.`);
       
       return res.json({ success: true, message: 'Telegram аккаунт привязан' });
