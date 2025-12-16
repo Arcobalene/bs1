@@ -124,6 +124,10 @@ function makeTelegramRequest(botToken, method, params = {}) {
     const url = new URL(`${TELEGRAM_API_URL}/bot${botToken}/${method}`);
     const postData = JSON.stringify(params);
     
+    console.log(`🌐 Запрос к Telegram API: ${method}`);
+    console.log(`   URL: ${url.hostname}${url.pathname}`);
+    console.log(`   Размер данных: ${Buffer.byteLength(postData)} байт`);
+    
     const options = {
       hostname: url.hostname,
       port: url.port || 443,
@@ -138,37 +142,53 @@ function makeTelegramRequest(botToken, method, params = {}) {
     
     const req = https.request(options, (res) => {
       let data = '';
-      
+
       res.on('data', (chunk) => {
         data += chunk;
       });
-      
+
       res.on('end', () => {
         try {
           const jsonData = JSON.parse(data);
           
+          console.log(`📥 Ответ от Telegram API (${method}):`, {
+            statusCode: res.statusCode,
+            ok: jsonData.ok,
+            description: jsonData.description || 'нет',
+            error_code: jsonData.error_code || 'нет'
+          });
+          
           if (res.statusCode !== 200) {
-            reject(new Error(`HTTP ${res.statusCode}: ${jsonData.description || 'Ошибка Telegram API'}`));
+            const errorMsg = `HTTP ${res.statusCode}: ${jsonData.description || 'Ошибка Telegram API'}`;
+            console.error(`❌ Ошибка Telegram API: ${errorMsg}`);
+            reject(new Error(errorMsg));
             return;
           }
           
           if (!jsonData.ok) {
-            reject(new Error(jsonData.description || 'Ошибка Telegram API'));
+            const errorMsg = jsonData.description || 'Ошибка Telegram API';
+            console.error(`❌ Telegram API вернул ошибку: ${errorMsg} (код: ${jsonData.error_code || 'неизвестен'})`);
+            reject(new Error(errorMsg));
             return;
           }
           
+          console.log(`✅ Telegram API успешно обработал запрос ${method}`);
           resolve(jsonData.result);
         } catch (error) {
+          console.error(`❌ Ошибка парсинга ответа от Telegram API:`, error.message);
+          console.error(`   Ответ сервера:`, data.substring(0, 500));
           reject(new Error('Ошибка парсинга ответа от Telegram API: ' + error.message));
         }
       });
     });
     
     req.on('error', (error) => {
+      console.error(`❌ Ошибка соединения с Telegram API:`, error.message);
       reject(new Error('Ошибка соединения с Telegram API: ' + error.message));
     });
     
     req.on('timeout', () => {
+      console.error(`❌ Таймаут при обращении к Telegram API`);
       req.destroy();
       reject(new Error('Таймаут при обращении к Telegram API'));
     });
@@ -202,24 +222,31 @@ async function sendTelegramMessage(botToken, chatId, message) {
 
 // Функция для отправки сообщения с кнопкой запроса контакта
 async function sendTelegramMessageWithContactButton(chatId, message) {
+  console.log(`📤 Отправка сообщения с кнопкой контакта: chatId=${chatId}`);
+  
   const botToken = await getTelegramBotToken();
   if (!botToken) {
+    console.error('❌ Токен Telegram бота не настроен');
     throw new Error('Токен Telegram бота не настроен');
   }
+
+  console.log(`✅ Токен бота получен (длина: ${botToken.length} символов)`);
 
   // Валидация chatId
   const chatIdValidation = validateTelegramId(chatId);
   if (!chatIdValidation.valid) {
+    console.error(`❌ Некорректный chatId: ${chatId}`);
     throw new Error(chatIdValidation.message);
   }
 
   // Валидация сообщения
   const messageValidation = validateMessage(message);
   if (!messageValidation.valid) {
+    console.error(`❌ Некорректное сообщение: ${messageValidation.message}`);
     throw new Error(messageValidation.message);
   }
 
-  return await makeTelegramRequest(botToken, 'sendMessage', {
+  const requestData = {
     chat_id: chatIdValidation.id,
     text: message,
     parse_mode: 'HTML',
@@ -228,10 +255,27 @@ async function sendTelegramMessageWithContactButton(chatId, message) {
         text: '📱 Отправить контакт',
         request_contact: true
       }]],
-      resize_keyboard: true,
-      one_time_keyboard: true
+      one_time_keyboard: true,
+      resize_keyboard: true
     }
-  });
+  };
+
+  console.log(`📋 Данные запроса к Telegram API:`, JSON.stringify({
+    chat_id: requestData.chat_id,
+    text_length: requestData.text.length,
+    has_reply_markup: !!requestData.reply_markup,
+    reply_markup_type: requestData.reply_markup ? 'keyboard' : 'нет'
+  }, null, 2));
+
+  try {
+    const result = await makeTelegramRequest(botToken, 'sendMessage', requestData);
+    console.log(`✅ Сообщение с кнопкой контакта успешно отправлено`);
+    return result;
+  } catch (error) {
+    console.error(`❌ Ошибка при отправке сообщения с кнопкой контакта:`, error.message);
+    console.error(`  Stack:`, error.stack);
+    throw error;
+  }
 }
 
 // Функция для получения информации о боте
@@ -365,8 +409,17 @@ function validateTelegramUpdate(update) {
 
 // Вебхук для обработки сообщений от Telegram бота
 app.post('/api/bot/webhook', async (req, res) => {
+  // Устанавливаем таймаут для ответа (Telegram ожидает ответ в течение 60 секунд)
+  res.setTimeout(50000, () => {
+    console.error('❌ Таймаут ответа webhook');
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Таймаут обработки' });
+    }
+  });
+
   try {
     console.log('📨 Получен webhook запрос от Telegram');
+    console.log('   Headers:', JSON.stringify(req.headers, null, 2));
     
     const botToken = await getTelegramBotToken();
     if (!botToken) {
@@ -374,13 +427,15 @@ app.post('/api/bot/webhook', async (req, res) => {
       return res.status(503).json({ success: false, message: 'Telegram бот не настроен' });
     }
 
+    console.log(`✅ Токен бота получен (длина: ${botToken.length} символов)`);
+
     const update = req.body;
     console.log('📋 Update от Telegram:', JSON.stringify(update, null, 2));
     
     // Валидация структуры update
     const updateValidation = validateTelegramUpdate(update);
     if (!updateValidation.valid) {
-      console.error('Некорректный update:', updateValidation.message);
+      console.error('❌ Некорректный update:', updateValidation.message);
       return res.status(400).json({ success: false, message: updateValidation.message });
     }
     
@@ -408,16 +463,20 @@ app.post('/api/bot/webhook', async (req, res) => {
       if (text.includes('connect')) {
         console.log(`🔗 Обработка команды /start connect для telegramId=${telegramIdValidation.id}`);
         try {
-          await sendTelegramMessageWithContactButton(telegramIdValidation.id, 
+          const result = await sendTelegramMessageWithContactButton(telegramIdValidation.id, 
             '👋 Привет! Для подключения уведомлений о записях в салоне, пожалуйста, отправьте ваш контакт.\n\n' +
             '📱 Нажмите кнопку ниже, чтобы отправить ваш номер телефона.\n\n' +
             '⚠️ Важно: номер телефона должен совпадать с номером, указанным в настройках вашего салона.');
-          console.log(`✅ Запрос контакта отправлен на telegramId=${telegramIdValidation.id}`);
-          return res.json({ success: true, message: 'Запрос контакта отправлен' });
+          console.log(`✅ Запрос контакта отправлен на telegramId=${telegramIdValidation.id}, message_id=${result.message_id || 'неизвестен'}`);
+          // Отправляем ответ webhook'у ДО завершения обработки
+          res.json({ success: true, message: 'Запрос контакта отправлен' });
+          return;
         } catch (error) {
           console.error('❌ Ошибка отправки сообщения с кнопкой контакта:', error.message);
           console.error('  Stack:', error.stack);
-          return res.status(500).json({ success: false, message: 'Ошибка отправки сообщения' });
+          // Отправляем ответ об ошибке
+          res.status(500).json({ success: false, message: 'Ошибка отправки сообщения: ' + error.message });
+          return;
         }
       }
       
@@ -589,11 +648,17 @@ app.post('/api/bot/webhook', async (req, res) => {
     }
     
     // Игнорируем другие типы сообщений
+    console.log('ℹ️  Сообщение не обработано (неизвестный тип), возвращаем успешный ответ');
     return res.json({ success: true, message: 'Игнорируется' });
   } catch (error) {
-    console.error('Ошибка обработки вебхука Telegram:', error.message);
-    console.error('Stack:', error.stack);
-    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    console.error('❌ Ошибка обработки вебхука Telegram:', error.message);
+    console.error('  Stack:', error.stack);
+    // Всегда возвращаем ответ, даже при ошибке
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Ошибка сервера: ' + error.message });
+    } else {
+      console.error('⚠️  Ответ уже отправлен, невозможно отправить ошибку');
+    }
   }
 });
 
