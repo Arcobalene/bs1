@@ -66,21 +66,31 @@ async function getTelegramBotToken() {
     return cachedBotToken;
   }
   
+  // Сначала проверяем переменные окружения
+  if (TELEGRAM_BOT_TOKEN) {
+    cachedBotToken = TELEGRAM_BOT_TOKEN;
+    tokenCacheTime = now;
+  }
+  
   try {
     // Ищем админа с сохраненным токеном
     const adminUsers = await dbUsers.getAll();
     const admin = adminUsers.find(u => (u.role === 'admin' || u.username === 'admin') && u.bot_token);
-    if (admin && admin.bot_token) {
-      cachedBotToken = admin.bot_token;
+    if (admin && admin.bot_token && admin.bot_token.trim()) {
+      // Токен из БД имеет приоритет
+      cachedBotToken = admin.bot_token.trim();
       tokenCacheTime = now;
       return cachedBotToken;
     }
   } catch (error) {
     console.error('Ошибка получения токена из БД:', error);
+    // Если ошибка при обращении к БД, используем токен из env (если есть)
+    if (TELEGRAM_BOT_TOKEN) {
+      return TELEGRAM_BOT_TOKEN;
+    }
   }
-  // Возвращаем токен из переменных окружения
-  cachedBotToken = TELEGRAM_BOT_TOKEN;
-  tokenCacheTime = now;
+  
+  // Возвращаем токен из переменных окружения или null
   return cachedBotToken;
 }
 
@@ -2054,6 +2064,22 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
       }
     }
     
+    // Получаем токен бота (из БД админа или из env)
+    let botToken = null;
+    let hasBotToken = false;
+    try {
+      botToken = await getTelegramBotToken();
+      hasBotToken = !!botToken;
+    } catch (error) {
+      console.error('Ошибка получения токена бота:', error);
+    }
+    
+    // Проверяем, есть ли токен в БД у текущего пользователя (если он админ)
+    let botTokenInDb = false;
+    if (user.bot_token && user.bot_token.trim()) {
+      botTokenInDb = true;
+    }
+    
     res.json({ 
       success: true, 
       settings: {
@@ -2062,7 +2088,9 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
         notifyCancellations: telegramSettings.notifyCancellations === true,
         notifyChanges: telegramSettings.notifyChanges === true
       },
-      telegramId: user.telegram_id || null
+      telegramId: user.telegram_id || null,
+      hasBotToken: hasBotToken,
+      botTokenConfigured: botTokenInDb || hasBotToken
     });
   } catch (error) {
     console.error('Ошибка получения настроек Telegram:', error);
@@ -2263,19 +2291,39 @@ async function getBotInfo() {
 // API: Получить ссылку на бота для подключения
 app.get('/api/telegram/connect-link', requireAuth, async (req, res) => {
   try {
-    const botToken = await getTelegramBotToken();
-    if (!botToken) {
+    let botToken;
+    try {
+      botToken = await getTelegramBotToken();
+    } catch (error) {
+      console.error('Ошибка получения токена бота:', error);
       return res.status(503).json({ 
         success: false, 
-        message: 'Telegram бот не настроен. Укажите токен бота в настройках Telegram.' 
+        message: 'Ошибка получения токена бота. Проверьте настройки.' 
       });
     }
     
-    const botInfo = await getBotInfo();
+    if (!botToken) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Telegram бот не настроен. Укажите токен бота в настройках Telegram или установите переменную окружения TELEGRAM_BOT_TOKEN.' 
+      });
+    }
+    
+    let botInfo;
+    try {
+      botInfo = await getBotInfo();
+    } catch (error) {
+      console.error('Ошибка получения информации о боте:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Не удалось получить информацию о боте. Проверьте правильность токена.' 
+      });
+    }
+    
     if (!botInfo || !botInfo.username) {
       return res.status(500).json({ 
         success: false, 
-        message: 'Не удалось получить информацию о боте' 
+        message: 'Не удалось получить информацию о боте. Проверьте правильность токена.' 
       });
     }
     
