@@ -25,6 +25,7 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - MINIO_USE_SSL=false
+      - TELEGRAM_BOT_URL=http://telegram-bot:3001
     networks:
       - beauty-network
     depends_on:
@@ -89,6 +90,45 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+
+  telegram-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: beauty-studio-telegram-bot
+    ports:
+      - "${TELEGRAM_BOT_PORT:-3001}:3001"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - TELEGRAM_BOT_PORT=3001
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - DB_TYPE=postgres
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-beauty_studio}
+      - DB_USER=${DB_USER:-beauty_user}
+      - DB_PASSWORD=${DB_PASSWORD:-beauty_password}
+    networks:
+      - beauty-network
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.beauty-studio.description=Telegram Bot Service"
+      - "com.beauty-studio.version=1.0.0"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    command: ["node", "telegram-bot.js"]
 
 volumes:
   postgres-data:

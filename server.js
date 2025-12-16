@@ -5,6 +5,7 @@ const path = require('path');
 const multer = require('multer');
 const Minio = require('minio');
 const https = require('https');
+const http = require('http');
 const { users: dbUsers, services, masters, bookings, migrateFromJSON } = require('./database');
 const { 
   timeToMinutes, 
@@ -1889,7 +1890,7 @@ function phoneMatches(phone1, phone2) {
   return normalized1 === normalized2;
 }
 
-// Отправка уведомления в Telegram владельцу салона
+// Отправка уведомления в Telegram владельцу салона через микросервис
 // salonOwnerId - ID владельца салона (ownerId), которому принадлежит запись
 // Уведомление отправляется ТОЛЬКО на telegram_id этого владельца
 // Изоляция гарантируется: каждый владелец получает уведомления только о своих записях
@@ -1902,12 +1903,6 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
     }
     
     console.log(`🔔 Отправка Telegram уведомления владельцу салона: salonOwnerId=${salonOwnerId}, eventType=${eventType}`);
-    
-    const botToken = await getTelegramBotToken();
-    if (!botToken) {
-      console.log('ℹ️ Токен Telegram бота не настроен');
-      return;
-    }
     
     const salonOwner = await dbUsers.getById(salonOwnerId);
     if (!salonOwner) {
@@ -1985,10 +1980,19 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
       message += `\n💬 <b>Комментарий:</b> ${escapeHtml(booking.comment)}`;
     }
 
-    // Отправляем сообщение ТОЛЬКО на telegram_id владельца салона, которому принадлежит запись
-    // Используем токен бота из БД или env, telegram_id берется из записи владельца
-    console.log(`📤 Отправка сообщения в Telegram на telegram_id=${salonOwner.telegram_id} для владельца salonOwnerId=${salonOwnerId}...`);
-    await sendTelegramMessage(botToken, salonOwner.telegram_id, message);
+    // Отправляем сообщение через микросервис Telegram бота
+    const response = await callTelegramBotApi('/api/bot/send-notification', {
+      method: 'POST',
+      body: {
+        telegramId: salonOwner.telegram_id,
+        message: message
+      }
+    });
+
+    if (response.status !== 200 || !response.data.success) {
+      throw new Error(response.data.message || `HTTP ${response.status}`);
+    }
+
     console.log(`✅ Уведомление отправлено владельцу салона (salonOwnerId=${salonOwnerId}, telegram_id=${salonOwner.telegram_id})`);
   } catch (error) {
     console.error('❌ Ошибка отправки уведомления владельцу салона:', error);
@@ -2326,35 +2330,16 @@ async function getBotInfo() {
 // API: Получить ссылку на бота для подключения
 app.get('/api/telegram/connect-link', requireAuth, async (req, res) => {
   try {
-    let botToken;
-    try {
-      botToken = await getTelegramBotToken();
-    } catch (error) {
-      console.error('❌ Ошибка получения токена бота:', error);
-      return res.status(500).json({ 
+    const response = await callTelegramBotApi('/api/bot/info');
+    
+    if (response.status !== 200 || !response.data.success) {
+      return res.status(response.status === 500 ? 500 : 400).json({ 
         success: false, 
-        message: 'Ошибка сервера при получении токена бота' 
+        message: response.data.message || 'Не удалось получить информацию о боте. Проверьте правильность токена.' 
       });
     }
     
-    if (!botToken) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Telegram бот не настроен. Укажите токен бота в настройках Telegram (вкладка "Интеграция Telegram") или установите переменную окружения TELEGRAM_BOT_TOKEN.' 
-      });
-    }
-    
-    let botInfo;
-    try {
-      botInfo = await getBotInfo();
-    } catch (error) {
-      console.error('❌ Ошибка получения информации о боте:', error);
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Не удалось получить информацию о боте. Проверьте правильность токена: ' + (error.message || 'неизвестная ошибка')
-      });
-    }
-    
+    const botInfo = response.data.botInfo;
     if (!botInfo || !botInfo.username) {
       return res.status(400).json({ 
         success: false, 
@@ -2371,107 +2356,22 @@ app.get('/api/telegram/connect-link', requireAuth, async (req, res) => {
     console.error('❌ Неожиданная ошибка в /api/telegram/connect-link:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Внутренняя ошибка сервера' 
+      message: 'Внутренняя ошибка сервера: ' + error.message
     });
   }
 });
 
-// Вебхук для обработки сообщений от Telegram бота
+// Вебхук для обработки сообщений от Telegram бота (проксирование в микросервис)
 app.post('/api/telegram/webhook', express.json(), async (req, res) => {
   try {
-    const botToken = await getTelegramBotToken();
-    if (!botToken) {
-      return res.status(503).json({ success: false, message: 'Telegram бот не настроен' });
-    }
-
-    const update = req.body;
+    const response = await callTelegramBotApi('/api/bot/webhook', {
+      method: 'POST',
+      body: req.body
+    });
     
-    // Обрабатываем команду /start connect
-    if (update.message && update.message.text && update.message.text.startsWith('/start')) {
-      const from = update.message.from;
-      const telegramId = from.id;
-      const text = update.message.text;
-      
-      // Если команда /start connect, отправляем сообщение с кнопкой запроса контакта
-      if (text.includes('connect')) {
-        await sendTelegramMessageWithContactButton(telegramId, 
-          '👋 Привет! Для подключения уведомлений о записях в салоне, пожалуйста, отправьте ваш контакт.\n\n' +
-          '📱 Нажмите кнопку ниже, чтобы отправить ваш номер телефона.\n\n' +
-          '⚠️ Важно: номер телефона должен совпадать с номером, указанным в настройках вашего салона.');
-        return res.json({ success: true, message: 'Запрос контакта отправлен' });
-      }
-      
-      // Обычная команда /start
-      const botToken = await getTelegramBotToken();
-      await sendTelegramMessage(botToken, telegramId, 
-        '👋 Привет! Я бот для уведомлений о записях в салоне.\n\n' +
-        'Для подключения уведомлений перейдите в настройки салона и нажмите "Подключить Telegram".');
-      return res.json({ success: true, message: 'Приветствие отправлено' });
-    }
-    
-    // Обрабатываем сообщения с контактом
-    if (update.message && update.message.contact) {
-      const botToken = await getTelegramBotToken();
-      const message = update.message;
-      const contact = message.contact;
-      const from = message.from;
-
-      // Валидация: contact.user_id должен совпадать с message.from.id
-      if (contact.user_id !== from.id) {
-        console.error(`❌ Несоответствие ID: contact.user_id=${contact.user_id}, message.from.id=${from.id}`);
-        await sendTelegramMessage(botToken, from.id, 
-          '❌ Ошибка: ID контакта не совпадает с вашим Telegram ID. Попробуйте еще раз.');
-        return res.json({ success: false, message: 'Несоответствие идентификаторов' });
-      }
-
-      const telegramId = from.id;
-      const phone = contact.phone_number;
-
-      if (!phone) {
-        await sendTelegramMessage(botToken, telegramId, 
-          '❌ Ошибка: номер телефона не найден в контакте.');
-        return res.json({ success: false, message: 'Номер телефона отсутствует' });
-      }
-
-      // Нормализуем номер телефона в E.164
-      const normalizedPhone = normalizeToE164(phone);
-      
-      // Ищем владельца салона по номеру телефона
-      const owner = await dbUsers.getByPhone(normalizedPhone);
-      if (!owner) {
-        await sendTelegramMessage(botToken, telegramId, 
-          `❌ Владелец салона с номером ${normalizedPhone} не найден.\n\n` +
-          'Убедитесь, что номер телефона указан в настройках салона (вкладка "Информация о салоне").');
-        return res.json({ success: false, message: 'Владелец салона не найден' });
-      }
-
-      // Проверяем, что telegram_id еще не занят другим владельцем
-      const existingOwner = await dbUsers.getByTelegramId(telegramId);
-      if (existingOwner && existingOwner.id !== owner.id) {
-        await sendTelegramMessage(botToken, telegramId, 
-          '❌ Этот Telegram аккаунт уже привязан к другому владельцу салона.');
-        return res.json({ success: false, message: 'Telegram аккаунт уже привязан' });
-      }
-
-      // Сохраняем telegram_id на запись владельца салона
-      await dbUsers.update(owner.id, { telegramId: telegramId });
-      
-      console.log(`✅ Telegram аккаунт привязан к владельцу салона: ownerId=${owner.id}, telegramId=${telegramId}, phone=${normalizedPhone}`);
-      
-      // Отправляем подтверждение владельцу
-      await sendTelegramMessage(botToken, telegramId, 
-        `✅ Telegram успешно подключен!\n\n` +
-        `Вы будете получать уведомления о записях в салоне "${owner.salon_name || 'Beauty Studio'}".\n\n` +
-        `Уведомления будут приходить только для записей на странице: /booking?userId=${owner.id}\n\n` +
-        `Вы можете настроить типы уведомлений в панели администратора.`);
-      
-      return res.json({ success: true, message: 'Telegram аккаунт привязан' });
-    }
-    
-    // Игнорируем другие типы сообщений
-    return res.json({ success: true, message: 'Игнорируется' });
+    res.status(response.status).json(response.data);
   } catch (error) {
-    console.error('Ошибка обработки вебхука Telegram:', error);
+    console.error('Ошибка проксирования вебхука в микросервис Telegram бота:', error);
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
