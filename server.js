@@ -1981,16 +1981,22 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
     }
 
     // Отправляем сообщение через микросервис Telegram бота
-    const response = await callTelegramBotApi('/api/bot/send-notification', {
-      method: 'POST',
-      body: {
-        telegramId: salonOwner.telegram_id,
-        message: message
-      }
-    });
+    try {
+      const response = await callTelegramBotApi('/api/bot/send-notification', {
+        method: 'POST',
+        body: {
+          telegramId: salonOwner.telegram_id,
+          message: message
+        }
+      });
 
-    if (response.status !== 200 || !response.data.success) {
-      throw new Error(response.data.message || `HTTP ${response.status}`);
+      if (response.status !== 200 || !response.data.success) {
+        throw new Error(response.data.message || `HTTP ${response.status}`);
+      }
+    } catch (error) {
+      // Логируем ошибку, но не пробрасываем дальше, чтобы не прерывать основной процесс
+      console.error('Ошибка вызова микросервиса Telegram бота:', error.message);
+      throw error; // Пробрасываем для логирования в catch блоке выше
     }
 
     console.log(`✅ Уведомление отправлено владельцу салона (salonOwnerId=${salonOwnerId}, telegram_id=${salonOwner.telegram_id})`);
@@ -2211,55 +2217,69 @@ async function callTelegramBotApi(endpoint, options = {}) {
   const url = `${telegramBotUrl}${endpoint}`;
   
   return new Promise((resolve, reject) => {
-    const urlObj = new URL(url);
-    const isHttps = urlObj.protocol === 'https:';
-    const httpModule = isHttps ? https : http;
-    
-    const requestOptions = {
-      hostname: urlObj.hostname,
-      port: urlObj.port || (isHttps ? 443 : 80),
-      path: urlObj.pathname + urlObj.search,
-      method: options.method || 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      timeout: 10000
-    };
-    
-    const req = httpModule.request(requestOptions, (res) => {
-      let data = '';
+    try {
+      const urlObj = new URL(url);
+      const isHttps = urlObj.protocol === 'https:';
+      const httpModule = isHttps ? https : http;
       
-      res.on('data', (chunk) => {
-        data += chunk;
+      const requestOptions = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || (isHttps ? 443 : 80),
+        path: urlObj.pathname + urlObj.search,
+        method: options.method || 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers
+        },
+        timeout: 10000
+      };
+      
+      const req = httpModule.request(requestOptions, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          try {
+            const jsonData = JSON.parse(data);
+            resolve({ status: res.statusCode, data: jsonData });
+          } catch (error) {
+            // Если не удалось распарсить JSON, возвращаем сырой ответ
+            resolve({ 
+              status: res.statusCode, 
+              data: { success: false, message: `Ошибка парсинга ответа: ${data.substring(0, 200)}` } 
+            });
+          }
+        });
       });
       
-      res.on('end', () => {
+      req.on('error', (error) => {
+        reject(new Error(`Ошибка соединения с микросервисом: ${error.message}`));
+      });
+      
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Таймаут при обращении к микросервису Telegram бота'));
+      });
+      
+      req.setTimeout(10000);
+      
+      if (options.body) {
         try {
-          const jsonData = JSON.parse(data);
-          resolve({ status: res.statusCode, data: jsonData });
+          req.write(JSON.stringify(options.body));
         } catch (error) {
-          resolve({ status: res.statusCode, data: { success: false, message: data } });
+          req.destroy();
+          reject(new Error(`Ошибка сериализации тела запроса: ${error.message}`));
+          return;
         }
-      });
-    });
-    
-    req.on('error', (error) => {
-      reject(error);
-    });
-    
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('Таймаут при обращении к микросервису Telegram бота'));
-    });
-    
-    req.setTimeout(10000);
-    
-    if (options.body) {
-      req.write(JSON.stringify(options.body));
+      }
+      
+      req.end();
+    } catch (error) {
+      reject(new Error(`Ошибка создания запроса: ${error.message}`));
     }
-    
-    req.end();
   });
 }
 

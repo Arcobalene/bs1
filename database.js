@@ -360,8 +360,22 @@ const users = {
       values.push(telegramValue);
     }
     if (userData.telegramId !== undefined) {
-      updates.push(`telegram_id = $${paramIndex++}`);
-      values.push(userData.telegramId);
+      // Валидация telegramId: должен быть положительным целым числом или null
+      if (userData.telegramId !== null) {
+        const telegramId = typeof userData.telegramId === 'string' 
+          ? parseInt(userData.telegramId, 10) 
+          : userData.telegramId;
+        
+        if (!Number.isInteger(telegramId) || telegramId <= 0) {
+          throw new Error('telegramId должен быть положительным целым числом или null');
+        }
+        
+        updates.push(`telegram_id = $${paramIndex++}`);
+        values.push(telegramId);
+      } else {
+        updates.push(`telegram_id = $${paramIndex++}`);
+        values.push(null);
+      }
     }
     if (userData.botToken !== undefined) {
       updates.push(`bot_token = $${paramIndex++}`);
