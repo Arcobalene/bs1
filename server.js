@@ -1921,8 +1921,10 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
       return;
     }
 
+    console.log(`📋 Информация о владельце: userId=${salonOwner.id}, telegram_id=${salonOwner.telegram_id || 'не установлен'}, salon_phone=${salonOwner.salon_phone || 'не указан'}`);
+
     if (!salonOwner.telegram_id) {
-      console.log(`ℹ️ У владельца салона не привязан Telegram: salonOwnerId=${salonOwnerId}`);
+      console.log(`ℹ️ У владельца салона не привязан Telegram: salonOwnerId=${salonOwnerId}. Для подключения владелец должен отправить свой номер телефона в боте.`);
       return;
     }
 
@@ -1992,7 +1994,11 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
     }
 
     // Отправляем сообщение через микросервис Telegram бота
+    console.log(`📤 Вызов микросервиса Telegram бота для отправки уведомления: telegramId=${salonOwner.telegram_id}, длина сообщения=${message.length}`);
     try {
+      const telegramBotUrl = process.env.TELEGRAM_BOT_URL || 'http://telegram-bot:3001';
+      console.log(`🔗 URL микросервиса: ${telegramBotUrl}/api/bot/send-notification`);
+      
       const response = await callTelegramBotApi('/api/bot/send-notification', {
         method: 'POST',
         body: {
@@ -2001,12 +2007,19 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
         }
       });
 
+      console.log(`📥 Ответ микросервиса: status=${response.status}, success=${response.data.success}, message=${response.data.message || 'нет'}`);
+
       if (response.status !== 200 || !response.data.success) {
-        throw new Error(response.data.message || `HTTP ${response.status}`);
+        const errorMsg = response.data.message || `HTTP ${response.status}`;
+        console.error(`❌ Ошибка отправки уведомления: ${errorMsg}`);
+        throw new Error(errorMsg);
       }
+      
+      console.log(`✅ Микросервис успешно обработал запрос на отправку уведомления`);
     } catch (error) {
       // Логируем ошибку, но не пробрасываем дальше, чтобы не прерывать основной процесс
-      console.error('Ошибка вызова микросервиса Telegram бота:', error.message);
+      console.error('❌ Ошибка вызова микросервиса Telegram бота:', error.message);
+      console.error('  Stack:', error.stack);
       throw error; // Пробрасываем для логирования в catch блоке выше
     }
 
@@ -2108,11 +2121,21 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
       botTokenLength = user.bot_token.trim().length;
     }
     
+    // Возвращаем токен только для админа (для отображения в UI)
+    // В целях безопасности возвращаем только если он есть в БД
+    let botTokenForUI = null;
+    if (user.bot_token && user.bot_token.trim()) {
+      // Возвращаем токен для отображения в поле (только для админа)
+      botTokenForUI = user.bot_token.trim();
+    }
+    
     console.log('📋 Получение настроек Telegram:', {
       userId: req.session.userId,
       botTokenInDb: botTokenInDb,
       botTokenLength: botTokenLength,
-      hasBotTokenFromFunction: hasBotToken
+      hasBotTokenFromFunction: hasBotToken,
+      botTokenForUI: botTokenForUI ? `[${botTokenForUI.length} символов]` : 'не указан',
+      telegramId: user.telegram_id || 'не установлен'
     });
     
     res.json({ 
@@ -2127,7 +2150,8 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
       hasBotToken: hasBotToken,
       botTokenConfigured: botTokenInDb || hasBotToken,
       botTokenInDb: botTokenInDb,
-      botTokenLength: botTokenLength
+      botTokenLength: botTokenLength,
+      botToken: botTokenForUI // Возвращаем токен для заполнения поля
     });
   } catch (error) {
     console.error('Ошибка получения настроек Telegram:', error);

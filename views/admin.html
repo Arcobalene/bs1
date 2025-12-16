@@ -1310,6 +1310,9 @@
   // Загружаем данные при загрузке страницы
   loadUserData();
   
+  // Загружаем настройки Telegram при загрузке страницы
+  loadTelegramSettings();
+  
   // Подсвечиваем активную страницу
   highlightActivePage();
 
@@ -1330,6 +1333,32 @@
         if (data.success) {
           const settings = data.settings || {};
           const isConnected = data.telegramId !== null && data.telegramId !== undefined;
+          
+          // Загружаем токен бота в поле (только для админа)
+          const botTokenInput = document.getElementById('telegram-bot-token');
+          if (botTokenInput && data.botToken) {
+            botTokenInput.value = data.botToken;
+            console.log('Токен бота загружен в поле (длина:', data.botToken.length, 'символов)');
+          } else if (botTokenInput && data.botTokenInDb) {
+            // Если токен есть в БД, но не возвращается (из соображений безопасности), показываем звездочки
+            botTokenInput.value = '••••••••••••••••';
+            botTokenInput.placeholder = 'Токен сохранен (введите новый для изменения)';
+          } else if (botTokenInput) {
+            botTokenInput.value = '';
+            botTokenInput.placeholder = 'Введите токен бота (например: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz)';
+          }
+          
+          // Обновляем статус токена
+          const botTokenStatus = document.getElementById('bot-token-status');
+          if (botTokenStatus) {
+            if (data.botTokenConfigured) {
+              botTokenStatus.textContent = `✅ Токен настроен (${data.botTokenLength || 0} символов)`;
+              botTokenStatus.style.color = '#10b981';
+            } else {
+              botTokenStatus.textContent = '⚠️ Токен не настроен. Укажите токен бота или установите переменную окружения TELEGRAM_BOT_TOKEN.';
+              botTokenStatus.style.color = '#f59e0b';
+            }
+          }
           
           // Обновляем статус подключения
           const statusText = document.getElementById('telegram-status-text');
@@ -1412,6 +1441,9 @@
           alertDiv.className = 'alert success';
           alertDiv.textContent = 'Настройки Telegram успешно сохранены!';
           alertDiv.style.display = 'block';
+          
+          // Перезагружаем настройки для обновления UI (включая токен)
+          await loadTelegramSettings();
         } else {
           alertDiv.className = 'alert error';
           alertDiv.textContent = data.message || 'Ошибка сохранения настроек';

@@ -260,30 +260,40 @@ app.post('/api/bot/send-notification', async (req, res) => {
   try {
     const { telegramId, message } = req.body;
     
+    console.log(`📨 Получен запрос на отправку уведомления: telegramId=${telegramId}, message length=${message ? message.length : 0}`);
+    
     // Валидация входных данных
     if (telegramId === undefined || message === undefined) {
+      console.error('❌ Отсутствуют обязательные поля: telegramId или message');
       return res.status(400).json({ success: false, message: 'telegramId и message обязательны' });
     }
 
     const telegramIdValidation = validateTelegramId(telegramId);
     if (!telegramIdValidation.valid) {
+      console.error('❌ Некорректный telegramId:', telegramId);
       return res.status(400).json({ success: false, message: telegramIdValidation.message });
     }
 
     const messageValidation = validateMessage(message);
     if (!messageValidation.valid) {
+      console.error('❌ Некорректное сообщение:', messageValidation.message);
       return res.status(400).json({ success: false, message: messageValidation.message });
     }
     
+    console.log(`🔑 Получение токена бота...`);
     const botToken = await getTelegramBotToken();
     if (!botToken) {
+      console.error('❌ Токен бота не настроен. Проверьте переменную окружения TELEGRAM_BOT_TOKEN или настройте токен в БД для админа.');
       return res.status(503).json({ success: false, message: 'Токен бота не настроен' });
     }
     
+    console.log(`✅ Токен бота получен (длина: ${botToken.length} символов), отправка сообщения на telegramId=${telegramIdValidation.id}...`);
     await sendTelegramMessage(botToken, telegramIdValidation.id, message);
+    console.log(`✅ Уведомление успешно отправлено на telegramId=${telegramIdValidation.id}`);
     res.json({ success: true });
   } catch (error) {
-    console.error('Ошибка отправки уведомления:', error.message);
+    console.error('❌ Ошибка отправки уведомления:', error.message);
+    console.error('  Stack:', error.stack);
     // Не раскрываем детали ошибки клиенту для безопасности
     const errorMessage = error.message.includes('HTTP') ? 'Ошибка при отправке сообщения' : error.message;
     res.status(500).json({ success: false, message: errorMessage });
