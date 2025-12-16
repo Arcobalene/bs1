@@ -2515,14 +2515,19 @@ app.get('/api/telegram/connect-link', requireAuth, async (req, res) => {
 // Вебхук для обработки сообщений от Telegram бота (проксирование в микросервис)
 app.post('/api/telegram/webhook', express.json(), async (req, res) => {
   try {
+    console.log('📨 Получен webhook запрос от Telegram на основном сервере');
+    console.log('   Body:', JSON.stringify(req.body, null, 2));
+    
     const response = await callTelegramBotApi('/api/bot/webhook', {
       method: 'POST',
       body: req.body
     });
     
+    console.log(`✅ Webhook проксирован в микросервис: status=${response.status}`);
     res.status(response.status).json(response.data);
   } catch (error) {
-    console.error('Ошибка проксирования вебхука в микросервис Telegram бота:', error);
+    console.error('❌ Ошибка проксирования вебхука в микросервис Telegram бота:', error);
+    console.error('   Stack:', error.stack);
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
