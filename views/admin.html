@@ -428,7 +428,9 @@
   // Проверка авторизации и загрузка данных
   async function loadUserData() {
     try {
-      const response = await fetch('/api/user');
+      const response = await fetch('/api/user', {
+        credentials: 'include'
+      });
       const result = await response.json();
       
       if (!result.success) {
@@ -528,7 +530,9 @@
   // Загрузка настроек дизайна
   async function loadDesignSettings() {
     try {
-      const response = await fetch('/api/salon/design');
+      const response = await fetch('/api/salon/design', {
+        credentials: 'include'
+      });
       const result = await response.json();
       if (result.success && result.design) {
         designSettings = { ...designSettings, ...result.design };
@@ -767,7 +771,8 @@
         const response = await fetch('/api/salon/design', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ design })
+          body: JSON.stringify({ design }),
+          credentials: 'include'
         });
 
         if (!response.ok) {
@@ -1013,7 +1018,10 @@
   if (logoutLink) {
     logoutLink.addEventListener('click', async (e) => {
       e.preventDefault();
-      await fetch('/api/logout', { method: 'POST' });
+      await fetch('/api/logout', { 
+        method: 'POST',
+        credentials: 'include'
+      });
       window.location.href = '/';
     });
   }
@@ -1025,7 +1033,8 @@
       try {
         const response = await fetch('/api/users/restore', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include'
         });
 
         const result = await response.json();
@@ -1157,6 +1166,7 @@
         const response = await fetch('/api/salon', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             salonName,
             salonAddress,
@@ -1306,7 +1316,9 @@
   // Загрузка настроек Telegram
   async function loadTelegramSettings() {
     try {
-      const response = await fetch('/api/telegram/settings');
+      const response = await fetch('/api/telegram/settings', {
+        credentials: 'include'
+      });
       if (response.ok) {
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
@@ -1384,7 +1396,8 @@
         const response = await fetch('/api/telegram/settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(settings)
+          body: JSON.stringify(settings),
+          credentials: 'include'
         });
         
         const contentType = response.headers.get('content-type');
@@ -1421,7 +1434,9 @@
       alertDiv.style.display = 'none';
       
       try {
-        const response = await fetch('/api/telegram/connect-link');
+        const response = await fetch('/api/telegram/connect-link', {
+          credentials: 'include'
+        });
         const data = await response.json();
         
         if (data.success && data.botUsername) {
@@ -1454,7 +1469,9 @@
   if (telegramReconnectBtn) {
     telegramReconnectBtn.addEventListener('click', async () => {
       try {
-        const response = await fetch('/api/telegram/connect-link');
+        const response = await fetch('/api/telegram/connect-link', {
+          credentials: 'include'
+        });
         const data = await response.json();
         
         if (data.success && data.botUsername) {
@@ -1490,7 +1507,8 @@
       try {
         const response = await fetch('/api/telegram/unlink', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include'
         });
         
         const data = await response.json();
@@ -1851,7 +1869,9 @@
   async function checkNewBookings() {
     try {
       console.log('Проверка новых записей...');
-      const bookingsRes = await fetch('/api/bookings');
+      const bookingsRes = await fetch('/api/bookings', {
+        credentials: 'include'
+      });
       if (!bookingsRes.ok) {
         console.error('Ошибка получения записей:', bookingsRes.status);
         return;
@@ -1931,7 +1951,9 @@
   async function initNotificationCheck() {
     try {
       console.log('🔔 Инициализация проверки новых записей...');
-      const bookingsRes = await fetch('/api/bookings');
+      const bookingsRes = await fetch('/api/bookings', {
+        credentials: 'include'
+      });
       if (!bookingsRes.ok) {
         console.error('❌ Ошибка получения записей при инициализации:', bookingsRes.status);
         // Все равно запускаем проверку при ошибке
