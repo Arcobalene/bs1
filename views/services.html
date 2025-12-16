@@ -118,6 +118,14 @@
   </div>
 </div>
 
+<!-- Модальное окно для просмотра увеличенного фото -->
+<div id="photo-view-modal" class="modal-overlay hidden" style="z-index: 9999999 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; background: rgba(0, 0, 0, 0.95) !important;">
+  <div style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 20px;">
+    <button type="button" class="modal-close" id="close-photo-modal" style="position: absolute; top: 20px; right: 20px; z-index: 10000000; background: rgba(255, 255, 255, 0.9); color: #000; width: 40px; height: 40px; border-radius: 50%; font-size: 24px; border: none; cursor: pointer;">×</button>
+    <img id="photo-view-image" src="" alt="Фото работы" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px;" />
+  </div>
+</div>
+
 <!-- Модальное окно для редактирования мастера -->
 <div id="edit-master-modal" class="modal-overlay hidden" style="z-index: 999999 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;">
   <div class="modal">
@@ -871,6 +879,10 @@
         img.style.height = '100%';
         img.style.objectFit = 'cover';
         img.alt = photo.originalName || 'Фото работы';
+        img.style.cursor = 'pointer';
+        img.onclick = () => {
+          openPhotoModal(photoUrl, photo.originalName || 'Фото работы');
+        };
         img.onerror = function() {
           console.error('Ошибка загрузки фото:', photoUrl);
           console.error('Детали фото:', {
@@ -1033,6 +1045,45 @@
   document.getElementById('cancel-edit-master')?.addEventListener('click', closeEditMasterModal);
   document.getElementById('edit-master-modal')?.addEventListener('click', (e) => {
     if (e.target.id === 'edit-master-modal') closeEditMasterModal();
+  });
+
+  // Функция для открытия модалки с увеличенным фото
+  function openPhotoModal(photoUrl, photoName) {
+    const modal = document.getElementById('photo-view-modal');
+    const img = document.getElementById('photo-view-image');
+    if (modal && img) {
+      img.src = photoUrl;
+      img.alt = photoName || 'Фото работы';
+      modal.classList.remove('hidden');
+      document.body.style.overflow = 'hidden'; // Блокируем скролл страницы
+    }
+  }
+
+  // Функция для закрытия модалки с фото
+  function closePhotoModal() {
+    const modal = document.getElementById('photo-view-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      document.body.style.overflow = ''; // Восстанавливаем скролл
+    }
+  }
+
+  // Обработчики закрытия модалки с фото
+  document.getElementById('close-photo-modal')?.addEventListener('click', closePhotoModal);
+  document.getElementById('photo-view-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'photo-view-modal') {
+      closePhotoModal();
+    }
+  });
+
+  // Закрытие по Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const photoModal = document.getElementById('photo-view-modal');
+      if (photoModal && !photoModal.classList.contains('hidden')) {
+        closePhotoModal();
+      }
+    }
   });
 
   // Загружаем данные при загрузке страницы
