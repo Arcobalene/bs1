@@ -611,12 +611,23 @@ app.post('/api/salon', requireAuth, async (req, res) => {
       return res.json({ success: false, message: 'Пользователь не найден' });
     }
 
+    // Нормализуем номер телефона в формат E.164 для единообразия
+    let normalizedPhone = undefined;
+    if (salonPhone !== undefined) {
+      if (salonPhone && salonPhone.trim()) {
+        normalizedPhone = normalizeToE164(salonPhone.trim());
+        console.log(`📞 Сохранение номера телефона для userId=${req.session.userId}: ${normalizedPhone} (исходный: ${salonPhone})`);
+      } else {
+        normalizedPhone = '';
+      }
+    }
+    
     await dbUsers.update(req.session.userId, {
       salonName: salonName !== undefined ? sanitizeString(salonName, 255) : undefined,
       salonAddress: salonAddress !== undefined ? sanitizeString(salonAddress, 500) : undefined,
       salonLat: salonLat !== undefined ? (salonLat ? parseFloat(salonLat) : null) : undefined,
       salonLng: salonLng !== undefined ? (salonLng ? parseFloat(salonLng) : null) : undefined,
-      salonPhone: salonPhone !== undefined ? (salonPhone ? sanitizeString(salonPhone.trim(), 50) : '') : undefined
+      salonPhone: normalizedPhone
     });
 
     res.json({ success: true });
@@ -1902,7 +1913,7 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
       return;
     }
     
-    console.log(`🔔 Отправка Telegram уведомления владельцу салона: salonOwnerId=${salonOwnerId}, eventType=${eventType}`);
+    console.log(`🔔 Отправка Telegram уведомления владельцу салона: salonOwnerId=${salonOwnerId}, eventType=${eventType}, booking.user_id должен быть=${salonOwnerId}`);
     
     const salonOwner = await dbUsers.getById(salonOwnerId);
     if (!salonOwner) {
@@ -1999,7 +2010,7 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
       throw error; // Пробрасываем для логирования в catch блоке выше
     }
 
-    console.log(`✅ Уведомление отправлено владельцу салона (salonOwnerId=${salonOwnerId}, telegram_id=${salonOwner.telegram_id})`);
+    console.log(`✅ Уведомление отправлено владельцу салона: salonOwnerId=${salonOwnerId}, telegram_id=${salonOwner.telegram_id}, salonUrl=/booking?userId=${salonOwnerId}`);
   } catch (error) {
     console.error('❌ Ошибка отправки уведомления владельцу салона:', error);
     console.error('  Stack:', error.stack);

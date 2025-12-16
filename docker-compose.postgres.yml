@@ -103,6 +103,7 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - TELEGRAM_BOT_PORT=3001
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - SALON_BASE_URL=${SALON_BASE_URL:-http://155.212.184.10}
       - DB_TYPE=postgres
       - DB_HOST=db
       - DB_PORT=5432

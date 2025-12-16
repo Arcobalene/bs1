@@ -415,13 +415,20 @@ app.post('/api/bot/webhook', async (req, res) => {
 
       // Нормализуем номер телефона в E.164
       const normalizedPhone = normalizeToE164(phone);
+      console.log(`🔍 Поиск владельца по номеру телефона: ${normalizedPhone} (исходный: ${phone})`);
       
       // Ищем владельца салона по номеру телефона
       let owner;
       try {
         owner = await dbUsers.getByPhone(normalizedPhone);
+        if (owner) {
+          console.log(`✅ Владелец найден: userId=${owner.id}, salon_name="${owner.salon_name}", salon_phone="${owner.salon_phone}"`);
+        } else {
+          console.log(`❌ Владелец не найден для номера: ${normalizedPhone}`);
+        }
       } catch (error) {
         console.error('Ошибка поиска владельца по телефону:', error.message);
+        console.error('Stack:', error.stack);
         try {
           await sendTelegramMessage(botToken, telegramId, 
             '❌ Ошибка сервера при поиске вашего аккаунта. Попробуйте позже.');
@@ -468,12 +475,15 @@ app.post('/api/bot/webhook', async (req, res) => {
       }
 
       // Сохраняем telegram_id на запись владельца салона
+      console.log(`💾 Сохранение telegram_id для владельца: userId=${owner.id}, telegramId=${telegramId}`);
       try {
         await dbUsers.update(owner.id, { telegramId: telegramId });
+        console.log(`✅ Telegram аккаунт успешно привязан: ownerId=${owner.id}, telegramId=${telegramId}, phone=${normalizedPhone}, salonUrl=${process.env.SALON_BASE_URL || 'http://155.212.184.10'}/booking?userId=${owner.id}`);
       } catch (error) {
         console.error('Ошибка сохранения telegram_id:', error.message);
+        console.error('Stack:', error.stack);
         // Проверяем, не связана ли ошибка с уникальностью
-        if (error.message && error.message.includes('unique')) {
+        if (error.message && (error.message.includes('unique') || error.message.includes('duplicate'))) {
           try {
             await sendTelegramMessage(botToken, telegramId, 
               '❌ Этот Telegram аккаунт уже привязан к другому пользователю.');
@@ -491,14 +501,14 @@ app.post('/api/bot/webhook', async (req, res) => {
         return res.status(500).json({ success: false, message: 'Ошибка сохранения' });
       }
       
-      console.log(`✅ Telegram аккаунт привязан к владельцу салона: ownerId=${owner.id}, telegramId=${telegramId}, phone=${normalizedPhone}`);
-      
       // Отправляем подтверждение владельцу
+      const salonUrl = process.env.SALON_BASE_URL || 'http://155.212.184.10';
       try {
         await sendTelegramMessage(botToken, telegramId, 
           `✅ Telegram успешно подключен!\n\n` +
           `Вы будете получать уведомления о записях в салоне "${owner.salon_name || 'Beauty Studio'}".\n\n` +
-          `Уведомления будут приходить только для записей на странице: /booking?userId=${owner.id}\n\n` +
+          `📱 Страница вашего салона: ${salonUrl}/booking?userId=${owner.id}\n\n` +
+          `Уведомления будут приходить только для записей на этой странице.\n\n` +
           `Вы можете настроить типы уведомлений в панели администратора.`);
       } catch (error) {
         console.error('Ошибка отправки подтверждения:', error.message);
