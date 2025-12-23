@@ -495,7 +495,7 @@ footer {
   margin-top: 8px;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
-  overflow: visible;
+  overflow: hidden;
   background: #f9fafb;
   display: grid;
 }
@@ -1251,13 +1251,13 @@ header {
 
   /* Календарь */
   .admin-calendar-card {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow: visible;
   }
 
   .calendar-grid {
-    overflow: visible;
-    width: fit-content;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
     min-width: 680px;
     display: grid;
   }
