@@ -221,14 +221,38 @@ async function getPhoneBySalonId(salonId) {
 async function checkPhoneInDatabase(phone, callback) {
   const normalized = normalizePhone(phone);
   
+  console.log(JSON.stringify({
+    level: 'INFO',
+    msg: 'Проверка номера телефона в основном приложении',
+    original_phone: phone,
+    normalized_phone: normalized,
+    url: `${MAIN_APP_URL}/api/owners/by-phone/${encodeURIComponent(normalized)}`
+  }));
+  
   try {
     const response = await axios.get(`${MAIN_APP_URL}/api/owners/by-phone/${encodeURIComponent(normalized)}`, {
       timeout: 5000,
       validateStatus: (status) => status < 500
     });
 
+    console.log(JSON.stringify({
+      level: 'INFO',
+      msg: 'Ответ от основного приложения',
+      status: response.status,
+      success: response.data?.success,
+      has_owner: !!response.data?.owner
+    }));
+
     if (response.status === 200 && response.data?.success) {
       const ownerData = response.data.owner || response.data;
+      console.log(JSON.stringify({
+        level: 'INFO',
+        msg: 'Владелец найден',
+        owner_id: ownerData.id,
+        username: ownerData.username,
+        salon_name: ownerData.salon_name
+      }));
+      
       return callback({
         phone: normalized,
         name: ownerData.username || ownerData.name || 'Владелец',
@@ -236,12 +260,20 @@ async function checkPhoneInDatabase(phone, callback) {
       }, null);
     }
 
+    console.log(JSON.stringify({
+      level: 'WARN',
+      msg: 'Владелец не найден',
+      status: response.status,
+      response_data: response.data
+    }));
+    
     callback(null, null);
   } catch (error) {
     console.error(JSON.stringify({
       level: 'ERROR',
       msg: 'Ошибка проверки номера в основном приложении',
       error: error.message,
+      error_code: error.code,
       phone: normalized
     }));
     callback(null, null);

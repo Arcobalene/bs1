@@ -2210,6 +2210,64 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
   }
 });
 
+// API: Получить владельца по телефону (для Telegram бота)
+app.get('/api/owners/by-phone/:phone', async (req, res) => {
+  try {
+    const phone = decodeURIComponent(req.params.phone);
+    
+    console.log(`🔍 Поиск владельца по телефону: "${phone}"`);
+    
+    if (!phone || !phone.trim()) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Номер телефона не указан' 
+      });
+    }
+
+    const user = await dbUsers.getByPhone(phone);
+    
+    if (!user) {
+      console.log(`❌ Владелец с телефоном "${phone}" не найден в базе данных`);
+      
+      // Для диагностики: проверим, есть ли вообще пользователи с телефонами
+      const allUsers = await dbUsers.getAll();
+      const usersWithPhones = allUsers.filter(u => u.salon_phone).map(u => ({
+        id: u.id,
+        username: u.username,
+        phone: u.salon_phone
+      }));
+      console.log(`ℹ️ Всего пользователей с телефонами: ${usersWithPhones.length}`);
+      if (usersWithPhones.length > 0 && usersWithPhones.length <= 10) {
+        console.log(`   Телефоны в БД: ${JSON.stringify(usersWithPhones)}`);
+      }
+      
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Владелец с таким номером телефона не найден' 
+      });
+    }
+
+    console.log(`✅ Владелец найден: id=${user.id}, username=${user.username}, phone=${user.salon_phone}`);
+    
+    res.json({
+      success: true,
+      owner: {
+        id: user.id,
+        username: user.username,
+        name: user.username, // Для обратной совместимости
+        salon_name: user.salon_name || 'Салон',
+        salon_phone: user.salon_phone
+      }
+    });
+  } catch (error) {
+    console.error('❌ Ошибка поиска владельца по телефону:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Внутренняя ошибка сервера' 
+    });
+  }
+});
+
 // API: Получить токен бота для внутреннего использования (только для микросервиса бота)
 app.get('/api/telegram/bot-token', async (req, res) => {
   try {
