@@ -102,8 +102,9 @@ services:
       - "${TELEGRAM_BOT_PORT:-3001}:3001"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_BOT_PORT=3001
+      - TELEGRAM_BOT_INTERNAL_SECRET=${TELEGRAM_BOT_INTERNAL_SECRET:-default-internal-secret-change-in-production}
       - MAIN_APP_URL=http://beauty-studio:3000
       - MAIN_APP_INTERNAL_URL=http://beauty-studio:3000
       - SQLITE_PATH=/app/data/bot_database.sqlite

@@ -2197,6 +2197,29 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
   }
 });
 
+// API: Получить токен бота для внутреннего использования (только для микросервиса бота)
+app.get('/api/telegram/bot-token', async (req, res) => {
+  try {
+    // Простая проверка через заголовок для безопасности
+    // Если заголовок передан, проверяем его; если нет - разрешаем (внутренняя сеть Docker)
+    const internalSecret = req.headers['x-internal-secret'];
+    const expectedSecret = process.env.TELEGRAM_BOT_INTERNAL_SECRET || 'default-internal-secret-change-in-production';
+    if (internalSecret && internalSecret !== expectedSecret) {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    const token = await getTelegramBotToken();
+    if (!token) {
+      return res.status(404).json({ success: false, error: 'Bot token not found' });
+    }
+
+    res.json({ success: true, token });
+  } catch (error) {
+    console.error('Ошибка получения токена бота:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // API: Сохранить настройки Telegram (только для админов)
 app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) => {
   try {

@@ -10,15 +10,65 @@ const fs = require('fs');
 // КОНФИГУРАЦИЯ ДЛЯ DOCKER
 // ============================================================================
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const PORT = process.env.TELEGRAM_BOT_PORT || 3001;
 const SQLITE_PATH = process.env.SQLITE_PATH || '/app/data/bot_database.sqlite';
 const MAIN_APP_URL = process.env.MAIN_APP_URL || 'http://beauty-studio:3000';
+const INTERNAL_SECRET = process.env.TELEGRAM_BOT_INTERNAL_SECRET || 'default-internal-secret-change-in-production';
 
-// Проверка обязательных переменных
-if (!BOT_TOKEN) {
-  console.error('❌ TELEGRAM_BOT_TOKEN не установлен в .env');
-  process.exit(1);
+// Переменная для хранения текущего токена бота
+let BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
+
+/**
+ * Получает токен бота из основного приложения через API
+ */
+async function getBotTokenFromMainApp() {
+  try {
+    const response = await axios.get(`${MAIN_APP_URL}/api/telegram/bot-token`, {
+      headers: {
+        'X-Internal-Secret': INTERNAL_SECRET
+      },
+      timeout: 5000
+    });
+
+    if (response.data && response.data.success && response.data.token) {
+      return response.data.token;
+    }
+    return null;
+  } catch (error) {
+    console.error(JSON.stringify({
+      level: 'ERROR',
+      msg: 'Ошибка получения токена из основного приложения',
+      error: error.message
+    }));
+    return null;
+  }
+}
+
+/**
+ * Инициализирует токен бота (из .env или из основного приложения)
+ */
+async function initBotToken() {
+  // Сначала пробуем получить из переменной окружения
+  const envToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (envToken && envToken.trim()) {
+    console.log(JSON.stringify({ level: 'INFO', msg: 'Токен бота загружен из переменной окружения' }));
+    return envToken.trim();
+  }
+
+  // Если нет в .env, пытаемся получить из основного приложения
+  console.log(JSON.stringify({ level: 'INFO', msg: 'Токен не найден в .env, запрашиваем из основного приложения' }));
+  const tokenFromApp = await getBotTokenFromMainApp();
+
+  if (tokenFromApp) {
+    console.log(JSON.stringify({ level: 'INFO', msg: 'Токен бота получен из основного приложения' }));
+    return tokenFromApp;
+  }
+
+  console.error(JSON.stringify({
+    level: 'ERROR',
+    msg: 'Токен бота не найден ни в .env, ни в основном приложении'
+  }));
+  return null;
 }
 
 // Создаем директорию для данных если не существует
@@ -28,8 +78,27 @@ if (!fs.existsSync(dataDir)) {
   console.log(`✅ Создана директория для данных: ${dataDir}`);
 }
 
-// Инициализация бота
-const bot = new Telegraf(BOT_TOKEN);
+// Инициализация бота (будет инициализирован после получения токена)
+let bot = null;
+
+async function initBot() {
+  const token = await initBotToken();
+  if (!token) {
+    console.error(JSON.stringify({
+      level: 'ERROR',
+      msg: 'Не удалось получить токен бота. Проверьте .env или настройки в админке.'
+    }));
+    process.exit(1);
+  }
+
+  BOT_TOKEN = token;
+  bot = new Telegraf(BOT_TOKEN);
+  
+  // Регистрируем обработчики команд
+  registerBotHandlers(bot);
+  
+  return bot;
+}
 
 // Инициализация базы данных SQLite
 const db = new sqlite3.Database(SQLITE_PATH, (err) => {
@@ -354,6 +423,14 @@ async function sendNotificationToOwner(ownerId, type, data) {
         message = `🔔 <b>Уведомление</b>\n\n${JSON.stringify(data, null, 2)}`;
     }
 
+    if (!bot) {
+      console.error(JSON.stringify({
+        level: 'ERROR',
+        msg: 'Бот не инициализирован'
+      }));
+      return;
+    }
+
     const sendPromises = chatIds.map(chatId => {
       return bot.telegram.sendMessage(chatId, message, options).catch(err => {
         console.error(JSON.stringify({
@@ -385,10 +462,11 @@ async function sendNotificationToOwner(ownerId, type, data) {
 }
 
 // ============================================================================
-// ОБРАБОТЧИКИ КОМАНД БОТА
+// РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ КОМАНД БОТА
 // ============================================================================
 
-bot.command('start', async (ctx) => {
+function registerBotHandlers(botInstance) {
+  botInstance.command('start', async (ctx) => {
   const userId = ctx.from.id;
   
   getOwnerByTelegramId(userId, (err, owner) => {
@@ -423,9 +501,9 @@ bot.command('start', async (ctx) => {
       ]).resize()
     );
   });
-});
+  });
 
-bot.on('contact', async (ctx) => {
+  botInstance.on('contact', async (ctx) => {
   const userId = ctx.from.id;
   const phone = ctx.message.contact.phone_number;
 
@@ -489,9 +567,9 @@ bot.on('contact', async (ctx) => {
       });
     });
   });
-});
+  });
 
-bot.command('setup_group', async (ctx) => {
+  botInstance.command('setup_group', async (ctx) => {
   if (ctx.chat.type === 'private') {
     return ctx.reply('❌ Эта команда работает только в группах!\n\nДобавьте меня в группу и используйте команду там.');
   }
@@ -542,9 +620,9 @@ bot.command('setup_group', async (ctx) => {
       }));
     });
   });
-});
+  });
 
-bot.command('myinfo', async (ctx) => {
+  botInstance.command('myinfo', async (ctx) => {
   const userId = ctx.from.id;
 
   getOwnerByTelegramId(userId, (err, owner) => {
@@ -567,9 +645,9 @@ bot.command('myinfo', async (ctx) => {
       { parse_mode: 'HTML' }
     );
   });
-});
+  });
 
-bot.command('chats', async (ctx) => {
+  botInstance.command('chats', async (ctx) => {
   const userId = ctx.from.id;
 
   getOwnerByTelegramId(userId, (err, owner) => {
@@ -608,9 +686,9 @@ bot.command('chats', async (ctx) => {
       }
     );
   });
-});
+  });
 
-bot.command('test', async (ctx) => {
+  botInstance.command('test', async (ctx) => {
   const userId = ctx.from.id;
 
   getOwnerByTelegramId(userId, (err, owner) => {
@@ -626,9 +704,9 @@ bot.command('test', async (ctx) => {
     sendNotificationToOwner(owner.id, 'test', {});
     ctx.reply('✅ Тестовое уведомление отправлено во все ваши чаты!');
   });
-});
+  });
 
-bot.command('help', (ctx) => {
+  botInstance.command('help', (ctx) => {
   const helpText = `📖 <b>Справка по командам</b>\n\n` +
     `<b>Личные сообщения:</b>\n` +
     `/start - Регистрация по номеру телефона\n` +
@@ -645,12 +723,13 @@ bot.command('help', (ctx) => {
     `⏰ Напоминаниях о записях`;
 
   ctx.reply(helpText, { parse_mode: 'HTML' });
-});
+  });
 
-bot.catch((err, ctx) => {
-  console.error(JSON.stringify({ level: 'ERROR', msg: 'Ошибка бота', error: err.message }));
-  ctx.reply('❌ Произошла ошибка. Попробуйте позже или обратитесь к администратору.');
-});
+  botInstance.catch((err, ctx) => {
+    console.error(JSON.stringify({ level: 'ERROR', msg: 'Ошибка бота', error: err.message }));
+    ctx.reply('❌ Произошла ошибка. Попробуйте позже или обратитесь к администратору.');
+  });
+}
 
 // ============================================================================
 // API ЭНДПОЙНТЫ ДЛЯ ВНУТРЕННЕГО ИСПОЛЬЗОВАНИЯ (ОСНОВНОЕ ПРИЛОЖЕНИЕ)
@@ -788,28 +867,35 @@ app.listen(PORT, '0.0.0.0', () => {
   }));
 });
 
-// Запуск бота
-bot.launch()
-  .then(() => {
+// Асинхронный запуск бота
+(async () => {
+  try {
+    await initBot();
+    
+    // Запуск бота
+    await bot.launch();
+    
     console.log(JSON.stringify({
       level: 'INFO',
       msg: 'Telegram бот запущен успешно',
       username: bot.botInfo.username
     }));
-  })
-  .catch((err) => {
+  } catch (err) {
     console.error(JSON.stringify({
       level: 'ERROR',
       msg: 'Ошибка запуска бота',
       error: err.message
     }));
     process.exit(1);
-  });
+  }
+})();
 
 // Graceful shutdown для Docker
 process.once('SIGTERM', () => {
   console.log(JSON.stringify({ level: 'INFO', msg: 'Получен SIGTERM, останавливаем бота' }));
-  bot.stop('SIGTERM');
+  if (bot) {
+    bot.stop('SIGTERM');
+  }
   db.close((err) => {
     if (err) {
       console.error(JSON.stringify({ level: 'ERROR', msg: 'Ошибка закрытия БД', error: err.message }));
@@ -822,7 +908,9 @@ process.once('SIGTERM', () => {
 
 process.once('SIGINT', () => {
   console.log(JSON.stringify({ level: 'INFO', msg: 'Получен SIGINT, останавливаем бота' }));
-  bot.stop('SIGINT');
+  if (bot) {
+    bot.stop('SIGINT');
+  }
   db.close((err) => {
     if (err) {
       console.error(JSON.stringify({ level: 'ERROR', msg: 'Ошибка закрытия БД', error: err.message }));
