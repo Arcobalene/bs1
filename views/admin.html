@@ -48,6 +48,19 @@
     <p class="note">Ваша ссылка для записи: <strong id="booking-link"></strong></p>
   </div>
 
+  <!-- Информация о Telegram боте (доступна всем пользователям) -->
+  <div class="card" style="margin-bottom: 24px;">
+    <div style="padding: 16px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+        <div style="flex: 1;">
+          <strong style="font-size: 1.1rem; color: #0c4a6e;">Telegram бот для уведомлений</strong>
+          <p style="margin: 8px 0 0 0; color: #075985; font-size: 0.9rem;">Получайте уведомления о новых записях, отменах и изменениях прямо в Telegram</p>
+        </div>
+        <button type="button" class="btn-primary" id="telegram-bot-info-btn">О боте</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Главные вкладки админ-панели -->
   <div class="main-tabs">
     <button class="main-tab-button active" data-main-tab="salon-info">Информация о салоне</button>
@@ -338,16 +351,6 @@
     <div class="card">
       <h2>Уведомления Telegram</h2>
       <p class="description">Подключите Telegram для получения уведомлений о новых записях, изменениях и отменах.</p>
-
-      <div style="margin-bottom: 24px; padding: 16px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px;">
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-          <div>
-            <strong style="font-size: 1.1rem; color: #0c4a6e;">Информация о Telegram боте</strong>
-            <p style="margin: 8px 0 0 0; color: #075985; font-size: 0.9rem;">Узнайте, что умеет наш бот и как им пользоваться</p>
-          </div>
-          <button type="button" class="btn-primary" id="telegram-bot-info-btn">О боте</button>
-        </div>
-      </div>
 
       <div id="telegram-status-section" style="margin-bottom: 24px;">
         <div style="padding: 20px; background: #f3f4f6; border-radius: 8px;">
