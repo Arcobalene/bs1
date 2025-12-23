@@ -182,6 +182,14 @@ header p {
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
   }
 }
 
@@ -1127,14 +1135,19 @@ header {
 
   .nav-links {
     margin-top: 16px;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
+    justify-content: center;
   }
 
   .nav-links a {
-    padding: 8px 14px;
+    padding: 10px 14px;
     font-size: 0.85rem;
     margin: 2px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   /* Container адаптация */
@@ -1255,18 +1268,37 @@ header {
   .admin-list-item {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
-    padding: 8px 0;
+    gap: 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .admin-list-main {
+    width: 100%;
   }
 
   .admin-list-actions {
     width: 100%;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    gap: 8px;
   }
 
   .admin-list-actions button {
-    padding: 4px 8px;
-    font-size: 0.8rem;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    min-height: 44px;
+    border-radius: 8px;
+    flex: 1;
+  }
+
+  .admin-list-actions button[data-action="edit"] {
+    background: #dbeafe;
+    color: #2563eb;
+  }
+
+  .admin-list-actions button[data-action="delete"] {
+    background: #fee2e2;
+    color: #b91c1c;
   }
 
   /* Календарь на мобильных */
@@ -1384,21 +1416,147 @@ header {
     gap: 16px;
   }
 
+  /* Поиск и фильтры */
+  #clients-search,
+  input[type="text"][placeholder*="Поиск"],
+  input[type="search"] {
+    font-size: 16px !important; /* Предотвращает зум на iOS */
+    width: 100% !important;
+    padding: 12px !important;
+    min-height: 44px;
+  }
+
+  /* Статистика клиентов */
+  #clients-stats {
+    padding: 12px !important;
+    font-size: 0.9rem;
+  }
+
+  /* Списки клиентов */
+  .client-item,
+  .client-card {
+    padding: 12px !important;
+    margin-bottom: 12px;
+    border-radius: 12px;
+  }
+
+  /* Карточки пользователей */
+  .user-card {
+    padding: 14px !important;
+  }
+
+  /* Баннер Telegram на мобильных */
+  .card > div[style*="background: #f0f9ff"] {
+    padding: 14px !important;
+  }
+
+  .card > div[style*="background: #f0f9ff"] > div {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .card > div[style*="background: #f0f9ff"] button {
+    width: 100%;
+    padding: 12px;
+    min-height: 44px;
+  }
+
+  /* Фото мастера на мобильных */
+  .master-photo-preview,
+  #master-photos-preview {
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  #master-photos-preview > div {
+    min-width: 80px !important;
+    max-width: 120px !important;
+    aspect-ratio: 1;
+  }
+
+  /* Модальное окно с фото на мобильных */
+  #photo-view-modal {
+    padding: 10px !important;
+  }
+
+  #photo-view-modal > div {
+    padding: 10px !important;
+  }
+
+  #photo-view-image {
+    max-width: 95vw !important;
+    max-height: 85vh !important;
+  }
+
+  #close-photo-modal {
+    width: 44px !important;
+    height: 44px !important;
+    top: 10px !important;
+    right: 10px !important;
+  }
+
+  /* Модальное окно информации о Telegram боте */
+  #telegram-bot-info-modal {
+    padding: 20px 10px !important;
+  }
+
+  #telegram-bot-info-modal > div {
+    width: calc(100% - 20px) !important;
+    max-width: calc(100vw - 20px) !important;
+    padding: 20px !important;
+    max-height: 90vh !important;
+  }
+
+  /* Улучшение для логотипа в header */
+  #logo-container img.logo-img,
+  header img.logo-img {
+    max-height: 60px !important;
+    max-width: 150px !important;
+  }
+
   /* Модальные окна */
+  .modal-overlay {
+    padding: 10px !important;
+    align-items: flex-start !important;
+    padding-top: 60px !important;
+  }
+
   .modal {
-    width: 95%;
-    max-width: none;
-    padding: 14px 16px;
-    margin: 20px;
+    width: calc(100% - 20px) !important;
+    max-width: calc(100vw - 20px) !important;
+    padding: 16px !important;
+    margin: 0 !important;
+    max-height: calc(100vh - 80px) !important;
+    overflow-y: auto !important;
+    box-sizing: border-box !important;
   }
 
   .modal-title {
-    font-size: 0.95rem;
+    font-size: 1rem;
+  }
+
+  .modal-body {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+  }
+
+  /* Улучшаем формы в модальных окнах */
+  .modal form {
+    gap: 12px;
+  }
+
+  .modal input,
+  .modal select,
+  .modal textarea {
+    font-size: 16px !important; /* Предотвращает зум на iOS */
   }
 
   /* Карта */
   #map {
     height: 300px !important;
+    width: 100% !important;
+    border-radius: 12px !important;
+    max-width: 100% !important;
   }
 
   /* Улучшение для touch-устройств */
@@ -1439,6 +1597,66 @@ header {
   /* Свободные слоты */
   .cal-slot-free {
     min-height: 32px;
+  }
+
+  /* Карточки клиентов на мобильных */
+  .client-card {
+    padding: 14px !important;
+  }
+
+  /* Применяем стили для динамически созданных карточек клиентов */
+  div[class*="client-card"],
+  div[style*="padding: 16px"][style*="background: #ffffff"][style*="border: 1px solid"] {
+    padding: 14px !important;
+  }
+
+  /* Улучшаем отображение карточек клиентов */
+  div[style*="display: flex"][style*="justify-content: space-between"] {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  div[style*="display: flex"][style*="justify-content: space-between"] > div:last-child {
+    width: 100% !important;
+    margin-left: 0 !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+    align-self: stretch !important;
+  }
+
+  div[style*="display: grid"][style*="grid-template-columns: repeat(auto-fit"] {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* Статистика внутри карточек клиентов */
+  div[style*="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Карта на мобильных */
+  #map {
+    height: 300px !important;
+    width: 100% !important;
+    border-radius: 12px !important;
+  }
+
+  /* Баннеры и уведомления */
+  .card > div[style*="background"] {
+    padding: 14px !important;
+  }
+
+  /* Фото мастера на мобильных */
+  .master-photo-preview,
+  #master-photos-preview > div {
+    min-width: 80px !important;
+    max-width: 120px !important;
+  }
+
+  /* Логотип в header на мобильных */
+  header img.logo-img {
+    max-height: 60px !important;
+    max-width: 150px !important;
   }
 }
 

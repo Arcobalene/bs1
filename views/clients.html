@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Клиенты — Beauty Studio</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -156,6 +156,11 @@
       return;
     }
 
+    const isMobile = window.innerWidth <= 768;
+    const statsGridCols = isMobile ? '1fr' : 'repeat(auto-fit, minmax(150px, 1fr))';
+    const cardLayout = isMobile ? 'column' : 'row';
+    const buttonsLayout = isMobile ? 'column' : 'column';
+    
     list.innerHTML = filteredClients.map(client => {
       const lastBooking = client.lastBooking;
       const lastBookingDate = lastBooking ? new Date(lastBooking.date).toLocaleDateString('ru-RU', {
@@ -167,19 +172,19 @@
 
       return `
         <div class="client-card" style="
-          padding: 16px;
+          padding: ${isMobile ? '14px' : '16px'};
           background: #ffffff;
           border: 1px solid #e5e7eb;
           border-radius: 8px;
           margin-bottom: 12px;
           transition: box-shadow 0.2s;
-        " onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow='none'">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-            <div style="flex: 1;">
+        ">
+          <div style="display: flex; flex-direction: ${cardLayout}; gap: 12px; justify-content: space-between; align-items: flex-start;">
+            <div style="flex: 1; width: 100%;">
               <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
                 <div style="
-                  width: 48px;
-                  height: 48px;
+                  width: ${isMobile ? '40px' : '48px'};
+                  height: ${isMobile ? '40px' : '48px'};
                   border-radius: 50%;
                   background: linear-gradient(135deg, #f973b6, #a855f7);
                   display: flex;
@@ -187,18 +192,18 @@
                   justify-content: center;
                   color: white;
                   font-weight: 600;
-                  font-size: 1.2rem;
+                  font-size: ${isMobile ? '1rem' : '1.2rem'};
                   flex-shrink: 0;
                 ">${client.name.charAt(0).toUpperCase()}</div>
-                <div>
-                  <div style="font-weight: 600; font-size: 1.1rem; color: #1f2937; margin-bottom: 4px;">${client.name}</div>
-                  <div style="color: #6b7280; font-size: 0.9rem;">📞 ${client.phone}</div>
+                <div style="flex: 1; min-width: 0;">
+                  <div style="font-weight: 600; font-size: ${isMobile ? '1rem' : '1.1rem'}; color: #1f2937; margin-bottom: 4px; word-wrap: break-word;">${client.name}</div>
+                  <div style="color: #6b7280; font-size: ${isMobile ? '0.85rem' : '0.9rem'}; word-wrap: break-word;">📞 ${client.phone}</div>
                 </div>
               </div>
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+              <div style="display: grid; grid-template-columns: ${statsGridCols}; gap: ${isMobile ? '10px' : '12px'}; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
                 <div>
                   <div style="font-size: 0.85rem; color: #6b7280; margin-bottom: 4px;">Всего записей</div>
-                  <div style="font-weight: 600; color: #1f2937; font-size: 1.1rem;">${client.totalBookings}</div>
+                  <div style="font-weight: 600; color: #1f2937; font-size: ${isMobile ? '1rem' : '1.1rem'};">${client.totalBookings}</div>
                 </div>
                 <div>
                   <div style="font-size: 0.85rem; color: #6b7280; margin-bottom: 4px;">Последняя запись</div>
@@ -208,16 +213,16 @@
                 ${lastBooking ? `
                 <div>
                   <div style="font-size: 0.85rem; color: #6b7280; margin-bottom: 4px;">Последняя услуга</div>
-                  <div style="font-weight: 600; color: #1f2937; font-size: 0.95rem;">${lastBooking.service || '—'}</div>
+                  <div style="font-weight: 600; color: #1f2937; font-size: 0.95rem; word-wrap: break-word;">${lastBooking.service || '—'}</div>
                 </div>
                 ` : ''}
               </div>
             </div>
-            <div style="display: flex; flex-direction: column; gap: 8px; margin-left: 16px;">
-              <button class="btn-secondary" onclick="viewClientBookings('${client.phone}')" style="white-space: nowrap; font-size: 0.9rem;">
+            <div style="display: flex; flex-direction: ${buttonsLayout}; gap: 8px; ${isMobile ? 'width: 100%;' : 'margin-left: 16px;'}">
+              <button class="btn-secondary" onclick="viewClientBookings('${client.phone}')" style="white-space: nowrap; font-size: 0.9rem; ${isMobile ? 'width: 100%; min-height: 44px;' : ''}">
                 Просмотр записей
               </button>
-              <a href="tel:${client.phone}" class="btn-primary" style="text-decoration: none; text-align: center; white-space: nowrap; font-size: 0.9rem;">
+              <a href="tel:${client.phone}" class="btn-primary" style="text-decoration: none; text-align: center; white-space: nowrap; font-size: 0.9rem; ${isMobile ? 'width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: center;' : ''}">
                 📞 Позвонить
               </a>
             </div>
