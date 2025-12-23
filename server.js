@@ -5,6 +5,7 @@ const path = require('path');
 const multer = require('multer');
 const Minio = require('minio');
 const https = require('https');
+const http = require('http');
 const { users: dbUsers, services, masters, bookings, migrateFromJSON } = require('./database');
 const { 
   timeToMinutes, 
@@ -51,6 +52,63 @@ const minioClient = new Minio.Client({
 });
 
 const BUCKET_NAME = 'master-photos';
+
+// Глобальный токен Telegram бота (из переменных окружения или из БД для админа)
+let TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
+let cachedBotToken = null;
+let tokenCacheTime = 0;
+const TOKEN_CACHE_TTL = 60000; // 1 минута
+
+// Функция для получения токена бота (приоритет: БД админа > переменные окружения)
+async function getTelegramBotToken() {
+  const now = Date.now();
+  // Используем кэш, если он еще актуален
+  if (cachedBotToken !== null && (now - tokenCacheTime) < TOKEN_CACHE_TTL) {
+    return cachedBotToken;
+  }
+  
+  // Сбрасываем кэш
+  cachedBotToken = null;
+  
+  // Сначала проверяем переменные окружения
+  if (TELEGRAM_BOT_TOKEN) {
+    cachedBotToken = TELEGRAM_BOT_TOKEN;
+    tokenCacheTime = now;
+  }
+  
+  try {
+    // Ищем админа с сохраненным токеном
+    const adminUsers = await dbUsers.getAll();
+    const admin = adminUsers.find(u => (u.role === 'admin' || u.username === 'admin') && u.bot_token);
+    if (admin && admin.bot_token && admin.bot_token.trim()) {
+      // Токен из БД имеет приоритет
+      cachedBotToken = admin.bot_token.trim();
+      tokenCacheTime = now;
+      return cachedBotToken;
+    }
+  } catch (error) {
+    console.error('❌ Ошибка получения токена из БД:', error);
+    // Если ошибка при обращении к БД, используем токен из env (если есть)
+    if (TELEGRAM_BOT_TOKEN) {
+      return TELEGRAM_BOT_TOKEN;
+    }
+    // Если БД недоступна и нет токена в env, пробрасываем ошибку
+    throw new Error('База данных недоступна и токен не найден в переменных окружения');
+  }
+  
+  // Возвращаем токен из переменных окружения или null
+  return cachedBotToken;
+}
+
+// Функция для сброса кэша токена (вызывается при сохранении нового токена)
+function clearBotTokenCache() {
+  cachedBotToken = null;
+  tokenCacheTime = 0;
+}
+
+if (!TELEGRAM_BOT_TOKEN && process.env.NODE_ENV === 'production') {
+  console.warn('⚠️  WARNING: TELEGRAM_BOT_TOKEN is not set. Telegram notifications will be disabled.');
+}
 
 // Инициализация bucket в MinIO
 (async () => {
@@ -117,23 +175,42 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public', { maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0 }));
 
+// Определяем режим разработки (должно быть до использования)
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
 // Настройка сессий
+// Определяем, используется ли HTTPS
+// ВАЖНО: secure: true только для HTTPS, иначе cookie не установится в браузере
+const isHttps = process.env.HTTPS_ENABLED === 'true';
+const cookieSecure = isHttps; // secure: true только для HTTPS
+
 app.use(session({
   secret: SESSION_SECRET,
   resave: true, // Сохранять сессию при каждом запросе
   saveUninitialized: false, // Не сохранять пустые сессии
   name: 'beauty.studio.sid', // Явное имя cookie
   cookie: { 
-    secure: process.env.NODE_ENV === 'production' && process.env.HTTPS_ENABLED === 'true',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'lax',
-    path: '/'
+    secure: cookieSecure, // true только для HTTPS, иначе cookie не установится
+    httpOnly: true, // Защита от XSS
+    maxAge: 24 * 60 * 60 * 1000, // 24 часа
+    sameSite: 'lax', // Защита от CSRF, но позволяет отправку cookies при переходе по ссылкам
+    path: '/' // Cookie доступна для всех путей
   }
 }));
 
-// Логирование только в режиме разработки
-const isDevelopment = process.env.NODE_ENV !== 'production';
+// Логирование настроек сессии (только в режиме разработки)
+if (isDevelopment) {
+  console.log('🔐 Настройки сессии:', {
+    secure: cookieSecure,
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: '24 часа',
+    name: 'beauty.studio.sid',
+    isHttps: isHttps,
+    NODE_ENV: process.env.NODE_ENV || 'development',
+    HTTPS_ENABLED: process.env.HTTPS_ENABLED || 'не установлено'
+  });
+}
 if (isDevelopment) {
   app.use((req, res, next) => {
     if (req.path.startsWith('/api/login') || req.path.startsWith('/admin')) {
@@ -210,10 +287,23 @@ async function initDemoAccount() {
 
 // Middleware для проверки авторизации
 async function requireAuth(req, res, next) {
+  // Логирование для диагностики (только в режиме разработки)
+  if (isDevelopment && req.path && req.path.startsWith('/api/')) {
+    console.log(`[requireAuth] ${req.method} ${req.path}`, {
+      sessionId: req.sessionID,
+      userId: req.session.userId || 'не установлен',
+      hasCookie: !!req.headers.cookie,
+      cookieHeader: req.headers.cookie ? req.headers.cookie.substring(0, 50) + '...' : 'нет'
+    });
+  }
+  
   if (req.session.userId) {
     try {
       const user = await dbUsers.getById(req.session.userId);
       if (!user) {
+        if (isDevelopment) {
+          console.log(`[requireAuth] Пользователь не найден: userId=${req.session.userId}`);
+        }
         req.session.destroy();
         // Для API запросов всегда возвращаем JSON
         if (req.path && req.path.startsWith('/api/')) {
@@ -222,6 +312,9 @@ async function requireAuth(req, res, next) {
         return res.redirect('/login');
       }
       if (user.is_active === false || user.is_active === 0) {
+        if (isDevelopment) {
+          console.log(`[requireAuth] Аккаунт деактивирован: userId=${req.session.userId}`);
+        }
         req.session.destroy();
         // Для API запросов всегда возвращаем JSON
         if (req.path && req.path.startsWith('/api/')) {
@@ -241,6 +334,9 @@ async function requireAuth(req, res, next) {
   } else {
     // Для API запросов всегда возвращаем JSON
     if (req.path && req.path.startsWith('/api/')) {
+      if (isDevelopment) {
+        console.log(`[requireAuth] Сессия не найдена для ${req.method} ${req.path}`);
+      }
       return res.status(401).json({ success: false, message: 'Требуется авторизация' });
     }
     return res.redirect('/login');
@@ -553,12 +649,23 @@ app.post('/api/salon', requireAuth, async (req, res) => {
       return res.json({ success: false, message: 'Пользователь не найден' });
     }
 
+    // Нормализуем номер телефона в формат E.164 для единообразия
+    let normalizedPhone = undefined;
+    if (salonPhone !== undefined) {
+      if (salonPhone && salonPhone.trim()) {
+        normalizedPhone = normalizeToE164(salonPhone.trim());
+        console.log(`📞 Сохранение номера телефона для userId=${req.session.userId}: ${normalizedPhone} (исходный: ${salonPhone})`);
+      } else {
+        normalizedPhone = '';
+      }
+    }
+    
     await dbUsers.update(req.session.userId, {
       salonName: salonName !== undefined ? sanitizeString(salonName, 255) : undefined,
       salonAddress: salonAddress !== undefined ? sanitizeString(salonAddress, 500) : undefined,
       salonLat: salonLat !== undefined ? (salonLat ? parseFloat(salonLat) : null) : undefined,
       salonLng: salonLng !== undefined ? (salonLng ? parseFloat(salonLng) : null) : undefined,
-      salonPhone: salonPhone !== undefined ? (salonPhone ? sanitizeString(salonPhone.trim(), 50) : '') : undefined
+      salonPhone: normalizedPhone
     });
 
     res.json({ success: true });
@@ -1394,8 +1501,12 @@ app.post('/api/bookings', async (req, res) => {
       });
     }
 
+    // ownerId - это ID владельца салона, которому принадлежит страница бронирования /booking?userId=<ownerId>
+    const ownerId = idValidation.id;
+    
+    // Создаем запись, привязывая её к владельцу салона через user_id
     const bookingId = await bookings.create({
-      userId: idValidation.id,
+      userId: ownerId,
       name: sanitizeString(name, 255),
       phone: phone.trim(),
       service: sanitizeString(service, 255),
@@ -1406,10 +1517,9 @@ app.post('/api/bookings', async (req, res) => {
       comment: comment ? sanitizeString(comment, 1000) : ''
     });
 
-    // Отправляем уведомление владельцу салона в Telegram
+    // Отправляем уведомление ТОЛЬКО владельцу салона, которому принадлежит эта запись
     try {
-      console.log(`📨 Попытка отправить Telegram уведомление владельцу салона (userId=${idValidation.id})`);
-      await sendTelegramNotificationToOwner(idValidation.id, {
+      await sendTelegramNotificationToOwner(ownerId, {
         name: name.trim(),
         phone: phone.trim(),
         service: service.trim(),
@@ -1421,7 +1531,6 @@ app.post('/api/bookings', async (req, res) => {
       }, 'new');
     } catch (telegramError) {
       console.error('❌ Ошибка отправки уведомления в Telegram:', telegramError);
-      console.error('  Stack:', telegramError.stack);
     }
 
     res.status(201).json({ success: true, booking: { id: bookingId } });
@@ -1549,9 +1658,11 @@ app.put('/api/bookings/:id', requireAuth, async (req, res) => {
     
     await bookings.update(bookingId, updateData);
 
-    // Отправляем уведомление владельцу салона об изменении записи
+    // Отправляем уведомление ТОЛЬКО владельцу салона, которому принадлежит эта запись
+    // existingBooking.user_id - это ownerId владельца салона
+    const ownerId = existingBooking.user_id;
     try {
-      await sendTelegramNotificationToOwner(existingBooking.user_id, {
+      await sendTelegramNotificationToOwner(ownerId, {
         name: updateData.name || existingBooking.name,
         phone: updateData.phone || existingBooking.phone,
         service: updateData.service || existingBooking.service,
@@ -1591,13 +1702,14 @@ app.delete('/api/bookings/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Нет доступа к этой записи' });
     }
 
-    const salonOwnerId = existingBooking.user_id;
+    // existingBooking.user_id - это ownerId владельца салона
+    const ownerId = existingBooking.user_id;
 
     await bookings.delete(bookingId);
 
-    // Отправляем уведомление владельцу салона об отмене записи
+    // Отправляем уведомление ТОЛЬКО владельцу салона, которому принадлежит эта запись
     try {
-      await sendTelegramNotificationToOwner(salonOwnerId, {
+      await sendTelegramNotificationToOwner(ownerId, {
         name: existingBooking.name,
         phone: existingBooking.phone,
         service: existingBooking.service,
@@ -1827,26 +1939,35 @@ function phoneMatches(phone1, phone2) {
   return normalized1 === normalized2;
 }
 
-// Функция для отправки уведомления в Telegram при создании/изменении записи
-// Отправка уведомления владельцу салона через telegram_id
+// Отправка уведомления в Telegram владельцу салона через микросервис
+// salonOwnerId - ID владельца салона (ownerId), которому принадлежит запись
+// Уведомление отправляется ТОЛЬКО на telegram_id этого владельца
+// Изоляция гарантируется: каждый владелец получает уведомления только о своих записях
+// booking.user_id всегда равен salonOwnerId, что гарантирует правильную привязку
 async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType) {
   try {
-    console.log(`🔔 Отправка Telegram уведомления владельцу салона: salonOwnerId=${salonOwnerId}, eventType=${eventType}`);
+    if (!salonOwnerId || typeof salonOwnerId !== 'number') {
+      console.error('❌ Некорректный salonOwnerId:', salonOwnerId);
+      return;
+    }
+    
+    console.log(`🔔 Отправка Telegram уведомления владельцу салона: salonOwnerId=${salonOwnerId}, eventType=${eventType}, booking.user_id должен быть=${salonOwnerId}`);
     
     const salonOwner = await dbUsers.getById(salonOwnerId);
     if (!salonOwner) {
-      console.log('❌ Владелец салона не найден');
+      console.log(`❌ Владелец салона не найден: salonOwnerId=${salonOwnerId}`);
       return;
     }
 
-    // Проверяем наличие telegram_id
+    console.log(`📋 Информация о владельце: userId=${salonOwner.id}, telegram_id=${salonOwner.telegram_id || 'не установлен'}, salon_phone=${salonOwner.salon_phone || 'не указан'}`);
+
     if (!salonOwner.telegram_id) {
-      console.log('ℹ️ У владельца салона не привязан Telegram (telegram_id отсутствует)');
+      console.log(`ℹ️ У владельца салона не привязан Telegram: salonOwnerId=${salonOwnerId}. Для подключения владелец должен отправить свой номер телефона в боте.`);
       return;
     }
 
-    // Загружаем настройки Telegram для получения botToken
-    let telegramSettings = null;
+    // Загружаем настройки Telegram для проверки включенных уведомлений
+    let telegramSettings = {};
     if (salonOwner.telegram_settings) {
       try {
         telegramSettings = typeof salonOwner.telegram_settings === 'string' 
@@ -1854,13 +1975,8 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
           : salonOwner.telegram_settings;
       } catch (e) {
         console.error('❌ Ошибка парсинга telegram_settings:', e);
-        return;
+        telegramSettings = {};
       }
-    }
-
-    if (!telegramSettings || !telegramSettings.botToken) {
-      console.log('❌ Токен бота не настроен');
-      return;
     }
 
     // Проверяем, включены ли уведомления
@@ -1915,10 +2031,37 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
       message += `\n💬 <b>Комментарий:</b> ${escapeHtml(booking.comment)}`;
     }
 
-    // Отправляем сообщение на telegram_id владельца
-    console.log(`📤 Отправка сообщения в Telegram на telegram_id=${salonOwner.telegram_id}...`);
-    await sendTelegramMessage(telegramSettings.botToken, salonOwner.telegram_id, message);
-    console.log(`✅ Уведомление отправлено владельцу салона (telegram_id=${salonOwner.telegram_id})`);
+    // Отправляем сообщение через микросервис Telegram бота
+    console.log(`📤 Вызов микросервиса Telegram бота для отправки уведомления: telegramId=${salonOwner.telegram_id}, длина сообщения=${message.length}`);
+    try {
+      const telegramBotUrl = process.env.TELEGRAM_BOT_URL || 'http://telegram-bot:3001';
+      console.log(`🔗 URL микросервиса: ${telegramBotUrl}/api/bot/send-notification`);
+      
+      const response = await callTelegramBotApi('/api/bot/send-notification', {
+        method: 'POST',
+        body: {
+          telegramId: salonOwner.telegram_id,
+          message: message
+        }
+      });
+
+      console.log(`📥 Ответ микросервиса: status=${response.status}, success=${response.data.success}, message=${response.data.message || 'нет'}`);
+
+      if (response.status !== 200 || !response.data.success) {
+        const errorMsg = response.data.message || `HTTP ${response.status}`;
+        console.error(`❌ Ошибка отправки уведомления: ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+      
+      console.log(`✅ Микросервис успешно обработал запрос на отправку уведомления`);
+    } catch (error) {
+      // Логируем ошибку, но не пробрасываем дальше, чтобы не прерывать основной процесс
+      console.error('❌ Ошибка вызова микросервиса Telegram бота:', error.message);
+      console.error('  Stack:', error.stack);
+      throw error; // Пробрасываем для логирования в catch блоке выше
+    }
+
+    console.log(`✅ Уведомление отправлено владельцу салона: salonOwnerId=${salonOwnerId}, telegram_id=${salonOwner.telegram_id}, salonUrl=/booking?userId=${salonOwnerId}`);
   } catch (error) {
     console.error('❌ Ошибка отправки уведомления владельцу салона:', error);
     console.error('  Stack:', error.stack);
@@ -1986,7 +2129,7 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
       return res.status(404).json({ success: false, message: 'Пользователь не найден' });
     }
     
-    let telegramSettings = null;
+    let telegramSettings = {};
     if (user.telegram_settings) {
       try {
         telegramSettings = typeof user.telegram_settings === 'string' 
@@ -1998,18 +2141,55 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
       }
     }
     
+    // Получаем токен бота (из БД админа или из env)
+    let botToken = null;
+    let hasBotToken = false;
+    try {
+      botToken = await getTelegramBotToken();
+      hasBotToken = !!botToken;
+    } catch (error) {
+      console.error('Ошибка получения токена бота:', error);
+    }
+    
+    // Проверяем, есть ли токен в БД у текущего пользователя (если он админ)
+    let botTokenInDb = false;
+    let botTokenLength = 0;
+    if (user.bot_token && user.bot_token.trim()) {
+      botTokenInDb = true;
+      botTokenLength = user.bot_token.trim().length;
+    }
+    
+    // Возвращаем токен только для админа (для отображения в UI)
+    // В целях безопасности возвращаем только если он есть в БД
+    let botTokenForUI = null;
+    if (user.bot_token && user.bot_token.trim()) {
+      // Возвращаем токен для отображения в поле (только для админа)
+      botTokenForUI = user.bot_token.trim();
+    }
+    
+    console.log('📋 Получение настроек Telegram:', {
+      userId: req.session.userId,
+      botTokenInDb: botTokenInDb,
+      botTokenLength: botTokenLength,
+      hasBotTokenFromFunction: hasBotToken,
+      botTokenForUI: botTokenForUI ? `[${botTokenForUI.length} символов]` : 'не указан',
+      telegramId: user.telegram_id || 'не установлен'
+    });
+    
     res.json({ 
       success: true, 
-      settings: telegramSettings || {
-        botToken: '',
-        chatId: '',
-        phone: '',
-        enabled: false,
-        notifyNewBookings: true,
-        notifyCancellations: false,
-        notifyChanges: false
+      settings: {
+        enabled: telegramSettings.enabled !== false,
+        notifyNewBookings: telegramSettings.notifyNewBookings !== false,
+        notifyCancellations: telegramSettings.notifyCancellations === true,
+        notifyChanges: telegramSettings.notifyChanges === true
       },
-      telegramId: user.telegram_id || null
+      telegramId: user.telegram_id || null,
+      hasBotToken: hasBotToken,
+      botTokenConfigured: botTokenInDb || hasBotToken,
+      botTokenInDb: botTokenInDb,
+      botTokenLength: botTokenLength,
+      botToken: botTokenForUI // Возвращаем токен для заполнения поля
     });
   } catch (error) {
     console.error('Ошибка получения настроек Telegram:', error);
@@ -2020,41 +2200,26 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
 // API: Сохранить настройки Telegram (только для админов)
 app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { botToken, chatId, enabled, notifyNewBookings, notifyCancellations, notifyChanges, phone } = req.body;
-    
-    // Валидация токена бота (формат: число:строка)
-    if (botToken && botToken.trim()) {
-      const tokenPattern = /^\d+:[A-Za-z0-9_-]+$/;
-      if (!tokenPattern.test(botToken.trim())) {
-        return res.status(400).json({ success: false, message: 'Некорректный формат токена бота' });
-      }
-    }
-    
-    // Валидация Chat ID (число или строка начинающаяся с @)
-    if (chatId && chatId.trim()) {
-      const chatIdStr = chatId.trim();
-      if (!/^-?\d+$/.test(chatIdStr) && !chatIdStr.startsWith('@')) {
-        return res.status(400).json({ success: false, message: 'Некорректный формат Chat ID' });
-      }
-    }
-    
-    // Валидация телефона, если указан
-    if (phone && phone.trim()) {
-      const phoneValidation = validatePhone(phone);
-      if (!phoneValidation.valid) {
-        return res.status(400).json({ success: false, message: phoneValidation.message });
-      }
-    }
+    const { enabled, notifyNewBookings, notifyCancellations, notifyChanges, botToken } = req.body;
     
     const user = await dbUsers.getById(req.session.userId);
     if (!user) {
       return res.status(404).json({ success: false, message: 'Пользователь не найден' });
     }
     
+    // Загружаем существующие настройки, чтобы сохранить только флаги уведомлений
+    let existingSettings = {};
+    if (user.telegram_settings) {
+      try {
+        existingSettings = typeof user.telegram_settings === 'string' 
+          ? JSON.parse(user.telegram_settings) 
+          : user.telegram_settings;
+      } catch (e) {
+        console.error('Ошибка парсинга telegram_settings:', e);
+      }
+    }
+    
     const settings = {
-      botToken: botToken ? botToken.trim() : '',
-      chatId: chatId ? chatId.trim() : '',
-      phone: phone ? phone.trim() : '',
       enabled: enabled === true,
       notifyNewBookings: notifyNewBookings !== false,
       notifyCancellations: notifyCancellations === true,
@@ -2063,13 +2228,12 @@ app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =
     
     console.log('💾 Сохранение настроек Telegram:', {
       userId: req.session.userId,
-      hasToken: !!settings.botToken,
-      hasChatId: !!settings.chatId,
-      hasPhone: !!settings.phone,
       enabled: settings.enabled,
       notifyNewBookings: settings.notifyNewBookings,
       notifyCancellations: settings.notifyCancellations,
-      notifyChanges: settings.notifyChanges
+      notifyChanges: settings.notifyChanges,
+      botTokenProvided: botToken !== undefined,
+      botTokenValue: botToken ? `[${botToken.length} символов]` : 'не указан'
     });
     
     // Сохраняем настройки в БД через метод users.update
@@ -2077,7 +2241,31 @@ app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =
     
     if (DB_TYPE === 'postgres') {
       try {
-        await dbUsers.update(req.session.userId, { telegramSettings: settings });
+        const updateData = { telegramSettings: settings };
+        
+        // Сохраняем bot token только если он передан (только для админа)
+        if (botToken !== undefined) {
+          if (botToken && botToken.trim()) {
+            const trimmedToken = botToken.trim();
+            updateData.botToken = trimmedToken;
+            console.log('💾 Сохранение bot token для админа (длина:', trimmedToken.length, 'символов)');
+          } else {
+            // Если передан пустой токен, удаляем его
+            updateData.botToken = null;
+            console.log('💾 Удаление bot token');
+          }
+        } else {
+          console.log('ℹ️ botToken не передан в запросе, оставляем текущее значение');
+        }
+        
+        await dbUsers.update(req.session.userId, updateData);
+        
+        // Сбрасываем кэш токена при сохранении нового токена
+        if (botToken !== undefined) {
+          clearBotTokenCache();
+          console.log('🔄 Кэш токена бота сброшен');
+        }
+        
         console.log('✅ Настройки Telegram сохранены для пользователя', req.session.userId);
       } catch (updateError) {
         console.error('❌ Ошибка сохранения настроек Telegram:', updateError);
@@ -2096,42 +2284,265 @@ app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =
   }
 });
 
-// API: Тестовая отправка сообщения в Telegram (только для админов)
-app.post('/api/telegram/test', requireAuth, requireAdmin, async (req, res) => {
+// Функция для вызова API микросервиса Telegram бота
+async function callTelegramBotApi(endpoint, options = {}) {
+  const telegramBotUrl = process.env.TELEGRAM_BOT_URL || 'http://telegram-bot:3001';
+  const url = `${telegramBotUrl}${endpoint}`;
+  
+  return new Promise((resolve, reject) => {
+    try {
+      const urlObj = new URL(url);
+      const isHttps = urlObj.protocol === 'https:';
+      const httpModule = isHttps ? https : http;
+      
+      const requestOptions = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || (isHttps ? 443 : 80),
+        path: urlObj.pathname + urlObj.search,
+        method: options.method || 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers
+        },
+        timeout: 10000
+      };
+      
+      const req = httpModule.request(requestOptions, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          try {
+            const jsonData = JSON.parse(data);
+            resolve({ status: res.statusCode, data: jsonData });
+          } catch (error) {
+            // Если не удалось распарсить JSON, возвращаем сырой ответ
+            resolve({ 
+              status: res.statusCode, 
+              data: { success: false, message: `Ошибка парсинга ответа: ${data.substring(0, 200)}` } 
+            });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        reject(new Error(`Ошибка соединения с микросервисом: ${error.message}`));
+      });
+      
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Таймаут при обращении к микросервису Telegram бота'));
+      });
+      
+      req.setTimeout(10000);
+      
+      if (options.body) {
+        try {
+          req.write(JSON.stringify(options.body));
+        } catch (error) {
+          req.destroy();
+          reject(new Error(`Ошибка сериализации тела запроса: ${error.message}`));
+          return;
+        }
+      }
+      
+      req.end();
+    } catch (error) {
+      reject(new Error(`Ошибка создания запроса: ${error.message}`));
+    }
+  });
+}
+
+// Функция для отправки сообщения ботом с кнопкой request_contact
+async function sendTelegramMessageWithContactButton(chatId, message) {
+  const botToken = await getTelegramBotToken();
+  if (!botToken) {
+    throw new Error('Токен Telegram бота не настроен');
+  }
+  
+  return new Promise((resolve, reject) => {
+    const url = new URL(`https://api.telegram.org/bot${botToken}/sendMessage`);
+    const postData = JSON.stringify({
+      chat_id: chatId,
+      text: message,
+      parse_mode: 'HTML',
+      reply_markup: {
+        keyboard: [[{
+          text: '📱 Отправить контакт',
+          request_contact: true
+        }]],
+        resize_keyboard: true,
+        one_time_keyboard: true
+      }
+    });
+    
+    const options = {
+      hostname: url.hostname,
+      port: url.port || 443,
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    };
+    
+    const req = https.request(options, (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        try {
+          const jsonData = JSON.parse(data);
+          
+          if (res.statusCode !== 200 || !jsonData.ok) {
+            reject(new Error(jsonData.description || 'Ошибка отправки сообщения в Telegram'));
+            return;
+          }
+          
+          resolve({ success: true, data: jsonData });
+        } catch (error) {
+          reject(new Error('Ошибка парсинга ответа от Telegram API'));
+        }
+      });
+    });
+    
+    req.on('error', (error) => {
+      reject(error);
+    });
+    
+    req.write(postData);
+    req.end();
+  });
+}
+
+// Функция для получения информации о боте
+async function getBotInfo() {
+  const botToken = await getTelegramBotToken();
+  if (!botToken) {
+    throw new Error('Токен бота не найден');
+  }
+  
+  return new Promise((resolve, reject) => {
+    const url = new URL(`https://api.telegram.org/bot${botToken}/getMe`);
+    
+    const options = {
+      hostname: url.hostname,
+      port: url.port || 443,
+      path: url.pathname,
+      method: 'GET',
+      timeout: 10000
+    };
+    
+    const req = https.request(options, (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        try {
+          const jsonData = JSON.parse(data);
+          
+          if (res.statusCode !== 200 || !jsonData.ok) {
+            const errorMsg = jsonData.description || 'Ошибка получения информации о боте';
+            reject(new Error(errorMsg));
+            return;
+          }
+          
+          resolve(jsonData.result);
+        } catch (error) {
+          reject(new Error('Ошибка парсинга ответа от Telegram API: ' + error.message));
+        }
+      });
+    });
+    
+    req.on('error', (error) => {
+      reject(new Error('Ошибка соединения с Telegram API: ' + error.message));
+    });
+    
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Таймаут при обращении к Telegram API'));
+    });
+    
+    req.setTimeout(10000);
+    req.end();
+  });
+}
+
+// API: Получить ссылку на бота для подключения
+app.get('/api/telegram/connect-link', requireAuth, async (req, res) => {
   try {
-    const { botToken, chatId } = req.body;
+    const response = await callTelegramBotApi('/api/bot/info');
     
-    if (!botToken || !chatId) {
-      return res.status(400).json({ success: false, message: 'Токен бота и Chat ID обязательны' });
+    if (response.status !== 200 || !response.data.success) {
+      return res.status(response.status === 500 ? 500 : 400).json({ 
+        success: false, 
+        message: response.data.message || 'Не удалось получить информацию о боте. Проверьте правильность токена.' 
+      });
     }
     
-    // Валидация формата токена
-    const tokenPattern = /^\d+:[A-Za-z0-9_-]+$/;
-    if (!tokenPattern.test(botToken.trim())) {
-      return res.status(400).json({ success: false, message: 'Некорректный формат токена бота' });
+    const botInfo = response.data.botInfo;
+    if (!botInfo || !botInfo.username) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Не удалось получить информацию о боте. Проверьте правильность токена.' 
+      });
     }
     
-    // Валидация Chat ID
-    const chatIdStr = chatId.trim();
-    if (!/^-?\d+$/.test(chatIdStr) && !chatIdStr.startsWith('@')) {
-      return res.status(400).json({ success: false, message: 'Некорректный формат Chat ID' });
-    }
-    
-    const testMessage = `✅ <b>Тестовое сообщение</b>\n\nИнтеграция с Telegram ботом работает корректно!`;
-    
-    await sendTelegramMessage(botToken.trim(), chatIdStr, testMessage);
-    
-    res.json({ success: true, message: 'Тестовое сообщение успешно отправлено' });
+    res.json({ 
+      success: true, 
+      botUsername: botInfo.username,
+      botName: botInfo.first_name
+    });
   } catch (error) {
-    console.error('Ошибка тестовой отправки Telegram:', error);
+    console.error('❌ Неожиданная ошибка в /api/telegram/connect-link:', error);
     res.status(500).json({ 
       success: false, 
-      message: error.message || 'Ошибка отправки сообщения. Проверьте токен бота и Chat ID.' 
+      message: 'Внутренняя ошибка сервера: ' + error.message
     });
   }
 });
 
-// API: Привязать Telegram аккаунт (для Telegram бота)
+// Тестовый эндпоинт для проверки доступности webhook
+app.get('/api/telegram/webhook', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'Webhook endpoint доступен',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Вебхук для обработки сообщений от Telegram бота (проксирование в микросервис)
+app.post('/api/telegram/webhook', express.json(), async (req, res) => {
+  try {
+    console.log('📨 Получен webhook запрос от Telegram на основном сервере');
+    console.log('   Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('   Body:', JSON.stringify(req.body, null, 2));
+    
+    const response = await callTelegramBotApi('/api/bot/webhook', {
+      method: 'POST',
+      body: req.body
+    });
+    
+    console.log(`✅ Webhook проксирован в микросервис: status=${response.status}`);
+    res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('❌ Ошибка проксирования вебхука в микросервис Telegram бота:', error);
+    console.error('   Stack:', error.stack);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// API: Привязать Telegram аккаунт (для Telegram бота) - DEPRECATED, используется вебхук
 app.post('/api/telegram/link', async (req, res) => {
   try {
     const { telegramId, phone, contactUserId } = req.body;

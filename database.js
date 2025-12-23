@@ -191,6 +191,24 @@ async function initDatabase() {
       console.log('Поле telegram_id уже существует или ошибка миграции:', error.message);
     }
 
+    // Миграция: добавление поля bot_token для хранения токена Telegram бота (только для админа)
+    try {
+      await client.query(`
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'users' AND column_name = 'bot_token'
+          ) THEN
+            ALTER TABLE users ADD COLUMN bot_token VARCHAR(255);
+          END IF;
+        END $$;
+      `);
+      console.log('Миграция bot_token выполнена');
+    } catch (error) {
+      console.log('Поле bot_token уже существует или ошибка миграции:', error.message);
+    }
+
     console.log('База данных PostgreSQL инициализирована');
   } catch (error) {
     console.error('Ошибка инициализации БД:', error);
@@ -340,6 +358,28 @@ const users = {
         ? userData.telegramSettings 
         : JSON.stringify(userData.telegramSettings);
       values.push(telegramValue);
+    }
+    if (userData.telegramId !== undefined) {
+      // Валидация telegramId: должен быть положительным целым числом или null
+      if (userData.telegramId !== null) {
+        const telegramId = typeof userData.telegramId === 'string' 
+          ? parseInt(userData.telegramId, 10) 
+          : userData.telegramId;
+        
+        if (!Number.isInteger(telegramId) || telegramId <= 0) {
+          throw new Error('telegramId должен быть положительным целым числом или null');
+        }
+        
+        updates.push(`telegram_id = $${paramIndex++}`);
+        values.push(telegramId);
+      } else {
+        updates.push(`telegram_id = $${paramIndex++}`);
+        values.push(null);
+      }
+    }
+    if (userData.botToken !== undefined) {
+      updates.push(`bot_token = $${paramIndex++}`);
+      values.push(userData.botToken);
     }
 
     if (updates.length === 0) return;

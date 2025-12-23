@@ -167,7 +167,7 @@ header p {
   margin: 0 auto 40px;
   padding: 20px 16px 24px;
   position: relative;
-  z-index: 1;
+  z-index: 1001;
 }
 
 .grid {
