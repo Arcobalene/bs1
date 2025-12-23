@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Календарь — Beauty Studio</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -357,9 +357,13 @@
     if (isMobile) {
       // Минимальная ширина: 50px (время) + 7 * 90px (дни) = 680px
       grid.style.minWidth = "680px";
+      grid.style.width = "680px";
+      grid.style.maxWidth = "none";
       grid.style.gridTemplateColumns = `${timeColumnWidth} repeat(7, 90px)`;
     } else {
       grid.style.minWidth = "";
+      grid.style.width = "";
+      grid.style.maxWidth = "";
       grid.style.gridTemplateColumns = `${timeColumnWidth} repeat(7, 1fr)`;
     }
     

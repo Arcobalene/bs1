@@ -21,6 +21,9 @@ body {
   color: #222;
   line-height: 1.5;
   min-height: 100vh;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
 }
 
 header {
@@ -1138,15 +1141,24 @@ header {
   .container {
     margin: 0 auto 32px;
     padding: 24px 12px 20px;
-    overflow-x: hidden;
-    width: 100%;
-    max-width: 100%;
+    overflow-x: hidden !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    /* Ограничиваем контейнер шириной viewport */
+    max-width: 100vw !important;
   }
 
   /* Карточки */
   .card {
     padding: 16px;
     border-radius: 12px;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+    /* Ограничиваем карточку шириной контейнера */
+    position: relative;
+    max-width: 100% !important;
+    contain: layout;
   }
 
   .card h2 {
@@ -1259,18 +1271,29 @@ header {
 
   /* Календарь на мобильных */
   .admin-calendar-card {
-    overflow: hidden;
+    overflow-x: hidden !important;
+    overflow-y: visible;
     position: relative;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    /* Ограничиваем ширину карточки: viewport минус отступы контейнера (24px) */
+    max-width: calc(100vw - 24px) !important;
+    /* Убеждаемся, что карточка не выходит за границы */
+    contain: layout;
   }
 
   .calendar-wrapper {
-    overflow-x: auto;
+    overflow-x: auto !important;
+    overflow-y: visible;
     -webkit-overflow-scrolling: touch;
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    max-width: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
     position: relative;
+    box-sizing: border-box !important;
+    /* Убеждаемся, что wrapper не выходит за границы */
+    contain: layout style;
     /* Добавляем визуальный индикатор скролла */
     scrollbar-width: thin;
     scrollbar-color: rgba(168, 85, 247, 0.3) transparent;
@@ -1295,9 +1318,13 @@ header {
   }
 
   .calendar-grid {
-    min-width: 680px;
-    width: 680px;
-    margin: 0 auto;
+    min-width: 680px !important;
+    width: 680px !important;
+    max-width: 680px !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    /* Предотвращаем выход за границы */
+    flex-shrink: 0;
   }
 
   .week-controls {
@@ -1379,6 +1406,15 @@ header {
   /* Улучшение скролла */
   body {
     -webkit-overflow-scrolling: touch;
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+  }
+
+  html {
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
   }
 
   /* Улучшение для занятых слотов на мобильных */
@@ -1424,15 +1460,23 @@ header {
   .calendar-grid {
     min-width: 600px;
     width: 600px;
+    max-width: none;
   }
 
   .admin-calendar-card {
     margin: 0;
     padding: 14px;
+    overflow-x: hidden;
   }
 
   .calendar-wrapper {
     margin: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .container {
+    padding: 24px 8px 20px;
   }
 }
 
