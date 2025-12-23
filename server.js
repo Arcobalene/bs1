@@ -589,6 +589,7 @@ app.get('/api/user', requireAuth, async (req, res) => {
       salonLat: user.salon_lat,
       salonLng: user.salon_lng,
       salonPhone: user.salon_phone || '',
+      salonDisplayPhone: user.salon_display_phone || '',
       salonDesign: salonDesign,
       services: userServices,
       masters: userMasters,
@@ -649,27 +650,43 @@ app.post('/api/masters', requireAuth, async (req, res) => {
 // API: Обновить информацию о салоне
 app.post('/api/salon', requireAuth, async (req, res) => {
   try {
-    const { salonName, salonAddress, salonLat, salonLng, salonPhone } = req.body;
+    const { salonName, salonAddress, salonLat, salonLng, salonPhone, salonDisplayPhone } = req.body;
     const user = await dbUsers.getById(req.session.userId);
     
     if (!user) {
       return res.json({ success: false, message: 'Пользователь не найден' });
     }
 
-    // Валидация телефона (обязательное поле)
+    // Валидация телефона владельца (обязательное поле)
     const phoneValidation = validatePhone(salonPhone);
     if (!phoneValidation.valid) {
       return res.status(400).json({ success: false, message: phoneValidation.message });
     }
 
-    // Нормализуем номер телефона в формат E.164 для единообразия
+    // Нормализуем номер телефона владельца в формат E.164 для единообразия
     let normalizedPhone = undefined;
     if (salonPhone !== undefined) {
       if (salonPhone && salonPhone.trim()) {
         normalizedPhone = normalizeToE164(salonPhone.trim());
-        console.log(`📞 Сохранение номера телефона для userId=${req.session.userId}: ${normalizedPhone} (исходный: ${salonPhone})`);
+        console.log(`📞 Сохранение номера телефона владельца для userId=${req.session.userId}: ${normalizedPhone} (исходный: ${salonPhone})`);
       } else {
         normalizedPhone = '';
+      }
+    }
+
+    // Нормализуем номер телефона салона (необязательное поле)
+    let normalizedDisplayPhone = undefined;
+    if (salonDisplayPhone !== undefined) {
+      if (salonDisplayPhone && salonDisplayPhone.trim()) {
+        // Валидация телефона салона (если указан)
+        const displayPhoneValidation = validatePhone(salonDisplayPhone);
+        if (!displayPhoneValidation.valid) {
+          return res.status(400).json({ success: false, message: `Телефон салона: ${displayPhoneValidation.message}` });
+        }
+        normalizedDisplayPhone = normalizeToE164(salonDisplayPhone.trim());
+        console.log(`📞 Сохранение номера телефона салона для userId=${req.session.userId}: ${normalizedDisplayPhone} (исходный: ${salonDisplayPhone})`);
+      } else {
+        normalizedDisplayPhone = null;
       }
     }
     
@@ -678,7 +695,8 @@ app.post('/api/salon', requireAuth, async (req, res) => {
       salonAddress: salonAddress !== undefined ? sanitizeString(salonAddress, 500) : undefined,
       salonLat: salonLat !== undefined ? (salonLat ? parseFloat(salonLat) : null) : undefined,
       salonLng: salonLng !== undefined ? (salonLng ? parseFloat(salonLng) : null) : undefined,
-      salonPhone: normalizedPhone
+      salonPhone: normalizedPhone,
+      salonDisplayPhone: normalizedDisplayPhone
     });
 
     res.json({ success: true });
@@ -762,14 +780,14 @@ app.get('/api/salon/:userId', async (req, res) => {
       }
     }
     
-    res.json({ 
+      res.json({ 
       success: true, 
       salon: {
         name: user.salon_name || 'Beauty Studio',
         address: user.salon_address || '',
         lat: user.salon_lat,
         lng: user.salon_lng,
-        phone: user.salon_phone || '',
+        phone: user.salon_display_phone || user.salon_phone || '', // Используем display_phone, если есть, иначе phone
         design: salonDesign
       }
     });

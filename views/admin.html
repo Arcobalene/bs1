@@ -76,7 +76,13 @@
       <div>
         <label for="salon-phone">Телефон владельца *</label>
         <input type="tel" id="salon-phone" required placeholder="Например: +998XX XXX XX XX" />
-        <p class="note">Номер телефона будет использоваться для уведомлений и отображаться в хедере страницы салона</p>
+        <p class="note">Номер телефона владельца используется для уведомлений в Telegram. Не отображается на публичной странице.</p>
+      </div>
+
+      <div>
+        <label for="salon-display-phone">Телефон салона (для клиентов)</label>
+        <input type="tel" id="salon-display-phone" placeholder="Например: +998XX XXX XX XX" />
+        <p class="note">Номер телефона салона будет отображаться на публичной странице для клиентов</p>
       </div>
 
       <div>
@@ -1132,12 +1138,14 @@
     const salonName = document.getElementById('salon-name');
     const salonAddress = document.getElementById('salon-address');
     const salonPhone = document.getElementById('salon-phone');
+    const salonDisplayPhone = document.getElementById('salon-display-phone');
     const salonLat = document.getElementById('salon-lat');
     const salonLng = document.getElementById('salon-lng');
 
     if (salonName) salonName.value = currentUser.salonName || '';
     if (salonAddress) salonAddress.value = currentUser.salonAddress || '';
     if (salonPhone) salonPhone.value = currentUser.salonPhone || '';
+    if (salonDisplayPhone) salonDisplayPhone.value = currentUser.salonDisplayPhone || '';
     if (salonLat) salonLat.value = currentUser.salonLat || '';
     if (salonLng) salonLng.value = currentUser.salonLng || '';
 
@@ -1159,10 +1167,11 @@
       const salonName = document.getElementById('salon-name').value.trim();
       const salonAddress = document.getElementById('salon-address').value.trim();
       const salonPhone = document.getElementById('salon-phone').value.trim();
+      const salonDisplayPhone = document.getElementById('salon-display-phone').value.trim();
       const salonLat = document.getElementById('salon-lat').value;
       const salonLng = document.getElementById('salon-lng').value;
 
-      // Валидация телефона
+      // Валидация телефона владельца (обязательное поле)
       if (!salonPhone || !salonPhone.trim()) {
         if (salonAlert) {
           salonAlert.className = 'alert alert-error';
@@ -1176,10 +1185,23 @@
       if (phoneDigits.length < 9) {
         if (salonAlert) {
           salonAlert.className = 'alert alert-error';
-          salonAlert.textContent = 'Некорректный номер телефона (минимум 9 цифр)';
+          salonAlert.textContent = 'Некорректный номер телефона владельца (минимум 9 цифр)';
           salonAlert.style.display = 'block';
         }
         return;
+      }
+
+      // Валидация телефона салона (если указан)
+      if (salonDisplayPhone && salonDisplayPhone.trim()) {
+        const displayPhoneDigits = salonDisplayPhone.replace(/\D/g, '');
+        if (displayPhoneDigits.length < 9) {
+          if (salonAlert) {
+            salonAlert.className = 'alert alert-error';
+            salonAlert.textContent = 'Некорректный номер телефона салона (минимум 9 цифр)';
+            salonAlert.style.display = 'block';
+          }
+          return;
+        }
       }
 
       try {
@@ -1191,6 +1213,7 @@
             salonName,
             salonAddress,
             salonPhone,
+            salonDisplayPhone: salonDisplayPhone || null,
             salonLat: salonLat ? parseFloat(salonLat) : null,
             salonLng: salonLng ? parseFloat(salonLng) : null
           })
@@ -1208,6 +1231,7 @@
           currentUser.salonName = salonName;
           currentUser.salonAddress = salonAddress;
           currentUser.salonPhone = salonPhone;
+          currentUser.salonDisplayPhone = salonDisplayPhone || '';
           currentUser.salonLat = salonLat ? parseFloat(salonLat) : null;
           currentUser.salonLng = salonLng ? parseFloat(salonLng) : null;
 

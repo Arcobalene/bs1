@@ -150,7 +150,7 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(date);
     `);
 
-    // Миграция: добавление поля salon_phone, если его нет
+    // Миграция: добавление поля salon_phone, если его нет (номер владельца для Telegram)
     try {
       await client.query(`
         ALTER TABLE users 
@@ -159,6 +159,17 @@ async function initDatabase() {
       console.log('Миграция salon_phone выполнена');
     } catch (error) {
       console.log('Поле salon_phone уже существует или ошибка миграции:', error.message);
+    }
+
+    // Миграция: добавление поля salon_display_phone, если его нет (номер салона для публичного отображения)
+    try {
+      await client.query(`
+        ALTER TABLE users 
+        ADD COLUMN IF NOT EXISTS salon_display_phone VARCHAR(50)
+      `);
+      console.log('Миграция salon_display_phone выполнена');
+    } catch (error) {
+      console.log('Поле salon_display_phone уже существует или ошибка миграции:', error.message);
     }
 
     // Миграция: добавление поля salon_design, если его нет
@@ -275,7 +286,7 @@ const users = {
 
   create: async (userData) => {
     requirePool();
-    const { username, email, password, role, isActive, salonName, salonAddress, salonLat, salonLng, salonPhone, salonDesign } = userData;
+    const { username, email, password, role, isActive, salonName, salonAddress, salonLat, salonLng, salonPhone, salonDisplayPhone, salonDesign } = userData;
     
     // Валидация
     if (!username || !password) {
@@ -286,8 +297,8 @@ const users = {
     }
     
     const result = await pool.query(`
-      INSERT INTO users (username, email, password, role, is_active, salon_name, salon_address, salon_lat, salon_lng, salon_phone, salon_design)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO users (username, email, password, role, is_active, salon_name, salon_address, salon_lat, salon_lng, salon_phone, salon_display_phone, salon_design)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING id
     `, [
       username.trim(),
@@ -300,6 +311,7 @@ const users = {
       salonLat || null,
       salonLng || null,
       salonPhone ? salonPhone.trim() : null,
+      salonDisplayPhone ? salonDisplayPhone.trim() : null,
       salonDesign ? JSON.stringify(salonDesign) : '{}'
     ]);
     return result.rows[0].id;
@@ -342,6 +354,10 @@ const users = {
     if (userData.salonPhone !== undefined) {
       updates.push(`salon_phone = $${paramIndex++}`);
       values.push(userData.salonPhone ? userData.salonPhone.trim() : null);
+    }
+    if (userData.salonDisplayPhone !== undefined) {
+      updates.push(`salon_display_phone = $${paramIndex++}`);
+      values.push(userData.salonDisplayPhone ? userData.salonDisplayPhone.trim() : null);
     }
     if (userData.salonDesign !== undefined) {
       updates.push(`salon_design = $${paramIndex++}::jsonb`);
