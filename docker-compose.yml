@@ -60,6 +60,40 @@ services:
       timeout: 20s
       retries: 3
 
+  telegram-bot:
+    build: ./telegram-bot
+    container_name: beauty-studio-telegram-bot
+    restart: unless-stopped
+    depends_on:
+      - beauty-studio
+    ports:
+      - "${TELEGRAM_BOT_PORT:-3001}:3001"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_BOT_PORT=3001
+      - MAIN_APP_URL=http://beauty-studio:3000
+      - MAIN_APP_INTERNAL_URL=http://beauty-studio:3000
+      - SQLITE_PATH=/app/data/bot_database.sqlite
+    volumes:
+      - telegram-bot-data:/app/data
+    networks:
+      - beauty-network
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/health', (r) => { let data = ''; r.on('data', d => data += d); r.on('end', () => { try { const json = JSON.parse(data); process.exit(json.status === 'healthy' ? 0 : 1); } catch(e) { process.exit(1); } }); }).on('error', () => process.exit(1));\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.beauty-studio.description=Telegram Bot Service"
+      - "com.beauty-studio.version=1.0.0"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   # Именованный том для данных SQLite
   # Преимущества: изоляция, персистентность, удобное управление
@@ -67,6 +101,9 @@ volumes:
     driver: local
   # Том для MinIO хранилища
   minio-data:
+    driver: local
+  # Том для данных Telegram бота (SQLite база данных)
+  telegram-bot-data:
     driver: local
 
 networks:

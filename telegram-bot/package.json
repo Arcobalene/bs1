@@ -1,0 +1,24 @@
+{
+  "name": "telegram-bot-service",
+  "version": "1.0.0",
+  "description": "Telegram bot service for beauty salon notifications",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
+  },
+  "dependencies": {
+    "telegraf": "^4.16.3",
+    "sqlite3": "^5.1.6",
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1",
+    "axios": "^1.6.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": ["telegram", "bot", "salon", "booking"],
+  "author": "",
+  "license": "ISC"
+}
+
