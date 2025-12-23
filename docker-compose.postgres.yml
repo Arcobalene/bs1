@@ -92,32 +92,27 @@ services:
       retries: 3
 
   telegram-bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: ./telegram-bot
     container_name: beauty-studio-telegram-bot
+    restart: unless-stopped
+    depends_on:
+      beauty-studio:
+        condition: service_started
     ports:
       - "${TELEGRAM_BOT_PORT:-3001}:3001"
-    restart: unless-stopped
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_BOT_PORT=3001
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
-      - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL:-https://155.212.184.10/api/telegram/webhook}
-      - SALON_BASE_URL=${SALON_BASE_URL:-http://155.212.184.10}
-      - DB_TYPE=postgres
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-beauty_studio}
-      - DB_USER=${DB_USER:-beauty_user}
-      - DB_PASSWORD=${DB_PASSWORD:-beauty_password}
+      - MAIN_APP_URL=http://beauty-studio:3000
+      - MAIN_APP_INTERNAL_URL=http://beauty-studio:3000
+      - SQLITE_PATH=/app/data/bot_database.sqlite
+    volumes:
+      - telegram-bot-data:/app/data
     networks:
       - beauty-network
-    depends_on:
-      db:
-        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/health', (r) => { let data = ''; r.on('data', d => data += d); r.on('end', () => { try { const json = JSON.parse(data); process.exit(json.status === 'healthy' ? 0 : 1); } catch(e) { process.exit(1); } }); }).on('error', () => process.exit(1));\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -130,13 +125,15 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    command: ["node", "telegram-bot.js"]
 
 volumes:
   postgres-data:
     driver: local
   # Том для MinIO хранилища
   minio-data:
+    driver: local
+  # Том для данных Telegram бота (SQLite база данных)
+  telegram-bot-data:
     driver: local
 
 networks:
