@@ -1514,6 +1514,25 @@ header {
     max-width: 150px !important;
   }
 
+  /* Кликабельный номер телефона на странице салона */
+  #salon-phone {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 8px;
+    transition: all 0.2s;
+    min-height: 44px;
+    line-height: 1.5;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #salon-phone:hover,
+  #salon-phone:active {
+    background: rgba(168, 85, 247, 0.1);
+    color: #a855f7 !important;
+  }
+
   /* Модальные окна */
   .modal-overlay {
     padding: 10px !important;

@@ -48,7 +48,7 @@
 
     <!-- Правая колонка: форма записи -->
     <div class="card">
-      <p id="salon-phone" style="margin-bottom: 16px; font-size: 1.1rem; font-weight: 500; text-align: center; color: #6b7280; display: none;"></p>
+      <a id="salon-phone" href="#" style="margin-bottom: 16px; font-size: 1.1rem; font-weight: 500; text-align: center; color: #6b7280; display: none; text-decoration: none; cursor: pointer; transition: color 0.2s;"></a>
       <h2 id="section-booking-heading">Онлайн запись</h2>
       <p class="description">Заполните форму, мы подтвердим запись в ближайшее время.</p>
 
@@ -295,8 +295,20 @@
         // Отображаем телефон, если он есть
         if (salonPhone) {
           if (salon.phone && salon.phone.trim()) {
-            salonPhone.textContent = `📞 ${salon.phone}`;
+            const phoneNumber = salon.phone.trim();
+            salonPhone.textContent = `📞 ${phoneNumber}`;
+            salonPhone.href = `tel:${phoneNumber.replace(/\s+/g, '')}`;
             salonPhone.style.display = 'block';
+            salonPhone.title = 'Нажмите, чтобы позвонить';
+            // Добавляем hover эффект
+            salonPhone.onmouseenter = () => {
+              salonPhone.style.color = '#a855f7';
+              salonPhone.style.textDecoration = 'underline';
+            };
+            salonPhone.onmouseleave = () => {
+              salonPhone.style.color = '#6b7280';
+              salonPhone.style.textDecoration = 'none';
+            };
           } else {
             salonPhone.style.display = 'none';
           }
