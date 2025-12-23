@@ -569,10 +569,46 @@ function registerBotHandlers(botInstance) {
         name: owner.name,
         salon_name: owner.salon_name,
         telegram_id: userId
-      }, (err, ownerId) => {
+      }, async (err, ownerId) => {
         if (err) {
           console.error(JSON.stringify({ level: 'ERROR', msg: 'Ошибка сохранения', error: err.message }));
           return ctx.reply('❌ Произошла ошибка при сохранении данных. Попробуйте позже.');
+        }
+
+        // Обновляем telegram_id в основной базе данных через API
+        try {
+          const linkResponse = await axios.post(`${MAIN_APP_URL}/api/telegram/link`, {
+            telegramId: userId,
+            phone: normalizedPhone,
+            contactUserId: userId
+          }, {
+            timeout: 5000,
+            validateStatus: (status) => status < 500
+          });
+
+          if (linkResponse.status === 200 && linkResponse.data?.success) {
+            console.log(JSON.stringify({
+              level: 'INFO',
+              msg: 'telegram_id обновлен в основной базе данных',
+              userId: linkResponse.data.userId,
+              telegramId: userId
+            }));
+          } else {
+            console.warn(JSON.stringify({
+              level: 'WARN',
+              msg: 'Не удалось обновить telegram_id в основной базе данных',
+              status: linkResponse.status,
+              response: linkResponse.data
+            }));
+          }
+        } catch (linkError) {
+          console.error(JSON.stringify({
+            level: 'ERROR',
+            msg: 'Ошибка обновления telegram_id в основной базе данных',
+            error: linkError.message
+          }));
+          // Не прерываем регистрацию, если не удалось обновить telegram_id в основной БД
+          // Пользователь все равно зарегистрирован в боте и будет получать уведомления
         }
 
         ctx.reply(
@@ -594,7 +630,8 @@ function registerBotHandlers(botInstance) {
           level: 'INFO',
           msg: 'Новый владелец зарегистрирован',
           name: owner.name,
-          phone: normalizedPhone
+          phone: normalizedPhone,
+          telegramId: userId
         }));
       });
     });

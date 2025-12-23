@@ -2188,13 +2188,47 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
       botTokenForUI = user.bot_token.trim();
     }
     
+    // Проверяем статус подключения: если есть номер телефона, пытаемся синхронизировать с ботом
+    let telegramId = user.telegram_id;
+    if (!telegramId && user.salon_phone) {
+      try {
+        // Нормализуем телефон для сравнения (убираем все нецифровые символы)
+        const normalizePhoneForCompare = (phone) => (phone || '').replace(/\D/g, '').replace(/^8/, '7').replace(/^\+/, '');
+        const userPhoneNormalized = normalizePhoneForCompare(user.salon_phone);
+        
+        // Пытаемся получить список владельцев из бота
+        const ownersResponse = await callTelegramBotApi('/api/owners', {
+          method: 'GET'
+        });
+        
+        if (ownersResponse.status === 200 && ownersResponse.data?.success && Array.isArray(ownersResponse.data.owners)) {
+          // Ищем владельца по нормализованному телефону
+          const ownerInBot = ownersResponse.data.owners.find(o => {
+            const botPhoneNormalized = normalizePhoneForCompare(o.phone || '');
+            return botPhoneNormalized && userPhoneNormalized && botPhoneNormalized === userPhoneNormalized;
+          });
+          
+          if (ownerInBot && ownerInBot.telegram_id) {
+            // Синхронизируем telegram_id с основной базой
+            await dbUsers.update(user.id, { telegramId: ownerInBot.telegram_id });
+            telegramId = ownerInBot.telegram_id;
+            console.log(`✅ Синхронизирован telegram_id из бота: userId=${user.id}, telegramId=${telegramId}, phone=${user.salon_phone}`);
+          }
+        }
+      } catch (syncError) {
+        // Игнорируем ошибки синхронизации - это не критично
+        console.log('ℹ️ Не удалось синхронизировать статус с ботом:', syncError.message);
+      }
+    }
+    
     console.log('📋 Получение настроек Telegram:', {
       userId: req.session.userId,
       botTokenInDb: botTokenInDb,
       botTokenLength: botTokenLength,
       hasBotTokenFromFunction: hasBotToken,
       botTokenForUI: botTokenForUI ? `[${botTokenForUI.length} символов]` : 'не указан',
-      telegramId: user.telegram_id || 'не установлен'
+      telegramId: telegramId || 'не установлен',
+      salonPhone: user.salon_phone || 'не указан'
     });
     
     res.json({ 
@@ -2205,7 +2239,7 @@ app.get('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =>
         notifyCancellations: telegramSettings.notifyCancellations === true,
         notifyChanges: telegramSettings.notifyChanges === true
       },
-      telegramId: user.telegram_id || null,
+      telegramId: telegramId || null,
       hasBotToken: hasBotToken,
       botTokenConfigured: botTokenInDb || hasBotToken,
       botTokenInDb: botTokenInDb,
