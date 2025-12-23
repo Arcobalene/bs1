@@ -13,7 +13,7 @@ const fs = require('fs');
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const PORT = process.env.TELEGRAM_BOT_PORT || 3001;
 const SQLITE_PATH = process.env.SQLITE_PATH || '/app/data/bot_database.sqlite';
-const MAIN_APP_URL = process.env.MAIN_APP_URL || process.env.MAIN_APP_INTERNAL_URL || 'http://beauty-studio:3000';
+const MAIN_APP_URL = process.env.MAIN_APP_URL || 'http://beauty-studio:3000';
 
 // Проверка обязательных переменных
 if (!BOT_TOKEN) {
@@ -127,6 +127,25 @@ function normalizePhone(phone) {
 }
 
 /**
+ * Получает телефон владельца по salon_id из основного приложения
+ */
+async function getPhoneBySalonId(salonId) {
+  try {
+    const response = await axios.get(`${MAIN_APP_URL}/api/users/${salonId}`, {
+      timeout: 5000
+    });
+    return response.data?.salon_phone || null;
+  } catch (error) {
+    console.error(JSON.stringify({
+      level: 'ERROR',
+      msg: 'Ошибка получения данных владельца',
+      error: error.message
+    }));
+    return null;
+  }
+}
+
+/**
  * Проверяет номер телефона в базе данных основного приложения
  * Интеграция с основным приложением через REST API
  */
@@ -134,37 +153,18 @@ async function checkPhoneInDatabase(phone, callback) {
   const normalized = normalizePhone(phone);
   
   try {
-    // Пытаемся получить информацию о владельце через API основного приложения
     const response = await axios.get(`${MAIN_APP_URL}/api/owners/by-phone/${encodeURIComponent(normalized)}`, {
       timeout: 5000,
-      validateStatus: (status) => status < 500 // Не выбрасываем ошибку для 404
+      validateStatus: (status) => status < 500
     });
 
-    if (response.status === 200 && response.data && response.data.success) {
+    if (response.status === 200 && response.data?.success) {
       const ownerData = response.data.owner || response.data;
       return callback({
         phone: normalized,
         name: ownerData.username || ownerData.name || 'Владелец',
         salon_name: ownerData.salon_name || 'Салон'
       }, null);
-    }
-
-    // Если API не найден, используем заглушку для разработки
-    console.log(JSON.stringify({
-      level: 'WARN',
-      msg: 'API основного приложения не вернул данные, используется заглушка',
-      phone: normalized
-    }));
-
-    // ЗАГЛУШКА для тестирования (удалите в продакшене)
-    const mockOwners = [
-      { phone: '998903175511', name: 'Фери', salon_name: 'Салон Фери' },
-      { phone: '998901234567', name: 'Иван', salon_name: 'Салон Ивана' }
-    ];
-    
-    const owner = mockOwners.find(o => normalizePhone(o.phone) === normalized);
-    if (owner) {
-      return callback(owner, null);
     }
 
     callback(null, null);
@@ -175,17 +175,6 @@ async function checkPhoneInDatabase(phone, callback) {
       error: error.message,
       phone: normalized
     }));
-
-    // В случае ошибки API, проверяем заглушку
-    const mockOwners = [
-      { phone: '998903175511', name: 'Фери', salon_name: 'Салон Фери' }
-    ];
-    
-    const owner = mockOwners.find(o => normalizePhone(o.phone) === normalized);
-    if (owner) {
-      return callback(owner, null);
-    }
-
     callback(null, null);
   }
 }
@@ -687,8 +676,8 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// API: Уведомление о новой записи
-app.post('/api/notify/booking', async (req, res) => {
+// Общая функция для обработки уведомлений
+async function handleNotification(req, res, notificationType) {
   try {
     const { salon_phone, salon_id, booking_data } = req.body;
 
@@ -700,23 +689,15 @@ app.post('/api/notify/booking', async (req, res) => {
     }
 
     let phone = salon_phone;
+    if (!phone && salon_id) {
+      phone = await getPhoneBySalonId(salon_id);
+    }
     
-    // Если передан salon_id, получаем телефон через API основного приложения
-    if (salon_id && !phone) {
-      try {
-        const response = await axios.get(`${MAIN_APP_URL}/api/users/${salon_id}`, {
-          timeout: 5000
-        });
-        if (response.data && response.data.salon_phone) {
-          phone = response.data.salon_phone;
-        }
-      } catch (error) {
-        console.error(JSON.stringify({
-          level: 'ERROR',
-          msg: 'Ошибка получения данных владельца',
-          error: error.message
-        }));
-      }
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        error: 'Не удалось определить телефон владельца'
+      });
     }
 
     const normalizedPhone = normalizePhone(phone);
@@ -731,98 +712,29 @@ app.post('/api/notify/booking', async (req, res) => {
         return res.status(404).json({ success: false, error: 'Владелец не найден в базе бота' });
       }
 
-      await sendNotificationToOwner(owner.id, 'booking', booking_data || req.body);
+      await sendNotificationToOwner(owner.id, notificationType, booking_data || req.body);
       res.json({ success: true, message: 'Уведомление отправлено', owner_id: owner.id });
     });
 
   } catch (error) {
-    console.error(JSON.stringify({ level: 'ERROR', msg: 'Ошибка обработки вебхука booking', error: error.message }));
+    console.error(JSON.stringify({ level: 'ERROR', msg: `Ошибка обработки уведомления ${notificationType}`, error: error.message }));
     res.status(500).json({ success: false, error: 'Внутренняя ошибка сервера' });
   }
+}
+
+// API: Уведомление о новой записи
+app.post('/api/notify/booking', async (req, res) => {
+  await handleNotification(req, res, 'booking');
 });
 
 // API: Уведомление об отмене
 app.post('/api/notify/cancellation', async (req, res) => {
-  try {
-    const { salon_phone, salon_id, booking_data } = req.body;
-
-    if (!salon_phone && !salon_id) {
-      return res.status(400).json({ success: false, error: 'salon_phone или salon_id обязательны' });
-    }
-
-    let phone = salon_phone;
-    if (salon_id && !phone) {
-      try {
-        const response = await axios.get(`${MAIN_APP_URL}/api/users/${salon_id}`, { timeout: 5000 });
-        if (response.data && response.data.salon_phone) {
-          phone = response.data.salon_phone;
-        }
-      } catch (error) {
-        console.error(JSON.stringify({ level: 'ERROR', msg: 'Ошибка получения данных владельца', error: error.message }));
-      }
-    }
-
-    const normalizedPhone = normalizePhone(phone);
-    
-    getOwnerByPhone(normalizedPhone, async (err, owner) => {
-      if (err) {
-        return res.status(500).json({ success: false, error: 'Ошибка поиска владельца' });
-      }
-
-      if (!owner) {
-        return res.status(404).json({ success: false, error: 'Владелец не найден в базе бота' });
-      }
-
-      await sendNotificationToOwner(owner.id, 'cancel', booking_data || req.body);
-      res.json({ success: true, message: 'Уведомление об отмене отправлено', owner_id: owner.id });
-    });
-
-  } catch (error) {
-    console.error(JSON.stringify({ level: 'ERROR', msg: 'Ошибка обработки вебхука cancellation', error: error.message }));
-    res.status(500).json({ success: false, error: 'Внутренняя ошибка сервера' });
-  }
+  await handleNotification(req, res, 'cancel');
 });
 
 // API: Напоминание о записи
 app.post('/api/notify/reminder', async (req, res) => {
-  try {
-    const { salon_phone, salon_id, booking_data } = req.body;
-
-    if (!salon_phone && !salon_id) {
-      return res.status(400).json({ success: false, error: 'salon_phone или salon_id обязательны' });
-    }
-
-    let phone = salon_phone;
-    if (salon_id && !phone) {
-      try {
-        const response = await axios.get(`${MAIN_APP_URL}/api/users/${salon_id}`, { timeout: 5000 });
-        if (response.data && response.data.salon_phone) {
-          phone = response.data.salon_phone;
-        }
-      } catch (error) {
-        console.error(JSON.stringify({ level: 'ERROR', msg: 'Ошибка получения данных владельца', error: error.message }));
-      }
-    }
-
-    const normalizedPhone = normalizePhone(phone);
-    
-    getOwnerByPhone(normalizedPhone, async (err, owner) => {
-      if (err) {
-        return res.status(500).json({ success: false, error: 'Ошибка поиска владельца' });
-      }
-
-      if (!owner) {
-        return res.status(404).json({ success: false, error: 'Владелец не найден в базе бота' });
-      }
-
-      await sendNotificationToOwner(owner.id, 'reminder', booking_data || req.body);
-      res.json({ success: true, message: 'Напоминание отправлено', owner_id: owner.id });
-    });
-
-  } catch (error) {
-    console.error(JSON.stringify({ level: 'ERROR', msg: 'Ошибка обработки вебхука reminder', error: error.message }));
-    res.status(500).json({ success: false, error: 'Внутренняя ошибка сервера' });
-  }
+  await handleNotification(req, res, 'reminder');
 });
 
 // API: Список зарегистрированных владельцев
@@ -836,139 +748,20 @@ app.get('/api/owners', (req, res) => {
   });
 });
 
-// Старые эндпоинты для обратной совместимости (используют те же функции)
+// Старые эндпоинты для обратной совместимости (перенаправляют на новые)
 app.post('/webhook/booking', async (req, res) => {
-  // Используем ту же логику, что и /api/notify/booking
   req.body.booking_data = req.body.booking_data || req.body;
-  
-  try {
-    const { salon_phone, salon_id, booking_data } = req.body;
-
-    if (!salon_phone && !salon_id) {
-      return res.status(400).json({
-        success: false,
-        error: 'salon_phone или salon_id обязательны'
-      });
-    }
-
-    let phone = salon_phone;
-    
-    if (salon_id && !phone) {
-      try {
-        const response = await axios.get(`${MAIN_APP_URL}/api/users/${salon_id}`, {
-          timeout: 5000
-        });
-        if (response.data && response.data.salon_phone) {
-          phone = response.data.salon_phone;
-        }
-      } catch (error) {
-        console.error(JSON.stringify({
-          level: 'ERROR',
-          msg: 'Ошибка получения данных владельца',
-          error: error.message
-        }));
-      }
-    }
-
-    const normalizedPhone = normalizePhone(phone);
-    
-    getOwnerByPhone(normalizedPhone, async (err, owner) => {
-      if (err) {
-        return res.status(500).json({ success: false, error: 'Ошибка поиска владельца' });
-      }
-
-      if (!owner) {
-        return res.status(404).json({ success: false, error: 'Владелец не найден в базе бота' });
-      }
-
-      await sendNotificationToOwner(owner.id, 'booking', booking_data || req.body);
-      res.json({ success: true, message: 'Уведомление отправлено', owner_id: owner.id });
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Внутренняя ошибка сервера' });
-  }
+  await handleNotification(req, res, 'booking');
 });
 
 app.post('/webhook/cancel', async (req, res) => {
   req.body.booking_data = req.body.booking_data || req.body;
-  
-  try {
-    const { salon_phone, salon_id, booking_data } = req.body;
-
-    if (!salon_phone && !salon_id) {
-      return res.status(400).json({ success: false, error: 'salon_phone или salon_id обязательны' });
-    }
-
-    let phone = salon_phone;
-    if (salon_id && !phone) {
-      try {
-        const response = await axios.get(`${MAIN_APP_URL}/api/users/${salon_id}`, { timeout: 5000 });
-        if (response.data && response.data.salon_phone) {
-          phone = response.data.salon_phone;
-        }
-      } catch (error) {
-        console.error(JSON.stringify({ level: 'ERROR', msg: 'Ошибка получения данных владельца', error: error.message }));
-      }
-    }
-
-    const normalizedPhone = normalizePhone(phone);
-    
-    getOwnerByPhone(normalizedPhone, async (err, owner) => {
-      if (err) {
-        return res.status(500).json({ success: false, error: 'Ошибка поиска владельца' });
-      }
-
-      if (!owner) {
-        return res.status(404).json({ success: false, error: 'Владелец не найден в базе бота' });
-      }
-
-      await sendNotificationToOwner(owner.id, 'cancel', booking_data || req.body);
-      res.json({ success: true, message: 'Уведомление об отмене отправлено', owner_id: owner.id });
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Внутренняя ошибка сервера' });
-  }
+  await handleNotification(req, res, 'cancel');
 });
 
 app.post('/webhook/reminder', async (req, res) => {
   req.body.booking_data = req.body.booking_data || req.body;
-  
-  try {
-    const { salon_phone, salon_id, booking_data } = req.body;
-
-    if (!salon_phone && !salon_id) {
-      return res.status(400).json({ success: false, error: 'salon_phone или salon_id обязательны' });
-    }
-
-    let phone = salon_phone;
-    if (salon_id && !phone) {
-      try {
-        const response = await axios.get(`${MAIN_APP_URL}/api/users/${salon_id}`, { timeout: 5000 });
-        if (response.data && response.data.salon_phone) {
-          phone = response.data.salon_phone;
-        }
-      } catch (error) {
-        console.error(JSON.stringify({ level: 'ERROR', msg: 'Ошибка получения данных владельца', error: error.message }));
-      }
-    }
-
-    const normalizedPhone = normalizePhone(phone);
-    
-    getOwnerByPhone(normalizedPhone, async (err, owner) => {
-      if (err) {
-        return res.status(500).json({ success: false, error: 'Ошибка поиска владельца' });
-      }
-
-      if (!owner) {
-        return res.status(404).json({ success: false, error: 'Владелец не найден в базе бота' });
-      }
-
-      await sendNotificationToOwner(owner.id, 'reminder', booking_data || req.body);
-      res.json({ success: true, message: 'Напоминание отправлено', owner_id: owner.id });
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: 'Внутренняя ошибка сервера' });
-  }
+  await handleNotification(req, res, 'reminder');
 });
 
 // 404 handler
