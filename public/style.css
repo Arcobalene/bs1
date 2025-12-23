@@ -491,13 +491,20 @@ footer {
   color: #4b5563;
 }
 
-.calendar-grid {
+.calendar-wrapper {
   margin-top: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+}
+
+.calendar-grid {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   overflow: hidden;
   background: #f9fafb;
   display: grid;
+  min-width: fit-content;
 }
 
 .cal-cell {
@@ -1254,12 +1261,18 @@ header {
     overflow: visible;
   }
 
-  .calendar-grid {
+  .calendar-wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    width: 100%;
+    margin-left: -20px;
+    margin-right: -20px;
+    padding: 0 20px;
+    border-radius: 0;
+  }
+
+  .calendar-grid {
     min-width: 680px;
-    display: grid;
+    width: max-content;
   }
 
   .week-controls {
