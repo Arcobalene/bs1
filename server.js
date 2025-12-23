@@ -441,7 +441,7 @@ app.get('/clients', requireAuth, (req, res) => {
 // API: Регистрация
 app.post('/api/register', async (req, res) => {
   try {
-    const { username, password, email } = req.body;
+    const { username, password, email, phone } = req.body;
     
     // Валидация
     const usernameValidation = validateUsername(username);
@@ -452,6 +452,12 @@ app.post('/api/register', async (req, res) => {
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.valid) {
       return res.status(400).json({ success: false, message: passwordValidation.message });
+    }
+
+    // Валидация телефона (обязательное поле)
+    const phoneValidation = validatePhone(phone);
+    if (!phoneValidation.valid) {
+      return res.status(400).json({ success: false, message: phoneValidation.message });
     }
 
     const existingUser = await dbUsers.getByUsername(usernameValidation.username);
@@ -469,7 +475,8 @@ app.post('/api/register', async (req, res) => {
       salonName: '',
       salonAddress: '',
       salonLat: null,
-      salonLng: null
+      salonLng: null,
+      salonPhone: phone ? phone.trim() : null
     });
 
     // Добавляем услуги по умолчанию
@@ -647,6 +654,12 @@ app.post('/api/salon', requireAuth, async (req, res) => {
     
     if (!user) {
       return res.json({ success: false, message: 'Пользователь не найден' });
+    }
+
+    // Валидация телефона (обязательное поле)
+    const phoneValidation = validatePhone(salonPhone);
+    if (!phoneValidation.valid) {
+      return res.status(400).json({ success: false, message: phoneValidation.message });
     }
 
     // Нормализуем номер телефона в формат E.164 для единообразия
@@ -2309,6 +2322,7 @@ app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =
 
 // Функция для вызова API микросервиса Telegram бота
 async function callTelegramBotApi(endpoint, options = {}) {
+  // Используем имя сервиса из docker-compose, а не имя контейнера
   const telegramBotUrl = process.env.TELEGRAM_BOT_URL || 'http://telegram-bot:3001';
   const url = `${telegramBotUrl}${endpoint}`;
   
@@ -2338,26 +2352,52 @@ async function callTelegramBotApi(endpoint, options = {}) {
         });
         
         res.on('end', () => {
+          // Проверяем Content-Type
+          const contentType = res.headers['content-type'] || '';
+          
+          if (!contentType.includes('application/json')) {
+            // Если получен не JSON (например, HTML страница с ошибкой)
+            console.error(`❌ Микросервис вернул не JSON (Content-Type: ${contentType})`);
+            console.error(`   URL: ${url}, Status: ${res.statusCode}`);
+            console.error(`   Ответ: ${data.substring(0, 500)}`);
+            
+            return resolve({ 
+              status: res.statusCode, 
+              data: { 
+                success: false, 
+                message: `Микросервис Telegram бота недоступен или вернул некорректный ответ. Убедитесь, что контейнер telegram-bot запущен.` 
+              } 
+            });
+          }
+          
           try {
             const jsonData = JSON.parse(data);
             resolve({ status: res.statusCode, data: jsonData });
           } catch (error) {
             // Если не удалось распарсить JSON, возвращаем сырой ответ
+            console.error(`❌ Ошибка парсинга JSON ответа от микросервиса: ${error.message}`);
+            console.error(`   Ответ: ${data.substring(0, 500)}`);
             resolve({ 
               status: res.statusCode, 
-              data: { success: false, message: `Ошибка парсинга ответа: ${data.substring(0, 200)}` } 
+              data: { 
+                success: false, 
+                message: `Ошибка парсинга ответа от микросервиса: ${data.substring(0, 200)}` 
+              } 
             });
           }
         });
       });
       
       req.on('error', (error) => {
-        reject(new Error(`Ошибка соединения с микросервисом: ${error.message}`));
+        console.error('❌ Ошибка соединения с микросервисом Telegram бота:', error.message);
+        console.error(`   URL: ${url}`);
+        reject(new Error(`Микросервис Telegram бота недоступен: ${error.message}. Убедитесь, что контейнер telegram-bot запущен.`));
       });
       
       req.on('timeout', () => {
         req.destroy();
-        reject(new Error('Таймаут при обращении к микросервису Telegram бота'));
+        console.error(`❌ Таймаут при обращении к микросервису Telegram бота: ${url}`);
+        reject(new Error('Таймаут при обращении к микросервису Telegram бота. Проверьте, что контейнер telegram-bot запущен и доступен.'));
       });
       
       req.setTimeout(10000);
@@ -2507,9 +2547,11 @@ app.get('/api/telegram/connect-link', requireAuth, async (req, res) => {
     const response = await callTelegramBotApi('/api/bot/info');
     
     if (response.status !== 200 || !response.data.success) {
-      return res.status(response.status === 500 ? 500 : 400).json({ 
+      const errorMessage = response.data.message || 'Не удалось получить информацию о боте. Проверьте правильность токена.';
+      console.error('❌ Ошибка получения информации о боте:', errorMessage);
+      return res.status(response.status >= 500 ? 503 : 400).json({ 
         success: false, 
-        message: response.data.message || 'Не удалось получить информацию о боте. Проверьте правильность токена.' 
+        message: errorMessage
       });
     }
     
@@ -2527,7 +2569,16 @@ app.get('/api/telegram/connect-link', requireAuth, async (req, res) => {
       botName: botInfo.first_name
     });
   } catch (error) {
-    console.error('❌ Неожиданная ошибка в /api/telegram/connect-link:', error);
+    console.error('❌ Неожиданная ошибка в /api/telegram/connect-link:', error.message);
+    
+    // Проверяем, не связано ли это с недоступностью микросервиса
+    if (error.message.includes('недоступен') || error.message.includes('ECONNREFUSED') || error.message.includes('ENOTFOUND')) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Микросервис Telegram бота недоступен. Убедитесь, что контейнер telegram-bot запущен: docker-compose ps telegram-bot'
+      });
+    }
+    
     res.status(500).json({ 
       success: false, 
       message: 'Внутренняя ошибка сервера: ' + error.message

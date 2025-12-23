@@ -74,9 +74,9 @@
       </div>
 
       <div>
-        <label for="salon-phone">Телефон салона</label>
-        <input type="tel" id="salon-phone" placeholder="Например: +998XX XXX XX XX" />
-        <p class="note">Номер телефона будет отображаться в хедере страницы салона</p>
+        <label for="salon-phone">Телефон владельца *</label>
+        <input type="tel" id="salon-phone" required placeholder="Например: +998XX XXX XX XX" />
+        <p class="note">Номер телефона будет использоваться для уведомлений и отображаться в хедере страницы салона</p>
       </div>
 
       <div>
@@ -1162,6 +1162,26 @@
       const salonLat = document.getElementById('salon-lat').value;
       const salonLng = document.getElementById('salon-lng').value;
 
+      // Валидация телефона
+      if (!salonPhone || !salonPhone.trim()) {
+        if (salonAlert) {
+          salonAlert.className = 'alert alert-error';
+          salonAlert.textContent = 'Телефон владельца обязателен';
+          salonAlert.style.display = 'block';
+        }
+        return;
+      }
+
+      const phoneDigits = salonPhone.replace(/\D/g, '');
+      if (phoneDigits.length < 9) {
+        if (salonAlert) {
+          salonAlert.className = 'alert alert-error';
+          salonAlert.textContent = 'Некорректный номер телефона (минимум 9 цифр)';
+          salonAlert.style.display = 'block';
+        }
+        return;
+      }
+
       try {
         const response = await fetch('/api/salon', {
           method: 'POST',
@@ -1187,6 +1207,7 @@
           // Обновляем данные пользователя
           currentUser.salonName = salonName;
           currentUser.salonAddress = salonAddress;
+          currentUser.salonPhone = salonPhone;
           currentUser.salonLat = salonLat ? parseFloat(salonLat) : null;
           currentUser.salonLng = salonLng ? parseFloat(salonLng) : null;
 

@@ -33,6 +33,12 @@
       </div>
 
       <div>
+        <label for="phone">Телефон владельца *</label>
+        <input type="tel" id="phone" name="phone" required autocomplete="tel" placeholder="+998XX XXX XX XX" />
+        <p class="note">Номер телефона будет использоваться для уведомлений</p>
+      </div>
+
+      <div>
         <label for="password">Пароль *</label>
         <input type="password" id="password" name="password" required autocomplete="new-password" placeholder="Минимум 6 символов" />
       </div>
@@ -67,11 +73,26 @@
     const data = {
       username: formData.get('username'),
       email: formData.get('email'),
+      phone: formData.get('phone'),
       password: formData.get('password')
     };
 
     if (data.username.length < 3 || data.username.length > 30) {
       errorAlert.textContent = 'Логин должен быть от 3 до 30 символов';
+      errorAlert.style.display = 'block';
+      return;
+    }
+
+    if (!data.phone || !data.phone.trim()) {
+      errorAlert.textContent = 'Телефон владельца обязателен';
+      errorAlert.style.display = 'block';
+      return;
+    }
+
+    // Валидация телефона (минимум 9 цифр)
+    const phoneDigits = data.phone.replace(/\D/g, '');
+    if (phoneDigits.length < 9) {
+      errorAlert.textContent = 'Некорректный номер телефона (минимум 9 цифр)';
       errorAlert.style.display = 'block';
       return;
     }
