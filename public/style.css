@@ -1250,25 +1250,70 @@ header {
   }
 
   /* Календарь */
+  .admin-calendar-card {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .calendar-grid {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    min-width: 100%;
+  }
+
   .week-controls {
     flex-direction: column;
     align-items: stretch;
+    gap: 8px;
   }
 
   .week-controls button {
     width: 100%;
-    padding: 8px;
+    padding: 10px;
+    font-size: 0.9rem;
   }
 
   #week-label {
     text-align: center;
-    margin: 8px 0;
+    margin: 4px 0;
+    font-size: 1rem;
+    font-weight: 600;
   }
 
   .cal-cell {
     font-size: 0.7rem;
-    padding: 3px 4px;
-    min-height: 24px;
+    padding: 4px 5px;
+    min-height: 32px;
+    min-width: 100px;
+  }
+
+  .cal-hour-label {
+    font-size: 0.75rem;
+    min-width: 50px;
+    padding: 4px 6px;
+  }
+
+  .cal-day-header {
+    font-size: 0.75rem;
+    padding: 8px 4px;
+    min-width: 100px;
+  }
+
+  .cal-corner {
+    min-width: 50px;
+  }
+
+  /* Кнопка создания записи */
+  #create-booking-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 12px;
+  }
+
+  /* Адаптация формы фильтрации */
+  .admin-calendar-card .form-row {
+    grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   /* Модальные окна */
@@ -1303,13 +1348,54 @@ header {
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Улучшение для форм на iOS */
-  input,
-  select,
-  textarea {
-    -webkit-appearance: none;
-    border-radius: 10px;
+  /* Улучшение для занятых слотов на мобильных */
+  .cal-slot-busy {
+    font-size: 0.7rem;
+    line-height: 1.3;
+    padding: 6px 4px;
+    word-break: break-word;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
   }
+
+  /* Свободные слоты */
+  .cal-slot-free {
+    min-height: 32px;
+  }
+}
+
+/* Стили для календаря на очень маленьких экранах */
+@media (max-width: 480px) {
+  .cal-cell {
+    font-size: 0.65rem;
+    padding: 3px 4px;
+    min-height: 28px;
+    min-width: 90px;
+  }
+
+  .cal-hour-label {
+    font-size: 0.7rem;
+    min-width: 45px;
+  }
+
+  .cal-day-header {
+    font-size: 0.7rem;
+    padding: 6px 3px;
+    min-width: 90px;
+  }
+
+  .cal-corner {
+    min-width: 45px;
+  }
+
+  .cal-slot-busy {
+    font-size: 0.65rem;
+    padding: 4px 3px;
+  }
+}
+
+/* Улучшение для форм на iOS (внутри существующего медиа-запроса) */
 
   /* Улучшение для модальных окон */
   .modal-overlay {
