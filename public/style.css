@@ -1138,6 +1138,9 @@ header {
   .container {
     margin: 0 auto 32px;
     padding: 24px 12px 20px;
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100%;
   }
 
   /* Карточки */
@@ -1257,19 +1260,44 @@ header {
   /* Календарь на мобильных */
   .admin-calendar-card {
     overflow: hidden;
+    position: relative;
   }
 
   .calendar-wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    margin-left: -20px;
-    margin-right: -20px;
-    padding: 0 20px;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    max-width: 100%;
+    position: relative;
+    /* Добавляем визуальный индикатор скролла */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(168, 85, 247, 0.3) transparent;
+  }
+
+  .calendar-wrapper::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .calendar-wrapper::-webkit-scrollbar-track {
+    background: #f3f4f6;
+    border-radius: 4px;
+  }
+
+  .calendar-wrapper::-webkit-scrollbar-thumb {
+    background: rgba(168, 85, 247, 0.3);
+    border-radius: 4px;
+  }
+
+  .calendar-wrapper::-webkit-scrollbar-thumb:hover {
+    background: rgba(168, 85, 247, 0.5);
   }
 
   .calendar-grid {
     min-width: 680px;
     width: 680px;
+    margin: 0 auto;
   }
 
   .week-controls {
@@ -1390,6 +1418,21 @@ header {
   .cal-slot-busy {
     font-size: 0.65rem;
     padding: 4px 3px;
+  }
+
+  /* Оптимизация календаря на очень маленьких экранах */
+  .calendar-grid {
+    min-width: 600px;
+    width: 600px;
+  }
+
+  .admin-calendar-card {
+    margin: 0;
+    padding: 14px;
+  }
+
+  .calendar-wrapper {
+    margin: 0;
   }
 }
 
