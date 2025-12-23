@@ -493,9 +493,9 @@ footer {
 
 .calendar-wrapper {
   margin-top: 8px;
+  width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  border-radius: 12px;
 }
 
 .calendar-grid {
@@ -504,7 +504,6 @@ footer {
   overflow: hidden;
   background: #f9fafb;
   display: grid;
-  min-width: fit-content;
 }
 
 .cal-cell {
@@ -1264,15 +1263,16 @@ header {
   .calendar-wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    width: calc(100% + 40px);
     margin-left: -20px;
     margin-right: -20px;
     padding: 0 20px;
-    border-radius: 0;
+    box-sizing: border-box;
   }
 
   .calendar-grid {
     min-width: 680px;
-    width: max-content;
+    width: 680px;
   }
 
   .week-controls {
