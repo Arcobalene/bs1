@@ -1972,10 +1972,10 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
       return;
     }
 
-    console.log(`📋 Информация о владельце: userId=${salonOwner.id}, telegram_id=${salonOwner.telegram_id || 'не установлен'}, salon_phone=${salonOwner.salon_phone || 'не указан'}`);
+    console.log(`📋 Информация о владельце: userId=${salonOwner.id}, salon_phone=${salonOwner.salon_phone || 'не указан'}`);
 
-    if (!salonOwner.telegram_id) {
-      console.log(`ℹ️ У владельца салона не привязан Telegram: salonOwnerId=${salonOwnerId}. Для подключения владелец должен отправить свой номер телефона в боте.`);
+    if (!salonOwner.salon_phone) {
+      console.log(`ℹ️ У владельца салона не указан номер телефона: salonOwnerId=${salonOwnerId}. Номер телефона обязателен для отправки уведомлений.`);
       return;
     }
 
@@ -2012,56 +2012,46 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
       return;
     }
 
-    const escapeHtml = (str) => String(str || '').replace(/[&<>"']/g, (m) => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#039;'
-    }[m]));
-    
-    let message = '';
-    if (eventType === 'new') {
-      message = `📅 <b>Новая запись</b>\n\n`;
-    } else if (eventType === 'cancellation') {
-      message = `❌ <b>Отмена записи</b>\n\n`;
-    } else if (eventType === 'change') {
-      message = `✏️ <b>Изменение записи</b>\n\n`;
-    }
-
-    message += `👤 <b>Клиент:</b> ${escapeHtml(booking.name)}\n`;
-    message += `📞 <b>Телефон:</b> ${escapeHtml(booking.phone)}\n`;
-    message += `💼 <b>Услуга:</b> ${escapeHtml(booking.service)}\n`;
-    if (booking.master) {
-      message += `👨‍💼 <b>Мастер:</b> ${escapeHtml(booking.master)}\n`;
-    }
-    message += `📆 <b>Дата:</b> ${escapeHtml(booking.date)}\n`;
-    message += `🕐 <b>Время:</b> ${escapeHtml(booking.time)}`;
-    if (booking.endTime) {
-      message += ` - ${escapeHtml(booking.endTime)}`;
-    }
-    if (booking.comment) {
-      message += `\n💬 <b>Комментарий:</b> ${escapeHtml(booking.comment)}`;
-    }
-
-    // Отправляем сообщение через микросервис Telegram бота
-    console.log(`📤 Вызов микросервиса Telegram бота для отправки уведомления: telegramId=${salonOwner.telegram_id}, длина сообщения=${message.length}`);
+    // Отправляем уведомление через микросервис Telegram бота
+    console.log(`📤 Вызов микросервиса Telegram бота для отправки уведомления: salonOwnerId=${salonOwnerId}, eventType=${eventType}`);
     try {
       const telegramBotUrl = process.env.TELEGRAM_BOT_URL || 'http://telegram-bot:3001';
-      console.log(`🔗 URL микросервиса: ${telegramBotUrl}/api/bot/send-notification`);
       
-      const response = await callTelegramBotApi('/api/bot/send-notification', {
+      // Определяем эндпоинт в зависимости от типа события
+      let endpoint = '/api/notify/booking';
+      if (eventType === 'cancellation') {
+        endpoint = '/api/notify/cancellation';
+      } else if (eventType === 'change') {
+        // Для изменений используем тот же эндпоинт, что и для новых записей
+        endpoint = '/api/notify/booking';
+      }
+      
+      console.log(`🔗 URL микросервиса: ${telegramBotUrl}${endpoint}`);
+      console.log(`📋 Данные для отправки: salon_phone=${salonOwner.salon_phone}, booking_data=${JSON.stringify(booking)}`);
+      
+      const response = await callTelegramBotApi(endpoint, {
         method: 'POST',
         body: {
-          telegramId: salonOwner.telegram_id,
-          message: message
+          salon_phone: salonOwner.salon_phone,
+          booking_data: {
+            client_name: booking.name,
+            name: booking.name,
+            phone: booking.phone,
+            client_phone: booking.phone,
+            service: booking.service,
+            master: booking.master || '',
+            date: booking.date,
+            time: booking.time,
+            end_time: booking.endTime || null,
+            comment: booking.comment || ''
+          }
         }
       });
 
-      console.log(`📥 Ответ микросервиса: status=${response.status}, success=${response.data.success}, message=${response.data.message || 'нет'}`);
+      console.log(`📥 Ответ микросервиса: status=${response.status}, success=${response.data.success}, message=${response.data.message || response.data.error || 'нет'}`);
 
       if (response.status !== 200 || !response.data.success) {
-        const errorMsg = response.data.message || `HTTP ${response.status}`;
+        const errorMsg = response.data.message || response.data.error || `HTTP ${response.status}`;
         console.error(`❌ Ошибка отправки уведомления: ${errorMsg}`);
         throw new Error(errorMsg);
       }
@@ -2074,7 +2064,7 @@ async function sendTelegramNotificationToOwner(salonOwnerId, booking, eventType)
       throw error; // Пробрасываем для логирования в catch блоке выше
     }
 
-    console.log(`✅ Уведомление отправлено владельцу салона: salonOwnerId=${salonOwnerId}, telegram_id=${salonOwner.telegram_id}, salonUrl=/booking?userId=${salonOwnerId}`);
+    console.log(`✅ Уведомление отправлено владельцу салона: salonOwnerId=${salonOwnerId}, salon_phone=${salonOwner.salon_phone}, salonUrl=/booking?userId=${salonOwnerId}`);
   } catch (error) {
     console.error('❌ Ошибка отправки уведомления владельцу салона:', error);
     console.error('  Stack:', error.stack);
