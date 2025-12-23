@@ -349,9 +349,17 @@
     // Адаптивная ширина колонок для мобильных устройств
     const isMobile = window.innerWidth <= 768;
     const timeColumnWidth = isMobile ? "50px" : "80px";
-    const dayColumnWidth = isMobile ? "120px" : "1fr";
     
-    grid.style.gridTemplateColumns = `${timeColumnWidth} repeat(7, ${dayColumnWidth})`;
+    // На мобильных устанавливаем минимальную ширину для календаря, чтобы он прокручивался
+    if (isMobile) {
+      // Минимальная ширина: 50px (время) + 7 * 90px (дни) = 680px
+      grid.style.minWidth = "680px";
+      grid.style.gridTemplateColumns = `${timeColumnWidth} repeat(7, 90px)`;
+    } else {
+      grid.style.minWidth = "";
+      grid.style.gridTemplateColumns = `${timeColumnWidth} repeat(7, 1fr)`;
+    }
+    
     grid.innerHTML = "";
 
     const emptyHeader = document.createElement("div");
