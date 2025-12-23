@@ -1276,10 +1276,18 @@ header {
     position: relative;
     width: 100% !important;
     box-sizing: border-box !important;
-    /* Ограничиваем ширину карточки: viewport минус отступы контейнера (24px) */
-    max-width: calc(100vw - 24px) !important;
-    /* Убеждаемся, что карточка не выходит за границы */
-    contain: layout;
+    /* Убираем боковые отступы для календаря */
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* Восстанавливаем отступы для остального контента в карточке календаря */
+  .admin-calendar-card > h2,
+  .admin-calendar-card > p.description,
+  .admin-calendar-card > .form-row,
+  .admin-calendar-card > div:not(.calendar-wrapper) {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
   .calendar-wrapper {
@@ -1292,8 +1300,8 @@ header {
     max-width: 100% !important;
     position: relative;
     box-sizing: border-box !important;
-    /* Убеждаемся, что wrapper не выходит за границы */
-    contain: layout style;
+    /* Ограничиваем wrapper шириной viewport минус отступы контейнера (12px с каждой стороны = 24px) */
+    max-width: calc(100vw - 24px) !important;
     /* Добавляем визуальный индикатор скролла */
     scrollbar-width: thin;
     scrollbar-color: rgba(168, 85, 247, 0.3) transparent;
@@ -1321,7 +1329,7 @@ header {
     min-width: 680px !important;
     width: 680px !important;
     max-width: 680px !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     box-sizing: border-box !important;
     /* Предотвращаем выход за границы */
     flex-shrink: 0;
@@ -1465,14 +1473,26 @@ header {
 
   .admin-calendar-card {
     margin: 0;
-    padding: 14px;
-    overflow-x: hidden;
+    padding-top: 14px;
+    padding-bottom: 14px;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Восстанавливаем отступы для контента на маленьких экранах */
+  .admin-calendar-card > h2,
+  .admin-calendar-card > p.description,
+  .admin-calendar-card > .form-row,
+  .admin-calendar-card > div:not(.calendar-wrapper) {
+    padding-left: 14px;
+    padding-right: 14px;
   }
 
   .calendar-wrapper {
     margin: 0;
     width: 100%;
-    max-width: 100%;
+    max-width: calc(100vw - 16px) !important;
   }
 
   .container {
