@@ -827,6 +827,71 @@ app.get('/api/owners', (req, res) => {
   });
 });
 
+// API: Информация о боте (для основного приложения)
+app.get('/api/bot/info', async (req, res) => {
+  try {
+    // Если бот уже инициализирован, используем его информацию
+    if (bot && bot.botInfo) {
+      return res.json({
+        success: true,
+        botInfo: {
+          username: bot.botInfo.username,
+          first_name: bot.botInfo.first_name,
+          id: bot.botInfo.id
+        }
+      });
+    }
+
+    // Если бот еще не инициализирован, получаем токен и запрашиваем информацию через Telegram API
+    const token = await initBotToken();
+    if (!token) {
+      return res.status(503).json({
+        success: false,
+        message: 'Токен бота не найден. Проверьте настройки в админке или переменную окружения TELEGRAM_BOT_TOKEN.'
+      });
+    }
+
+    // Получаем информацию о боте через Telegram API
+    try {
+      const response = await axios.get(`https://api.telegram.org/bot${token}/getMe`, {
+        timeout: 5000
+      });
+
+      if (response.data && response.data.ok && response.data.result) {
+        return res.json({
+          success: true,
+          botInfo: {
+            username: response.data.result.username,
+            first_name: response.data.result.first_name,
+            id: response.data.result.id
+          }
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Не удалось получить информацию о боте. Проверьте правильность токена.'
+        });
+      }
+    } catch (apiError) {
+      console.error(JSON.stringify({
+        level: 'ERROR',
+        msg: 'Ошибка запроса к Telegram API',
+        error: apiError.message
+      }));
+      return res.status(400).json({
+        success: false,
+        message: 'Не удалось получить информацию о боте. Проверьте правильность токена.'
+      });
+    }
+  } catch (error) {
+    console.error(JSON.stringify({ level: 'ERROR', msg: 'Ошибка получения информации о боте', error: error.message }));
+    res.status(500).json({
+      success: false,
+      message: 'Ошибка получения информации о боте'
+    });
+  }
+});
+
 // Старые эндпоинты для обратной совместимости (перенаправляют на новые)
 app.post('/webhook/booking', async (req, res) => {
   req.body.booking_data = req.body.booking_data || req.body;
