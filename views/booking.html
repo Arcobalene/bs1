@@ -39,6 +39,7 @@
       <div class="services-list" id="services-list"></div>
       <div class="divider"></div>
       <h2 id="section-masters-heading">Мастера</h2>
+      <p class="note" id="masters-hint" style="margin-bottom: 12px; display: none;">Нажмите на имя, чтобы просмотреть работы</p>
       <div class="masters-list" id="masters-list"></div>
       <p class="note">
         После отправки заявки администратор свяжется с вами в мессенджере или по телефону для подтверждения времени.
@@ -704,6 +705,12 @@
       if (currentValue && serviceDurations[currentValue]) {
         serviceSelect.value = currentValue;
       }
+    }
+
+    // Показываем/скрываем подсказку о просмотре работ
+    const mastersHint = document.getElementById('masters-hint');
+    if (mastersHint) {
+      mastersHint.style.display = (masters && masters.length > 0) ? 'block' : 'none';
     }
 
     if (mastersListEl) {
