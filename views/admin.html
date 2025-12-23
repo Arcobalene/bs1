@@ -339,6 +339,16 @@
       <h2>Уведомления Telegram</h2>
       <p class="description">Подключите Telegram для получения уведомлений о новых записях, изменениях и отменах.</p>
 
+      <div style="margin-bottom: 24px; padding: 16px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <strong style="font-size: 1.1rem; color: #0c4a6e;">Информация о Telegram боте</strong>
+            <p style="margin: 8px 0 0 0; color: #075985; font-size: 0.9rem;">Узнайте, что умеет наш бот и как им пользоваться</p>
+          </div>
+          <button type="button" class="btn-primary" id="telegram-bot-info-btn">О боте</button>
+        </div>
+      </div>
+
       <div id="telegram-status-section" style="margin-bottom: 24px;">
         <div style="padding: 20px; background: #f3f4f6; border-radius: 8px;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
@@ -418,6 +428,56 @@
             <strong>Важно:</strong> Номер телефона в Telegram должен совпадать с номером, указанным в настройках салона. Если номер не совпадает, привязка не будет выполнена.
           </p>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно информации о Telegram боте -->
+  <div id="telegram-bot-info-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 10000; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: 12px; padding: 32px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <h2 style="margin: 0; font-size: 1.5rem; color: #1f2937;">О Telegram боте</h2>
+        <button type="button" id="telegram-bot-info-modal-close" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #6b7280; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='none'">×</button>
+      </div>
+
+      <div style="margin-bottom: 24px;">
+        <h3 style="margin: 0 0 12px 0; font-size: 1.2rem; color: #374151;">Что умеет бот:</h3>
+        <ul style="margin: 0; padding-left: 24px; line-height: 1.8; color: #4b5563;">
+          <li><strong>Уведомления о записях</strong> — автоматически отправляет уведомления о новых записях в ваш салон</li>
+          <li><strong>Уведомления об отменах</strong> — сообщает, когда клиент отменил запись</li>
+          <li><strong>Уведомления об изменениях</strong> — информирует об изменениях в существующих записях</li>
+          <li><strong>Работа в группах</strong> — можно добавить бота в группу Telegram для коллективных уведомлений</li>
+          <li><strong>Удобный интерфейс</strong> — все уведомления приходят в удобном формате с полной информацией о записи</li>
+        </ul>
+      </div>
+
+      <div style="margin-bottom: 24px; padding: 16px; background: #f3f4f6; border-radius: 8px;">
+        <h3 style="margin: 0 0 12px 0; font-size: 1.2rem; color: #374151;">Как начать пользоваться:</h3>
+        <ol style="margin: 0; padding-left: 24px; line-height: 1.8; color: #4b5563;">
+          <li>Нажмите на ссылку бота ниже, чтобы открыть его в Telegram</li>
+          <li>Нажмите кнопку "Начать" или отправьте команду <code style="background: white; padding: 2px 6px; border-radius: 4px; font-family: monospace;">/start</code></li>
+          <li>Отправьте свой номер телефона, используя кнопку "📱 Отправить номер телефона"</li>
+          <li>После успешной регистрации вы начнете получать уведомления автоматически</li>
+        </ol>
+      </div>
+
+      <div style="margin-bottom: 24px;">
+        <h3 style="margin: 0 0 12px 0; font-size: 1.2rem; color: #374151;">Ссылка на бота:</h3>
+        <div id="telegram-bot-link-container" style="padding: 16px; background: #f9fafb; border: 2px dashed #d1d5db; border-radius: 8px; text-align: center;">
+          <p id="telegram-bot-link-loading" style="margin: 0; color: #6b7280;">Загрузка информации о боте...</p>
+          <a id="telegram-bot-link" href="#" target="_blank" style="display: none; font-size: 1.1rem; font-weight: 600; color: #0ea5e9; text-decoration: none; padding: 12px 24px; background: white; border-radius: 8px; border: 2px solid #0ea5e9; display: inline-block; transition: all 0.2s;" onmouseover="this.style.background='#0ea5e9'; this.style.color='white'" onmouseout="this.style.background='white'; this.style.color='#0ea5e9'">
+            📱 Открыть бота в Telegram
+          </a>
+          <p id="telegram-bot-link-error" style="display: none; margin: 12px 0 0 0; color: #ef4444; font-size: 0.9rem;">
+            Не удалось загрузить информацию о боте. Убедитесь, что токен бота настроен.
+          </p>
+        </div>
+      </div>
+
+      <div style="padding: 16px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px;">
+        <p style="margin: 0; color: #92400e; font-size: 0.9rem;">
+          <strong>Важно:</strong> Номер телефона в Telegram должен совпадать с номером телефона владельца, указанным в настройках салона (вкладка "Информация о салоне"). Если номера не совпадают, регистрация не будет выполнена.
+        </p>
       </div>
     </div>
   </div>
@@ -1348,6 +1408,69 @@
         } else {
           link.classList.remove('active');
         }
+      }
+    });
+  }
+
+  // Обработчик кнопки "О боте"
+  const telegramBotInfoBtn = document.getElementById('telegram-bot-info-btn');
+  const telegramBotInfoModal = document.getElementById('telegram-bot-info-modal');
+  const telegramBotInfoModalClose = document.getElementById('telegram-bot-info-modal-close');
+  const telegramBotLink = document.getElementById('telegram-bot-link');
+  const telegramBotLinkLoading = document.getElementById('telegram-bot-link-loading');
+  const telegramBotLinkError = document.getElementById('telegram-bot-link-error');
+
+  // Открытие модального окна
+  if (telegramBotInfoBtn && telegramBotInfoModal) {
+    telegramBotInfoBtn.addEventListener('click', async () => {
+      telegramBotInfoModal.style.display = 'flex';
+      
+      // Загружаем информацию о боте
+      try {
+        telegramBotLinkLoading.style.display = 'block';
+        telegramBotLink.style.display = 'none';
+        telegramBotLinkError.style.display = 'none';
+
+        const response = await fetch('/api/telegram/connect-link', {
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (data.success && data.botUsername) {
+            const botUrl = `https://t.me/${data.botUsername}`;
+            telegramBotLink.href = botUrl;
+            telegramBotLink.style.display = 'inline-block';
+            telegramBotLinkLoading.style.display = 'none';
+          } else {
+            telegramBotLinkLoading.style.display = 'none';
+            telegramBotLinkError.style.display = 'block';
+          }
+        } else {
+          telegramBotLinkLoading.style.display = 'none';
+          telegramBotLinkError.style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки информации о боте:', error);
+        telegramBotLinkLoading.style.display = 'none';
+        telegramBotLinkError.style.display = 'block';
+      }
+    });
+  }
+
+  // Закрытие модального окна по клику на крестик
+  if (telegramBotInfoModalClose && telegramBotInfoModal) {
+    telegramBotInfoModalClose.addEventListener('click', () => {
+      telegramBotInfoModal.style.display = 'none';
+    });
+  }
+
+  // Закрытие модального окна по клику вне его
+  if (telegramBotInfoModal) {
+    telegramBotInfoModal.addEventListener('click', (e) => {
+      if (e.target === telegramBotInfoModal) {
+        telegramBotInfoModal.style.display = 'none';
       }
     });
   }
