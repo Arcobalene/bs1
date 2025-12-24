@@ -565,28 +565,18 @@
         opacity: 0.7;
       }
       .master-card {
-        background: ${isLightBg ? 'linear-gradient(135deg, #ffffff, #f8fafc)' : 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))'} !important;
+        background: ${isLightBg ? '#fff' : 'rgba(255, 255, 255, 0.1)'} !important;
         border-color: ${isLightBg ? '#e5e7eb' : 'rgba(255, 255, 255, 0.2)'} !important;
-        border-width: 2px !important;
-        box-shadow: ${isLightBg ? '0 2px 8px rgba(0, 0, 0, 0.08)' : '0 2px 8px rgba(0, 0, 0, 0.2)'} !important;
+        border-width: 1px !important;
       }
       .master-card:hover {
-        border-color: ${isLightBg ? '#a855f7' : 'rgba(255, 255, 255, 0.4)'} !important;
-        box-shadow: ${isLightBg ? '0 8px 20px rgba(168, 85, 247, 0.25)' : '0 8px 20px rgba(0, 0, 0, 0.3)'} !important;
-        background: ${isLightBg ? 'linear-gradient(135deg, #ffffff, #faf5ff)' : 'linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.1))'} !important;
-      }
-      .master-card[style*="cursor: pointer"] {
-        border-color: ${isLightBg ? '#c4b5fd' : 'rgba(255, 255, 255, 0.3)'} !important;
-        background: ${isLightBg ? 'linear-gradient(135deg, #faf5ff, #f3e8ff)' : 'linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.1))'} !important;
+        background: ${isLightBg ? '#f3f4f6' : 'rgba(255, 255, 255, 0.15)'} !important;
       }
       .master-card[style*="cursor: pointer"]:hover {
-        border-color: ${isLightBg ? '#a855f7' : 'rgba(255, 255, 255, 0.5)'} !important;
-        box-shadow: ${isLightBg ? '0 12px 28px rgba(168, 85, 247, 0.35)' : '0 12px 28px rgba(0, 0, 0, 0.4)'} !important;
-        background: ${isLightBg ? 'linear-gradient(135deg, #f3e8ff, #e9d5ff)' : 'linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.15))'} !important;
+        background: ${isLightBg ? '#f3f4f6' : 'rgba(255, 255, 255, 0.15)'} !important;
       }
       .master-card[style*="cursor: pointer"]:active {
-        transform: translateY(-1px) !important;
-        box-shadow: ${isLightBg ? '0 6px 16px rgba(168, 85, 247, 0.3)' : '0 6px 16px rgba(0, 0, 0, 0.35)'} !important;
+        background: ${isLightBg ? '#e5e7eb' : 'rgba(255, 255, 255, 0.2)'} !important;
       }
       .master-card-name {
         color: ${finalTextColor} !important;
