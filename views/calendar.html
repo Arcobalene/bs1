@@ -76,7 +76,6 @@
       <button type="button" id="modal-close" class="modal-close">×</button>
     </div>
     <div class="modal-body" id="modal-body-view">
-      <!-- Навигация между записями в одном временном слоте -->
       <div id="modal-bookings-navigation" style="display: none; margin-bottom: 16px; padding: 12px; background: #f3f4f6; border-radius: 8px;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
           <div style="font-weight: 600; color: #374151;">Записи в это время:</div>
@@ -156,25 +155,53 @@
   © 2025 Beauty Studio. Все права защищены.
 </footer>
 
+<!-- Контейнер для push-уведомлений -->
+<div class="notification-container" id="notification-container"></div>
+
+<!-- Иконка уведомлений -->
+<div class="notifications-icon" id="notifications-icon">
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25-2.5 7-2.5 7h15s-2.5-1.75-2.5-7c0-3.87-3.13-7-7-7zm0 2c2.76 0 5 2.24 5 5 0 2.88 2.88 4.5 2.88 4.5H4.12S7 11.88 7 9c0-2.76 2.24-5 5-5zm-1 15h2v2h-2v-2z"/>
+  </svg>
+  <div class="notifications-badge hidden" id="notifications-badge">0</div>
+</div>
+
+<!-- Панель уведомлений -->
+<div class="notifications-panel" id="notifications-panel">
+  <div class="notifications-panel-header">
+    <div class="notifications-panel-title">Уведомления</div>
+    <button class="notifications-panel-close" id="notifications-panel-close">×</button>
+  </div>
+  <div class="notifications-panel-body" id="notifications-panel-body">
+    <div class="notifications-panel-empty">Нет уведомлений</div>
+  </div>
+  <div class="notifications-panel-footer">
+    <button class="notifications-clear-all" id="notifications-clear-all">Очистить все</button>
+  </div>
+</div>
+
 <script>
-  let bookings = [];
-  let masters = [];
-  let services = [];
-  let currentUser = null;
-  let currentWeekStart = null;
-  let lastBookingCount = 0;
-  const WEEK_DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+// ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
+const CalendarApp = {
+  bookings: [],
+  masters: [],
+  services: [],
+  currentUser: null,
+  currentWeekStart: null,
+  currentEditingBookingId: null,
+  currentBookingIndex: 0,
+  sameTimeBookings: [],
+  knownBookingIds: new Set(),
+  lastBookingCheck: Date.now(),
+  notificationsList: JSON.parse(localStorage.getItem('notifications') || '[]'),
+  WEEK_DAYS: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
+  START_HOUR: 10,
+  END_HOUR: 20
+};
 
-  function getWeekStart(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = (day === 0 ? -6 : 1) - day;
-    d.setDate(d.getDate() + diff);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }
-
-  function timeToMinutes(t) {
+// ========== УТИЛИТЫ ==========
+const Utils = {
+  timeToMinutes(t) {
     if (!t) return null;
     const parts = t.split(":");
     if (parts.length !== 2) return null;
@@ -182,129 +209,181 @@
     const m = Number(parts[1]);
     if (Number.isNaN(h) || Number.isNaN(m)) return null;
     return h * 60 + m;
-  }
+  },
 
-  function minutesToTime(total) {
+  minutesToTime(total) {
     const h = Math.floor(total / 60);
     const m = total % 60;
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-  }
+  },
 
-  function dateToISO(dateObj) {
+  dateToISO(dateObj) {
     const y = dateObj.getFullYear();
     const m = String(dateObj.getMonth() + 1).padStart(2, "0");
     const d = String(dateObj.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
-  }
+  },
 
-  async function loadData() {
+  getWeekStart(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = (day === 0 ? -6 : 1) - day;
+    d.setDate(d.getDate() + diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  },
+
+  formatDate(dateStr) {
+    if (!dateStr) return "—";
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+};
+
+// ========== API ==========
+const API = {
+  async getUser() {
+    const res = await fetch('/api/user');
+    return await res.json();
+  },
+
+  async getBookings() {
+    const res = await fetch('/api/bookings');
+    return await res.json();
+  },
+
+  async getBookingsByDate(userId, date) {
+    const res = await fetch(`/api/bookings/${userId}?date=${date}`);
+    return await res.json();
+  },
+
+  async getServices(userId) {
+    const res = await fetch(`/api/services/${userId}`);
+    return await res.json();
+  },
+
+  async createBooking(bookingData) {
+    const res = await fetch('/api/bookings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bookingData)
+    });
+    return await res.json();
+  },
+
+  async updateBooking(id, bookingData) {
+    const res = await fetch(`/api/bookings/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bookingData)
+    });
+    return await res.json();
+  },
+
+  async deleteBooking(id) {
+    const res = await fetch(`/api/bookings/${id}`, { method: 'DELETE' });
+    return await res.json();
+  },
+
+  async logout() {
+    await fetch('/api/logout', { method: 'POST' });
+  }
+};
+
+// ========== ЗАГРУЗКА ДАННЫХ ==========
+const DataLoader = {
+  async loadAll() {
     try {
       // Проверка авторизации
-      const userRes = await fetch('/api/user');
-      const userResult = await userRes.json();
+      const userResult = await API.getUser();
       if (!userResult.success) {
         window.location.href = '/';
         return;
       }
 
-      currentUser = userResult.user;
+      CalendarApp.currentUser = userResult.user;
       
       // Применяем дизайн
-      if (currentUser.salonDesign) {
-        applyDesign(currentUser.salonDesign);
+      if (CalendarApp.currentUser.salonDesign) {
+        DesignManager.apply(CalendarApp.currentUser.salonDesign);
       }
       
-      // Обновляем ссылку "Страница салона" в навигации
-      const salonPageLink = document.getElementById('salon-page-link');
-      if (salonPageLink && currentUser && currentUser.id) {
-        salonPageLink.href = `/booking?userId=${currentUser.id}`;
-      }
+      // Обновляем навигацию
+      NavigationManager.update(CalendarApp.currentUser);
       
-      // Показываем ссылку на управление пользователями только для админов
-      const usersLink = document.getElementById('users-link');
-      const isAdmin = currentUser.role === 'admin' || currentUser.username === 'admin';
-      if (usersLink) {
-        if (isAdmin) {
-          usersLink.classList.add('show');
-        } else {
-          usersLink.classList.remove('show');
-        }
-      }
-
       // Загрузка записей
-      const bookingsRes = await fetch('/api/bookings');
-      const bookingsResult = await bookingsRes.json();
+      const bookingsResult = await API.getBookings();
       if (bookingsResult.success) {
-        bookings = bookingsResult.bookings;
-        console.log('Загружено записей:', bookings.length);
-        if (bookings.length > 0) {
-          console.log('Пример записи:', bookings[0]);
-        }
-        
-        // Проверяем, есть ли в URL параметр bookingId
-        const urlParams = new URLSearchParams(window.location.search);
-        const bookingIdParam = urlParams.get('bookingId');
-        if (bookingIdParam) {
-          const bookingId = parseInt(bookingIdParam);
-          // Удаляем параметр из URL
-          window.history.replaceState({}, document.title, window.location.pathname);
-          // Открываем запись
-          openBookingById(bookingId);
-        }
-
-        // Проверяем, есть ли в URL параметр clientPhone для фильтрации
-        const clientPhoneParam = urlParams.get('clientPhone');
-        if (clientPhoneParam) {
-          // Фильтруем записи по телефону клиента
-          const filteredBookings = bookings.filter(b => b.phone === clientPhoneParam);
-          if (filteredBookings.length > 0) {
-            // Переключаемся на неделю с первой записью клиента
-            const firstBooking = filteredBookings[0];
-            if (firstBooking.date) {
-              const bookingDate = new Date(firstBooking.date);
-              currentWeekStart = getWeekStart(bookingDate);
-            }
-            // Показываем уведомление о фильтрации
-            showNotification(
-              'Фильтр по клиенту',
-              `Показаны записи клиента: ${filteredBookings[0].name} (${filteredBookings.length} записей)`,
-              'info'
-            );
-            // Удаляем параметр из URL
-            window.history.replaceState({}, document.title, window.location.pathname);
-          }
-          renderCalendar();
-        }
-      } else {
-        console.error('Ошибка загрузки записей:', bookingsResult);
+        CalendarApp.bookings = bookingsResult.bookings;
+        this.initializeKnownBookings();
       }
 
       // Загрузка мастеров
-      masters = currentUser.masters || [];
+      CalendarApp.masters = CalendarApp.currentUser.masters || [];
       
       // Загрузка услуг
-      if (currentUser.id) {
-        const servicesRes = await fetch(`/api/services/${currentUser.id}`);
-        const servicesResult = await servicesRes.json();
+      if (CalendarApp.currentUser.id) {
+        const servicesResult = await API.getServices(CalendarApp.currentUser.id);
         if (servicesResult.success) {
-          services = servicesResult.services;
+          CalendarApp.services = servicesResult.services;
         }
       }
       
-      renderMasterFilter();
-      renderCalendar();
+      // Обработка URL параметров
+      this.handleURLParams();
+      
+      // Инициализация календаря
+      CalendarRenderer.renderMasterFilter();
+      CalendarRenderer.render();
+      
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
       window.location.href = '/';
     }
-  }
-  
-  // Обертка для loadData, чтобы она возвращала Promise
-  function loadDataPromise() {
-    return loadData();
-  }
+  },
 
-  function renderMasterFilter() {
+  initializeKnownBookings() {
+    CalendarApp.bookings.forEach(booking => {
+      CalendarApp.knownBookingIds.add(String(booking.id));
+    });
+  },
+
+  handleURLParams() {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    // Параметр bookingId
+    const bookingIdParam = urlParams.get('bookingId');
+    if (bookingIdParam) {
+      const bookingId = parseInt(bookingIdParam);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      BookingModal.openById(bookingId);
+    }
+
+    // Параметр clientPhone для фильтрации
+    const clientPhoneParam = urlParams.get('clientPhone');
+    if (clientPhoneParam) {
+      const filteredBookings = CalendarApp.bookings.filter(b => b.phone === clientPhoneParam);
+      if (filteredBookings.length > 0) {
+        const firstBooking = filteredBookings[0];
+        if (firstBooking.date) {
+          const bookingDate = new Date(firstBooking.date);
+          CalendarApp.currentWeekStart = Utils.getWeekStart(bookingDate);
+        }
+        NotificationManager.show(
+          'Фильтр по клиенту',
+          `Показаны записи клиента: ${filteredBookings[0].name} (${filteredBookings.length} записей)`,
+          'info'
+        );
+        window.history.replaceState({}, document.title, window.location.pathname);
+        CalendarRenderer.render();
+      }
+    }
+  }
+};
+
+// ========== РЕНДЕРИНГ КАЛЕНДАРЯ ==========
+const CalendarRenderer = {
+  renderMasterFilter() {
     const filter = document.getElementById('calendar-master-filter');
     if (!filter) return;
 
@@ -314,33 +393,74 @@
     allOpt.value = '';
     allOpt.textContent = 'Общий календарь (все мастера)';
     filter.appendChild(allOpt);
-    masters.forEach((m) => {
+    
+    CalendarApp.masters.forEach((m) => {
       const opt = document.createElement('option');
       opt.value = m.name;
       opt.textContent = m.name;
       filter.appendChild(opt);
     });
     filter.value = currentValue || '';
-  }
+  },
 
-  function renderCalendar() {
+  render() {
     const grid = document.getElementById('calendar-grid');
     if (!grid) return;
 
-    if (!currentWeekStart) {
-      currentWeekStart = getWeekStart(new Date());
+    if (!CalendarApp.currentWeekStart) {
+      CalendarApp.currentWeekStart = Utils.getWeekStart(new Date());
     }
-
-    const startHour = 10;
-    const endHour = 20;
 
     const weekDates = [];
     for (let i = 0; i < 7; i++) {
-      const d = new Date(currentWeekStart);
+      const d = new Date(CalendarApp.currentWeekStart);
       d.setDate(d.getDate() + i);
       weekDates.push(d);
     }
 
+    this.updateWeekLabel(weekDates);
+    this.setupGridLayout(grid);
+    grid.innerHTML = "";
+
+    // Заголовки
+    const emptyHeader = document.createElement("div");
+    emptyHeader.className = "cal-cell cal-header cal-corner";
+    grid.appendChild(emptyHeader);
+
+    weekDates.forEach((d, idx) => {
+      const cell = document.createElement("div");
+      cell.className = "cal-cell cal-header cal-day-header";
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      cell.textContent = `${CalendarApp.WEEK_DAYS[idx]} ${dd}.${mm}`;
+      grid.appendChild(cell);
+    });
+
+    // Подготовка данных о записях
+    const selectedMaster = document.getElementById('calendar-master-filter')?.value || "";
+    const bookingsByDay = this.prepareBookingsByDay(weekDates, selectedMaster);
+    const occupiedCells = {};
+
+    // Создание строк для каждого часа
+    for (let hour = CalendarApp.START_HOUR; hour < CalendarApp.END_HOUR; hour++) {
+      const hourCell = document.createElement("div");
+      hourCell.className = "cal-cell cal-hour-label";
+      hourCell.textContent = `${String(hour).padStart(2, "0")}:00`;
+      grid.appendChild(hourCell);
+
+      weekDates.forEach((d) => {
+        const iso = Utils.dateToISO(d);
+        const cellKey = `${iso}_${hour}`;
+        
+        if (occupiedCells[cellKey]) return;
+        
+        const cell = this.createTimeSlotCell(iso, hour, bookingsByDay[iso], occupiedCells);
+        grid.appendChild(cell);
+      });
+    }
+  },
+
+  updateWeekLabel(weekDates) {
     const weekLabel = document.getElementById('week-label');
     if (weekLabel) {
       const fmt = (d) => {
@@ -350,14 +470,13 @@
       };
       weekLabel.textContent = `${fmt(weekDates[0])} – ${fmt(weekDates[6])}`;
     }
+  },
 
-    // Адаптивная ширина колонок для мобильных устройств
+  setupGridLayout(grid) {
     const isMobile = window.innerWidth <= 768;
     const timeColumnWidth = isMobile ? "50px" : "80px";
     
-    // На мобильных устанавливаем минимальную ширину для календаря, чтобы он прокручивался
     if (isMobile) {
-      // Минимальная ширина: 50px (время) + 7 * 90px (дни) = 680px
       grid.style.minWidth = "680px";
       grid.style.width = "680px";
       grid.style.maxWidth = "none";
@@ -368,255 +487,219 @@
       grid.style.maxWidth = "";
       grid.style.gridTemplateColumns = `${timeColumnWidth} repeat(7, 1fr)`;
     }
-    
-    grid.innerHTML = "";
+  },
 
-    const emptyHeader = document.createElement("div");
-    emptyHeader.className = "cal-cell cal-header cal-corner";
-    grid.appendChild(emptyHeader);
-
-    weekDates.forEach((d, idx) => {
-      const cell = document.createElement("div");
-      cell.className = "cal-cell cal-header cal-day-header";
-      const dd = String(d.getDate()).padStart(2, "0");
-      const mm = String(d.getMonth() + 1).padStart(2, "0");
-      cell.textContent = `${WEEK_DAYS[idx]} ${dd}.${mm}`;
-      grid.appendChild(cell);
-    });
-
-    const selectedMaster = document.getElementById('calendar-master-filter')?.value || "";
-    
-    // Карта для отслеживания занятых ячеек
-    // Используем объект для быстрого доступа
-    const occupiedCells = {};
-
-    // Сначала подготовим данные о записях
+  prepareBookingsByDay(weekDates, selectedMaster) {
     const bookingsByDay = {};
     weekDates.forEach((d) => {
-      const iso = dateToISO(d);
-      bookingsByDay[iso] = bookings.filter(b => {
+      const iso = Utils.dateToISO(d);
+      bookingsByDay[iso] = CalendarApp.bookings.filter(b => {
         if (b.date !== iso) return false;
         if (selectedMaster && b.master !== selectedMaster) return false;
         return true;
       });
     });
+    return bookingsByDay;
+  },
 
-    // Создаем строки для каждого часа
-    for (let hour = startHour; hour < endHour; hour++) {
-      // Ячейка времени
-      const hourCell = document.createElement("div");
-      hourCell.className = "cal-cell cal-hour-label";
-      hourCell.textContent = `${String(hour).padStart(2, "0")}:00`;
-      grid.appendChild(hourCell);
+  createTimeSlotCell(iso, hour, dayBookings, occupiedCells) {
+    const cell = document.createElement("div");
+    cell.className = "cal-cell cal-slot";
 
-      // Ячейки для каждого дня
-      weekDates.forEach((d) => {
-        const iso = dateToISO(d);
-        const cellKey = `${iso}_${hour}`;
-        
-        // Пропускаем, если ячейка уже занята объединенной записью
-        if (occupiedCells[cellKey]) {
-          return;
-        }
-        
-        const cell = document.createElement("div");
-        cell.className = "cal-cell cal-slot";
-
-        // Ищем запись, которая начинается в этот час
-        const bookingsForThisHour = bookingsByDay[iso]?.filter(b => {
-          const startM = timeToMinutes(b.time);
-          if (startM === null) return false;
-          const cellStart = hour * 60;
-          const cellEnd = (hour + 1) * 60;
-          return startM >= cellStart && startM < cellEnd;
-        }) || [];
-
-        if (bookingsForThisHour.length) {
-          cell.classList.add("cal-slot-busy");
-          
-          if (bookingsForThisHour.length === 1) {
-            const b = bookingsForThisHour[0];
-            const displayParts = [];
-            
-            if (b.name) {
-              displayParts.push(b.name);
-            }
-            
-            const timeStr = b.time + (b.endTime ? `-${b.endTime}` : '');
-            displayParts.push(timeStr);
-            cell.textContent = displayParts.join(" · ");
-            
-            // РАСЧЕТ ОБЪЕДИНЕНИЯ ЯЧЕЕК
-            const startM = timeToMinutes(b.time);
-            const endM = b.endTime ? timeToMinutes(b.endTime) : (startM + 60);
-            
-            if (startM !== null && endM !== null && endM > startM) {
-              const durationMinutes = endM - startM;
-              // Округляем ВВЕРХ до полных часов
-              const durationHours = Math.ceil(durationMinutes / 60);
-              
-              // ВАЖНО: в CSS Grid строки считаются с 1
-              // У нас есть:
-              // - Строка 1: заголовки (8 ячеек)
-              // - Далее строки для каждого часа, начиная с 2
-              // Каждая логическая строка содержит 8 ячеек (час + 7 дней)
-              // Но в CSS Grid каждая ячейка занимает одну позицию в потоке
-              // Структура: элемент 0-7 (строка 1), элементы 8-15 (строка 2), элементы 16-23 (строка 3)...
-              // Номер строки = floor(индекс элемента / 8) + 1
-              // Для часа h: индекс первого элемента строки = (h - startHour) * 8 + 8 (после заголовков)
-              // Номер строки = (h - startHour) + 2
-              
-              // Номер строки для текущего часа
-              const rowStart = (hour - startHour) + 2;
-              
-              // Количество строк для объединения
-              const rowSpan = Math.min(durationHours, endHour - hour);
-              
-              if (rowSpan > 1) {
-                // Объединяем ячейки
-                cell.style.gridRow = `${rowStart} / span ${rowSpan}`;
-                
-                // Помечаем последующие ячейки как занятые
-                for (let h = hour + 1; h < hour + rowSpan && h < endHour; h++) {
-                  const occupiedKey = `${iso}_${h}`;
-                  occupiedCells[occupiedKey] = true;
-                }
-              }
-            }
-            
-            // Всплывающая подсказка
-            const fullInfo = [];
-            if (b.time) fullInfo.push(`Время: ${b.time}${b.endTime ? '-' + b.endTime : ''}`);
-            if (b.name) fullInfo.push(`Клиент: ${b.name}`);
-            if (b.service) fullInfo.push(`Услуга: ${b.service}`);
-            if (b.master && b.master.trim()) {
-              fullInfo.push(`Мастер: ${b.master}`);
-            }
-            cell.title = fullInfo.join('\n');
-            
-            const bookingIndex = bookings.indexOf(b);
-            if (bookingIndex !== -1) {
-              cell.dataset.bookingIndex = String(bookingIndex);
-              cell.style.cursor = "pointer";
-            }
-          } else {
-            // Несколько записей в один час
-            cell.textContent = `${bookingsForThisHour.length} записей`;
-            const booking = bookingsForThisHour[0];
-            const bookingIndex = bookings.indexOf(booking);
-            if (bookingIndex !== -1) {
-              cell.dataset.bookingIndex = String(bookingIndex);
-              cell.style.cursor = "pointer";
-            }
-            cell.dataset.multipleBookings = "true";
-          }
-        } else {
-          // Свободный слот - можно создать запись
-          cell.classList.add("cal-slot-free");
-          cell.dataset.date = iso;
-          cell.dataset.hour = String(hour);
-          cell.style.cursor = "pointer";
-          cell.title = "Кликните, чтобы создать запись";
-        }
-
-        grid.appendChild(cell);
-      });
-    }
-  }
-
-  let currentEditingBookingId = null; // ID записи, которую редактируем
-  let currentBookingIndex = 0; // Индекс текущей записи в списке записей одного временного слота
-  let sameTimeBookings = []; // Массив записей в одном временном слоте
-
-  function openBookingModal(index) {
-    const modal = document.getElementById('booking-modal');
-    if (!modal) return;
-    const booking = bookings[index];
-    if (!booking) return;
-
-    currentEditingBookingId = booking.id; // Сохраняем ID для редактирования
-
-    // Находим все записи в том же временном слоте (та же дата и пересекающееся время)
-    const bookingStart = timeToMinutes(booking.time);
-    const bookingEnd = booking.endTime ? timeToMinutes(booking.endTime) : (bookingStart + 60);
-    
-    sameTimeBookings = bookings.filter(b => {
-      if (b.date !== booking.date) return false;
-      const bStart = timeToMinutes(b.time);
-      const bEnd = b.endTime ? timeToMinutes(b.endTime) : (bStart + 60);
-      if (bStart === null || bEnd === null || bookingStart === null || bookingEnd === null) return false;
-      // Проверяем пересечение временных интервалов
-      return (bStart < bookingEnd && bEnd > bookingStart);
+    const bookingsForThisHour = (dayBookings || []).filter(b => {
+      const startM = Utils.timeToMinutes(b.time);
+      if (startM === null) return false;
+      const cellStart = hour * 60;
+      const cellEnd = (hour + 1) * 60;
+      return startM >= cellStart && startM < cellEnd;
     });
 
-    // Находим индекс текущей записи в списке
-    currentBookingIndex = sameTimeBookings.findIndex(b => b.id === booking.id);
-    if (currentBookingIndex === -1) currentBookingIndex = 0;
-
-    // Показываем навигацию, если записей больше одной
-    const navSection = document.getElementById('modal-bookings-navigation');
-    if (sameTimeBookings.length > 1) {
-      navSection.style.display = 'block';
-      updateBookingsNavigation();
-      renderOtherBookingsList();
+    if (bookingsForThisHour.length) {
+      cell.classList.add("cal-slot-busy");
+      
+      if (bookingsForThisHour.length === 1) {
+        this.renderSingleBooking(cell, bookingsForThisHour[0], hour, iso, occupiedCells);
+      } else {
+        this.renderMultipleBookings(cell, bookingsForThisHour);
+      }
     } else {
-      navSection.style.display = 'none';
+      cell.classList.add("cal-slot-free");
+      cell.dataset.date = iso;
+      cell.dataset.hour = String(hour);
+      cell.style.cursor = "pointer";
+      cell.title = "Кликните, чтобы создать запись";
     }
 
-    displayBooking(booking);
+    return cell;
+  },
 
-    // Показываем модальное окно просмотра, скрываем форму
+  renderSingleBooking(cell, booking, hour, iso, occupiedCells) {
+    const displayParts = [];
+    if (booking.name) displayParts.push(booking.name);
+    const timeStr = booking.time + (booking.endTime ? `-${booking.endTime}` : '');
+    displayParts.push(timeStr);
+    cell.textContent = displayParts.join(" · ");
+    
+    const startM = Utils.timeToMinutes(booking.time);
+    const endM = booking.endTime ? Utils.timeToMinutes(booking.endTime) : (startM + 60);
+    
+    if (startM !== null && endM !== null && endM > startM) {
+      const durationMinutes = endM - startM;
+      const durationHours = Math.ceil(durationMinutes / 60);
+      const rowStart = (hour - CalendarApp.START_HOUR) + 2;
+      const rowSpan = Math.min(durationHours, CalendarApp.END_HOUR - hour);
+      
+      if (rowSpan > 1) {
+        cell.style.gridRow = `${rowStart} / span ${rowSpan}`;
+        for (let h = hour + 1; h < hour + rowSpan && h < CalendarApp.END_HOUR; h++) {
+          occupiedCells[`${iso}_${h}`] = true;
+        }
+      }
+    }
+    
+    const fullInfo = [];
+    if (booking.time) fullInfo.push(`Время: ${booking.time}${booking.endTime ? '-' + booking.endTime : ''}`);
+    if (booking.name) fullInfo.push(`Клиент: ${booking.name}`);
+    if (booking.service) fullInfo.push(`Услуга: ${booking.service}`);
+    if (booking.master && booking.master.trim()) {
+      fullInfo.push(`Мастер: ${booking.master}`);
+    }
+    cell.title = fullInfo.join('\n');
+    
+    const bookingIndex = CalendarApp.bookings.indexOf(booking);
+    if (bookingIndex !== -1) {
+      cell.dataset.bookingIndex = String(bookingIndex);
+      cell.style.cursor = "pointer";
+    }
+  },
+
+  renderMultipleBookings(cell, bookings) {
+    cell.textContent = `${bookings.length} записей`;
+    const booking = bookings[0];
+    const bookingIndex = CalendarApp.bookings.indexOf(booking);
+    if (bookingIndex !== -1) {
+      cell.dataset.bookingIndex = String(bookingIndex);
+      cell.style.cursor = "pointer";
+    }
+    cell.dataset.multipleBookings = "true";
+  }
+};
+
+// ========== МОДАЛЬНОЕ ОКНО ЗАПИСИ ==========
+const BookingModal = {
+  open(index) {
+    const booking = CalendarApp.bookings[index];
+    if (!booking) return;
+
+    CalendarApp.currentEditingBookingId = booking.id;
+    this.findSameTimeBookings(booking);
+    this.updateNavigation();
+    this.displayBooking(booking);
+
     document.getElementById('modal-body-view').style.display = 'block';
     document.getElementById('modal-body-form').style.display = 'none';
     document.getElementById('modal-title').textContent = 'Запись клиента';
     
-    modal.classList.remove("hidden");
-  }
+    const modal = document.getElementById('booking-modal');
+    if (modal) modal.classList.remove("hidden");
+  },
 
-  function displayBooking(booking) {
+  openById(bookingId) {
+    const index = CalendarApp.bookings.findIndex(b => b.id === bookingId);
+    if (index !== -1) {
+      const booking = CalendarApp.bookings[index];
+      if (booking.date) {
+        const bookingDate = new Date(booking.date);
+        CalendarApp.currentWeekStart = Utils.getWeekStart(bookingDate);
+        CalendarRenderer.render();
+      }
+      setTimeout(() => this.open(index), 100);
+    } else {
+      DataLoader.loadAll().then(() => {
+        const newIndex = CalendarApp.bookings.findIndex(b => b.id === bookingId);
+        if (newIndex !== -1) {
+          const booking = CalendarApp.bookings[newIndex];
+          if (booking.date) {
+            const bookingDate = new Date(booking.date);
+            CalendarApp.currentWeekStart = Utils.getWeekStart(bookingDate);
+            CalendarRenderer.render();
+          }
+          setTimeout(() => this.open(newIndex), 100);
+        }
+      });
+    }
+  },
+
+  findSameTimeBookings(booking) {
+    const bookingStart = Utils.timeToMinutes(booking.time);
+    const bookingEnd = booking.endTime ? Utils.timeToMinutes(booking.endTime) : (bookingStart + 60);
+    
+    CalendarApp.sameTimeBookings = CalendarApp.bookings.filter(b => {
+      if (b.date !== booking.date) return false;
+      const bStart = Utils.timeToMinutes(b.time);
+      const bEnd = b.endTime ? Utils.timeToMinutes(b.endTime) : (bStart + 60);
+      if (bStart === null || bEnd === null || bookingStart === null || bookingEnd === null) return false;
+      return (bStart < bookingEnd && bEnd > bookingStart);
+    });
+
+    CalendarApp.currentBookingIndex = CalendarApp.sameTimeBookings.findIndex(b => b.id === booking.id);
+    if (CalendarApp.currentBookingIndex === -1) CalendarApp.currentBookingIndex = 0;
+  },
+
+  updateNavigation() {
+    const navSection = document.getElementById('modal-bookings-navigation');
+    if (CalendarApp.sameTimeBookings.length > 1) {
+      navSection.style.display = 'block';
+      this.updateBookingsNavigation();
+      this.renderOtherBookingsList();
+    } else {
+      navSection.style.display = 'none';
+    }
+  },
+
+  displayBooking(booking) {
     document.getElementById('modal-client-name').textContent = booking.name || "—";
     document.getElementById('modal-client-phone').textContent = booking.phone || "—";
     document.getElementById('modal-service').textContent = booking.service || "—";
     document.getElementById('modal-master').textContent = booking.master || "Любой мастер";
-    document.getElementById('modal-date').textContent = booking.date || "—";
+    document.getElementById('modal-date').textContent = Utils.formatDate(booking.date);
     if (booking.time && booking.endTime) {
       document.getElementById('modal-time').textContent = `${booking.time}–${booking.endTime}`;
     } else {
       document.getElementById('modal-time').textContent = booking.time || "—";
     }
     document.getElementById('modal-comment').textContent = booking.comment || "Нет комментария";
-    
-    currentEditingBookingId = booking.id;
-  }
+    CalendarApp.currentEditingBookingId = booking.id;
+  },
 
-  function updateBookingsNavigation() {
+  updateBookingsNavigation() {
     const counter = document.getElementById('modal-booking-counter');
     const prevBtn = document.getElementById('modal-prev-booking');
     const nextBtn = document.getElementById('modal-next-booking');
     
     if (counter) {
-      counter.textContent = `${currentBookingIndex + 1} / ${sameTimeBookings.length}`;
+      counter.textContent = `${CalendarApp.currentBookingIndex + 1} / ${CalendarApp.sameTimeBookings.length}`;
     }
     
     if (prevBtn) {
-      prevBtn.disabled = currentBookingIndex === 0;
-      prevBtn.style.opacity = currentBookingIndex === 0 ? '0.5' : '1';
-      prevBtn.style.cursor = currentBookingIndex === 0 ? 'not-allowed' : 'pointer';
+      prevBtn.disabled = CalendarApp.currentBookingIndex === 0;
+      prevBtn.style.opacity = CalendarApp.currentBookingIndex === 0 ? '0.5' : '1';
+      prevBtn.style.cursor = CalendarApp.currentBookingIndex === 0 ? 'not-allowed' : 'pointer';
     }
     
     if (nextBtn) {
-      nextBtn.disabled = currentBookingIndex === sameTimeBookings.length - 1;
-      nextBtn.style.opacity = currentBookingIndex === sameTimeBookings.length - 1 ? '0.5' : '1';
-      nextBtn.style.cursor = currentBookingIndex === sameTimeBookings.length - 1 ? 'not-allowed' : 'pointer';
+      nextBtn.disabled = CalendarApp.currentBookingIndex === CalendarApp.sameTimeBookings.length - 1;
+      nextBtn.style.opacity = CalendarApp.currentBookingIndex === CalendarApp.sameTimeBookings.length - 1 ? '0.5' : '1';
+      nextBtn.style.cursor = CalendarApp.currentBookingIndex === CalendarApp.sameTimeBookings.length - 1 ? 'not-allowed' : 'pointer';
     }
-  }
+  },
 
-  function renderOtherBookingsList() {
+  renderOtherBookingsList() {
     const listContainer = document.getElementById('modal-other-bookings-list');
     if (!listContainer) return;
 
-    listContainer.innerHTML = sameTimeBookings.map((b, idx) => {
-      const isActive = idx === currentBookingIndex;
+    listContainer.innerHTML = CalendarApp.sameTimeBookings.map((b, idx) => {
+      const isActive = idx === CalendarApp.currentBookingIndex;
       return `
         <div class="booking-list-item" data-index="${idx}" style="
           padding: 10px;
@@ -641,79 +724,42 @@
       `;
     }).join('');
 
-    // Добавляем обработчики клика
     listContainer.querySelectorAll('.booking-list-item').forEach(item => {
       item.addEventListener('click', () => {
         const idx = parseInt(item.dataset.index);
-        if (idx !== currentBookingIndex && idx >= 0 && idx < sameTimeBookings.length) {
-          currentBookingIndex = idx;
-          const booking = sameTimeBookings[idx];
-          const bookingIndex = bookings.findIndex(b => b.id === booking.id);
+        if (idx !== CalendarApp.currentBookingIndex && idx >= 0 && idx < CalendarApp.sameTimeBookings.length) {
+          CalendarApp.currentBookingIndex = idx;
+          const booking = CalendarApp.sameTimeBookings[idx];
+          const bookingIndex = CalendarApp.bookings.findIndex(b => b.id === booking.id);
           if (bookingIndex !== -1) {
-            displayBooking(booking);
-            updateBookingsNavigation();
-            renderOtherBookingsList();
+            this.displayBooking(booking);
+            this.updateBookingsNavigation();
+            this.renderOtherBookingsList();
           }
         }
       });
     });
-  }
-  
-  function openEditBookingForm(bookingId) {
-    const booking = bookings.find(b => b.id === bookingId);
+  },
+
+  openEditForm(bookingId) {
+    const booking = CalendarApp.bookings.find(b => b.id === bookingId);
     if (!booking) return;
 
-    currentEditingBookingId = bookingId;
-
+    CalendarApp.currentEditingBookingId = bookingId;
     document.getElementById('modal-title').textContent = 'Редактировать запись';
     document.getElementById('modal-body-view').style.display = 'none';
     document.getElementById('modal-body-form').style.display = 'block';
 
-    // Заполняем форму данными записи
-    document.getElementById('new-booking-name').value = booking.name || '';
-    document.getElementById('new-booking-phone').value = booking.phone || '';
-    const dateInput = document.getElementById('new-booking-date');
-    // Устанавливаем минимальную дату (сегодня) даже при редактировании
-    const today = new Date();
-    const todayStr = dateToISO(today);
-    dateInput.setAttribute('min', todayStr);
-    dateInput.value = booking.date || '';
-    document.getElementById('new-booking-comment').value = booking.comment || '';
-
-    // Заполняем услуги
-    const serviceSelect = document.getElementById('new-booking-service');
-    serviceSelect.innerHTML = '<option value="">Выберите услугу</option>';
-    services.forEach(s => {
-      const opt = document.createElement('option');
-      opt.value = s.name;
-      opt.textContent = `${s.name} (${s.price.toLocaleString('ru-RU')} сум, ${s.duration} мин)`;
-      opt.selected = s.name === booking.service;
-      serviceSelect.appendChild(opt);
-    });
-
-    // Заполняем мастеров
-    const masterSelect = document.getElementById('new-booking-master');
-    masterSelect.innerHTML = '<option value="">Любой мастер</option>';
-    masters.forEach(m => {
-      const opt = document.createElement('option');
-      opt.value = m.name;
-      opt.textContent = m.name;
-      opt.selected = m.name === booking.master;
-      masterSelect.appendChild(opt);
-    });
-
-    // Генерируем слоты времени и предвыбираем текущее время записи
-    generateNewBookingSlots().then(() => {
+    BookingForm.fill(booking);
+    BookingForm.generateSlots().then(() => {
       const timeSelect = document.getElementById('new-booking-time');
       if (timeSelect && booking.time) {
-        // Ищем слот, который соответствует времени записи
-        const bookingTime = booking.time.substring(0, 5); // Обрезаем до HH:MM
+        const bookingTime = booking.time.substring(0, 5);
         const options = Array.from(timeSelect.options);
         const matchingOption = options.find(opt => opt.value === bookingTime);
         if (matchingOption) {
           timeSelect.value = bookingTime;
         } else {
-          // Если точного совпадения нет, добавляем текущее время как опцию
           const customOption = document.createElement('option');
           customOption.value = bookingTime;
           customOption.textContent = `${bookingTime}${booking.endTime ? ' – ' + booking.endTime.substring(0, 5) : ''} (текущее время)`;
@@ -723,48 +769,117 @@
       }
     });
 
-    // Меняем текст кнопки
     const submitBtn = document.getElementById('booking-form-submit');
-    if (submitBtn) {
-      submitBtn.textContent = 'Сохранить изменения';
-    }
-  }
-  
-  // Функция для открытия записи по ID
-  function openBookingById(bookingId) {
-    const index = bookings.findIndex(b => b.id === bookingId);
-    if (index !== -1) {
-      // Переключаемся на неделю с этой записью
-      const booking = bookings[index];
-      if (booking.date) {
-        const bookingDate = new Date(booking.date);
-        currentWeekStart = getWeekStart(bookingDate);
-        renderCalendar();
-      }
-      // Открываем модальное окно
-      setTimeout(() => {
-        openBookingModal(index);
-      }, 100);
-    } else {
-      // Если запись не найдена, перезагружаем данные
-      loadDataPromise().then(() => {
-        const newIndex = bookings.findIndex(b => b.id === bookingId);
-        if (newIndex !== -1) {
-          const booking = bookings[newIndex];
-          if (booking.date) {
-            const bookingDate = new Date(booking.date);
-            currentWeekStart = getWeekStart(bookingDate);
-            renderCalendar();
-          }
-          setTimeout(() => {
-            openBookingModal(newIndex);
-          }, 100);
-        }
-      });
-    }
-  }
+    if (submitBtn) submitBtn.textContent = 'Сохранить изменения';
+    
+    // Удаляем класс "hidden" для отображения модального окна
+    const modal = document.getElementById('booking-modal');
+    if (modal) modal.classList.remove("hidden");
+  },
 
-  async function generateNewBookingSlots() {
+  openNewForm(date = null, hour = null) {
+    CalendarApp.currentEditingBookingId = null;
+    document.getElementById('modal-title').textContent = 'Создать новую запись';
+    document.getElementById('modal-body-view').style.display = 'none';
+    document.getElementById('modal-body-form').style.display = 'block';
+    
+    document.getElementById('new-booking-form').reset();
+    document.getElementById('new-booking-alert').style.display = 'none';
+    
+    const dateInput = document.getElementById('new-booking-date');
+    const today = new Date();
+    const todayStr = Utils.dateToISO(today);
+    dateInput.setAttribute('min', todayStr);
+    dateInput.value = date || todayStr;
+    
+    BookingForm.fillServices();
+    BookingForm.fillMasters();
+    
+    const selectedMasterFilter = document.getElementById('calendar-master-filter')?.value;
+    if (selectedMasterFilter && selectedMasterFilter.trim() !== '') {
+      document.getElementById('new-booking-master').value = selectedMasterFilter;
+    }
+    
+    const submitBtn = document.getElementById('booking-form-submit');
+    if (submitBtn) submitBtn.textContent = 'Создать запись';
+    
+    BookingForm.generateSlots();
+    
+    const modal = document.getElementById('booking-modal');
+    if (modal) modal.classList.remove("hidden");
+  },
+
+  close() {
+    const modal = document.getElementById('booking-modal');
+    if (modal) {
+      modal.classList.add("hidden");
+      document.getElementById('modal-body-view').style.display = 'block';
+      document.getElementById('modal-body-form').style.display = 'none';
+      document.getElementById('new-booking-form').reset();
+      document.getElementById('new-booking-alert').style.display = 'none';
+      CalendarApp.currentEditingBookingId = null;
+      const submitBtn = document.getElementById('booking-form-submit');
+      if (submitBtn) submitBtn.textContent = 'Создать запись';
+    }
+  }
+};
+
+// ========== ФОРМА ЗАПИСИ ==========
+const BookingForm = {
+  fill(booking) {
+    document.getElementById('new-booking-name').value = booking.name || '';
+    document.getElementById('new-booking-phone').value = booking.phone || '';
+    const dateInput = document.getElementById('new-booking-date');
+    const today = new Date();
+    const todayStr = Utils.dateToISO(today);
+    dateInput.setAttribute('min', todayStr);
+    dateInput.value = booking.date || '';
+    document.getElementById('new-booking-comment').value = booking.comment || '';
+    
+    const serviceSelect = document.getElementById('new-booking-service');
+    serviceSelect.innerHTML = '<option value="">Выберите услугу</option>';
+    CalendarApp.services.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.name;
+      opt.textContent = `${s.name} (${s.price.toLocaleString('ru-RU')} сум, ${s.duration} мин)`;
+      opt.selected = s.name === booking.service;
+      serviceSelect.appendChild(opt);
+    });
+
+    const masterSelect = document.getElementById('new-booking-master');
+    masterSelect.innerHTML = '<option value="">Любой мастер</option>';
+    CalendarApp.masters.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.name;
+      opt.textContent = m.name;
+      opt.selected = m.name === booking.master;
+      masterSelect.appendChild(opt);
+    });
+  },
+
+  fillServices() {
+    const serviceSelect = document.getElementById('new-booking-service');
+    serviceSelect.innerHTML = '<option value="">Выберите услугу</option>';
+    CalendarApp.services.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.name;
+      opt.textContent = `${s.name} (${s.price.toLocaleString('ru-RU')} сум, ${s.duration} мин)`;
+      serviceSelect.appendChild(opt);
+    });
+  },
+
+  fillMasters() {
+    const masterSelect = document.getElementById('new-booking-master');
+    masterSelect.innerHTML = '<option value="">Любой мастер</option>';
+    CalendarApp.masters.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.name;
+      opt.textContent = m.name;
+      masterSelect.appendChild(opt);
+    });
+  },
+
+  async generateSlots() {
     const serviceSelect = document.getElementById('new-booking-service');
     const dateInput = document.getElementById('new-booking-date');
     const timeSelect = document.getElementById('new-booking-time');
@@ -796,8 +911,7 @@
       return;
     }
 
-    // Находим длительность услуги
-    const selectedService = services.find(s => s.name === service);
+    const selectedService = CalendarApp.services.find(s => s.name === service);
     if (!selectedService || !selectedService.duration) {
       const baseOption = document.createElement('option');
       baseOption.value = '';
@@ -810,14 +924,11 @@
     }
 
     const duration = selectedService.duration;
-
-    // Загружаем занятые интервалы для выбранной даты и мастера
     let busy = [];
+    
     try {
-      const bookingsRes = await fetch(`/api/bookings/${currentUser.id}?date=${date}`);
-      const bookingsResult = await bookingsRes.json();
+      const bookingsResult = await API.getBookingsByDate(CalendarApp.currentUser.id, date);
       if (bookingsResult.success && bookingsResult.bookings) {
-        // Фильтруем записи по мастеру
         const filteredBookings = selectedMaster && selectedMaster.trim() !== ''
           ? bookingsResult.bookings.filter(booking => {
               return booking.master === selectedMaster || !booking.master || booking.master.trim() === '';
@@ -825,8 +936,8 @@
           : bookingsResult.bookings;
         
         busy = filteredBookings.map(booking => {
-          const start = timeToMinutes(booking.time);
-          const end = booking.endTime ? timeToMinutes(booking.endTime) : (start + 60);
+          const start = Utils.timeToMinutes(booking.time);
+          const end = booking.endTime ? Utils.timeToMinutes(booking.endTime) : (start + 60);
           return [start, end].filter(v => v !== null);
         }).filter(interval => interval.length === 2);
       }
@@ -837,7 +948,6 @@
     const startOfDay = 10 * 60;
     const endOfDay = 20 * 60;
     const step = 30;
-
     const freeSlots = [];
 
     for (let start = startOfDay; start + duration <= endOfDay; start += step) {
@@ -866,8 +976,8 @@
 
       freeSlots.forEach((slot) => {
         const opt = document.createElement('option');
-        const startStr = minutesToTime(slot.start);
-        const endStr = minutesToTime(slot.end);
+        const startStr = Utils.minutesToTime(slot.start);
+        const endStr = Utils.minutesToTime(slot.end);
         opt.value = startStr;
         opt.textContent = `${startStr} – ${endStr}`;
         timeSelect.appendChild(opt);
@@ -876,187 +986,14 @@
 
     if (slotHint) slotHint.textContent = 'Доступные свободные окна на выбранную дату.';
     if (durationHint) durationHint.textContent = `Длительность услуги: ${duration} мин.`;
-  }
+  },
 
-  function closeBookingModal() {
-    const modal = document.getElementById('booking-modal');
-    if (modal) {
-      modal.classList.add("hidden");
-      // Сбрасываем форму
-      document.getElementById('modal-body-view').style.display = 'block';
-      document.getElementById('modal-body-form').style.display = 'none';
-      document.getElementById('new-booking-form').reset();
-      document.getElementById('new-booking-alert').style.display = 'none';
-      currentEditingBookingId = null;
-      // Возвращаем текст кнопки
-      const submitBtn = document.getElementById('booking-form-submit');
-      if (submitBtn) {
-        submitBtn.textContent = 'Создать запись';
-      }
-    }
-  }
-
-  function openNewBookingForm(date = null, hour = null) {
-    const modal = document.getElementById('booking-modal');
-    if (!modal || !currentUser) return;
-    
-    currentEditingBookingId = null; // Сбрасываем ID редактирования
-    
-    document.getElementById('modal-title').textContent = 'Создать новую запись';
-    document.getElementById('modal-body-view').style.display = 'none';
-    document.getElementById('modal-body-form').style.display = 'block';
-    
-    // Сбрасываем форму
-    document.getElementById('new-booking-form').reset();
-    document.getElementById('new-booking-alert').style.display = 'none';
-    
-    // Заполняем дату
-    const dateInput = document.getElementById('new-booking-date');
-    // Устанавливаем минимальную дату (сегодня)
-    const today = new Date();
-    const todayStr = dateToISO(today);
-    dateInput.setAttribute('min', todayStr);
-    
-    if (date) {
-      dateInput.value = date;
-    } else {
-      // Если дата не указана, устанавливаем сегодняшнюю дату
-      dateInput.value = todayStr;
-    }
-    
-    // Заполняем услуги
-    const serviceSelect = document.getElementById('new-booking-service');
-    serviceSelect.innerHTML = '<option value="">Выберите услугу</option>';
-    services.forEach(s => {
-      const opt = document.createElement('option');
-      opt.value = s.name;
-      opt.textContent = `${s.name} (${s.price.toLocaleString('ru-RU')} сум, ${s.duration} мин)`;
-      serviceSelect.appendChild(opt);
-    });
-    
-    // Заполняем мастеров
-    const masterSelect = document.getElementById('new-booking-master');
-    masterSelect.innerHTML = '<option value="">Любой мастер</option>';
-    masters.forEach(m => {
-      const opt = document.createElement('option');
-      opt.value = m.name;
-      opt.textContent = m.name;
-      masterSelect.appendChild(opt);
-    });
-    
-    // Если выбран фильтр мастера в календаре, устанавливаем его в форме
-    const selectedMasterFilter = document.getElementById('calendar-master-filter')?.value;
-    if (selectedMasterFilter && selectedMasterFilter.trim() !== '') {
-      masterSelect.value = selectedMasterFilter;
-    }
-    
-    // Меняем текст кнопки
-    const submitBtn = document.getElementById('booking-form-submit');
-    if (submitBtn) {
-      submitBtn.textContent = 'Создать запись';
-    }
-    
-    // Генерируем слоты времени (если уже выбрана услуга)
-    generateNewBookingSlots();
-    
-    modal.classList.remove("hidden");
-  }
-
-  // Слушатели событий
-  document.getElementById('prev-week')?.addEventListener('click', () => {
-    currentWeekStart.setDate(currentWeekStart.getDate() - 7);
-    renderCalendar();
-  });
-
-  document.getElementById('next-week')?.addEventListener('click', () => {
-    currentWeekStart.setDate(currentWeekStart.getDate() + 7);
-    renderCalendar();
-  });
-
-  document.getElementById('calendar-master-filter')?.addEventListener('change', renderCalendar);
-
-  // Перерисовка календаря при изменении размера окна для адаптивности
-  let resizeTimeout;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(() => {
-      renderCalendar();
-    }, 250);
-  });
-
-  // Кнопка создания новой записи
-  document.getElementById('create-booking-btn')?.addEventListener('click', () => {
-    openNewBookingForm();
-  });
-
-  document.getElementById('calendar-grid')?.addEventListener('click', (e) => {
-    const target = e.target.closest(".cal-slot");
-    if (!target) return;
-    
-    // Если это занятый слот - показываем информацию о записи
-    if (target.classList.contains("cal-slot-busy")) {
-      const idx = target.dataset.bookingIndex;
-      if (idx !== undefined) {
-        openBookingModal(Number(idx));
-      }
-      // Если есть несколько записей, можно показать список (пока открываем первую)
-      // TODO: можно добавить модальное окно со списком всех записей в этом слоте
-    }
-    // Если это свободный слот - открываем форму создания записи
-    else if (target.classList.contains("cal-slot-free")) {
-      const date = target.dataset.date;
-      const hour = parseInt(target.dataset.hour);
-      if (date && !isNaN(hour)) {
-        openNewBookingForm(date, hour);
-      }
-    }
-  });
-
-  document.getElementById('modal-close')?.addEventListener('click', closeBookingModal);
-  document.getElementById('booking-modal')?.addEventListener('click', (e) => {
-    if (e.target.id === 'booking-modal') closeBookingModal();
-  });
-
-  // Навигация между записями в одном временном слоте
-  document.getElementById('modal-prev-booking')?.addEventListener('click', () => {
-    if (currentBookingIndex > 0) {
-      currentBookingIndex--;
-      const booking = sameTimeBookings[currentBookingIndex];
-      displayBooking(booking);
-      updateBookingsNavigation();
-      renderOtherBookingsList();
-    }
-  });
-
-  document.getElementById('modal-next-booking')?.addEventListener('click', () => {
-    if (currentBookingIndex < sameTimeBookings.length - 1) {
-      currentBookingIndex++;
-      const booking = sameTimeBookings[currentBookingIndex];
-      displayBooking(booking);
-      updateBookingsNavigation();
-      renderOtherBookingsList();
-    }
-  });
-
-  document.getElementById('logout-link')?.addEventListener('click', async (e) => {
-    e.preventDefault();
-    await fetch('/api/logout', { method: 'POST' });
-    window.location.href = '/';
-  });
-
-  // Обработчики для генерации слотов времени в форме создания записи
-  document.getElementById('new-booking-service')?.addEventListener('change', generateNewBookingSlots);
-  document.getElementById('new-booking-date')?.addEventListener('change', generateNewBookingSlots);
-  document.getElementById('new-booking-master')?.addEventListener('change', generateNewBookingSlots);
-
-  // Обработчик формы создания/редактирования записи
-  document.getElementById('new-booking-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  async submit() {
     const alert = document.getElementById('new-booking-alert');
     alert.style.display = 'none';
     
     const formData = {
-      userId: currentUser.id,
+      userId: CalendarApp.currentUser.id,
       name: document.getElementById('new-booking-name').value.trim(),
       phone: document.getElementById('new-booking-phone').value.trim(),
       service: document.getElementById('new-booking-service').value,
@@ -1081,8 +1018,7 @@
       return;
     }
     
-    // Вычисляем endTime на основе услуги
-    const selectedService = services.find(s => s.name === formData.service);
+    const selectedService = CalendarApp.services.find(s => s.name === formData.service);
     if (selectedService && selectedService.duration) {
       const [hours, minutes] = formData.time.split(':').map(Number);
       const startMinutes = hours * 60 + minutes;
@@ -1092,45 +1028,35 @@
       formData.endTime = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
     }
     
-    const isEditing = currentEditingBookingId !== null;
+    const isEditing = CalendarApp.currentEditingBookingId !== null;
     
     try {
-      const url = isEditing ? `/api/bookings/${currentEditingBookingId}` : '/api/bookings';
-      const method = isEditing ? 'PUT' : 'POST';
+      const result = isEditing 
+        ? await API.updateBooking(CalendarApp.currentEditingBookingId, formData)
+        : await API.createBooking(formData);
       
-      const response = await fetch(url, {
-        method: method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      
-      const result = await response.json();
       if (result.success) {
         alert.textContent = isEditing ? 'Запись успешно обновлена!' : 'Запись успешно создана!';
         alert.className = 'alert alert-success';
         alert.style.display = 'block';
         
-        // Показываем push-уведомление
         const date = new Date(formData.date);
         const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-        const bookingId = isEditing ? currentEditingBookingId : (result.booking?.id || null);
-        showNotification(
+        const bookingId = isEditing ? CalendarApp.currentEditingBookingId : (result.booking?.id || null);
+        NotificationManager.show(
           isEditing ? 'Запись обновлена!' : 'Запись создана!',
           `${formData.name} - ${formData.service} на ${dateStr} в ${formData.time}`,
           'success',
           bookingId
         );
         
-        // Обновляем данные и календарь
         setTimeout(async () => {
-          const bookingsRes = await fetch('/api/bookings');
-          const bookingsResult = await bookingsRes.json();
+          const bookingsResult = await API.getBookings();
           if (bookingsResult.success) {
-            bookings = bookingsResult.bookings;
-            lastBookingCount = bookings.length;
-            renderCalendar();
+            CalendarApp.bookings = bookingsResult.bookings;
+            CalendarRenderer.render();
           }
-          closeBookingModal();
+          BookingModal.close();
         }, 1000);
       } else {
         alert.textContent = result.message || (isEditing ? 'Ошибка при обновлении записи' : 'Ошибка при создании записи');
@@ -1143,133 +1069,18 @@
       alert.className = 'alert alert-error';
       alert.style.display = 'block';
     }
-  });
-  
-  // Обработчик кнопки "Редактировать"
-  document.getElementById('edit-booking-btn')?.addEventListener('click', () => {
-    if (currentEditingBookingId) {
-      openEditBookingForm(currentEditingBookingId);
-    }
-  });
-  
-  // Обработчик кнопки "Удалить"
-  document.getElementById('delete-booking-btn')?.addEventListener('click', async () => {
-    if (!currentEditingBookingId) return;
-    
-    if (!confirm('Вы уверены, что хотите удалить эту запись?')) {
-      return;
-    }
-    
-    try {
-      const response = await fetch(`/api/bookings/${currentEditingBookingId}`, {
-        method: 'DELETE'
-      });
-      
-      const result = await response.json();
-      if (result.success) {
-        showNotification('Запись удалена', 'Запись успешно удалена из календаря', 'info');
-        
-        // Обновляем данные и календарь
-        setTimeout(async () => {
-          const bookingsRes = await fetch('/api/bookings');
-          const bookingsResult = await bookingsRes.json();
-          if (bookingsResult.success) {
-            bookings = bookingsResult.bookings;
-            lastBookingCount = bookings.length;
-            renderCalendar();
-          }
-          closeBookingModal();
-        }, 500);
-      } else {
-        alert('Ошибка при удалении записи: ' + (result.message || 'Неизвестная ошибка'));
-      }
-    } catch (error) {
-      console.error('Ошибка удаления записи:', error);
-      alert('Ошибка при удалении записи. Попробуйте позже.');
-    }
-  });
-
-  document.getElementById('cancel-booking-form')?.addEventListener('click', closeBookingModal);
-
-  // Загружаем данные при загрузке страницы
-  // Подсветка активной страницы в навигации
-  function highlightActivePage() {
-    const currentPath = window.location.pathname;
-    const navLinks = document.querySelectorAll('.nav-links a, .header-top-links a');
-    
-    navLinks.forEach(link => {
-      // Пропускаем ссылку на выход
-      if (link.id === 'logout-link' || link.href === '#' || !link.href) {
-        return;
-      }
-      
-      try {
-        const linkPath = new URL(link.href, window.location.origin).pathname;
-        // Нормализуем пути (убираем trailing slash)
-        const normalizedCurrent = currentPath.replace(/\/$/, '') || '/';
-        const normalizedLink = linkPath.replace(/\/$/, '') || '/';
-        
-        if (normalizedLink === normalizedCurrent) {
-          link.classList.add('active');
-        } else {
-          link.classList.remove('active');
-        }
-      } catch (e) {
-        // Если не удалось распарсить URL, просто сравниваем href
-        const href = link.getAttribute('href');
-        if (href && (href === currentPath || href.replace(/\/$/, '') === currentPath.replace(/\/$/, ''))) {
-          link.classList.add('active');
-        } else {
-          link.classList.remove('active');
-        }
-      }
-    });
   }
+};
 
-  loadData();
+// ========== УПРАВЛЕНИЕ УВЕДОМЛЕНИЯМИ ==========
+const NotificationManager = {
+  save() {
+    localStorage.setItem('notifications', JSON.stringify(CalendarApp.notificationsList));
+    this.updatePanel();
+    this.updateBadge();
+  },
   
-  // Подсвечиваем активную страницу
-  highlightActivePage();
-</script>
-
-<!-- Контейнер для push-уведомлений -->
-<div class="notification-container" id="notification-container"></div>
-
-<!-- Иконка уведомлений -->
-<div class="notifications-icon" id="notifications-icon">
-  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25-2.5 7-2.5 7h15s-2.5-1.75-2.5-7c0-3.87-3.13-7-7-7zm0 2c2.76 0 5 2.24 5 5 0 2.88 2.88 4.5 2.88 4.5H4.12S7 11.88 7 9c0-2.76 2.24-5 5-5zm-1 15h2v2h-2v-2z"/>
-  </svg>
-  <div class="notifications-badge hidden" id="notifications-badge">0</div>
-</div>
-
-<!-- Панель уведомлений -->
-<div class="notifications-panel" id="notifications-panel">
-  <div class="notifications-panel-header">
-    <div class="notifications-panel-title">Уведомления</div>
-    <button class="notifications-panel-close" id="notifications-panel-close">×</button>
-  </div>
-  <div class="notifications-panel-body" id="notifications-panel-body">
-    <div class="notifications-panel-empty">Нет уведомлений</div>
-  </div>
-  <div class="notifications-panel-footer">
-    <button class="notifications-clear-all" id="notifications-clear-all">Очистить все</button>
-  </div>
-</div>
-
-<script>
-  // Хранилище уведомлений
-  let notificationsList = JSON.parse(localStorage.getItem('notifications') || '[]');
-  
-  // Функция для сохранения уведомлений в localStorage
-  function saveNotifications() {
-    localStorage.setItem('notifications', JSON.stringify(notificationsList));
-    updateNotificationsPanel();
-    updateNotificationsBadge();
-  }
-  
-  // Функция для добавления уведомления в список
-  function addNotificationToList(title, message, type = 'success', bookingId = null) {
+  addToList(title, message, type = 'success', bookingId = null) {
     const notification = {
       id: Date.now(),
       title,
@@ -1277,57 +1088,43 @@
       type,
       time: new Date().toISOString(),
       read: false,
-      bookingId: bookingId // ID записи для перехода
+      bookingId
     };
     
-    notificationsList.unshift(notification); // Добавляем в начало
-    // Ограничиваем количество уведомлений (последние 50)
-    if (notificationsList.length > 50) {
-      notificationsList = notificationsList.slice(0, 50);
+    CalendarApp.notificationsList.unshift(notification);
+    if (CalendarApp.notificationsList.length > 50) {
+      CalendarApp.notificationsList = CalendarApp.notificationsList.slice(0, 50);
     }
     
-    saveNotifications();
-  }
+    this.save();
+  },
   
-  // Функция для обновления счетчика уведомлений
-  function updateNotificationsBadge() {
+  updateBadge() {
     const badge = document.getElementById('notifications-badge');
     if (!badge) return;
     
-    const unreadCount = notificationsList.filter(n => !n.read).length;
+    const unreadCount = CalendarApp.notificationsList.filter(n => !n.read).length;
     if (unreadCount > 0) {
       badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
       badge.classList.remove('hidden');
     } else {
       badge.classList.add('hidden');
     }
-  }
+  },
   
-  // Функция для обновления панели уведомлений
-  function updateNotificationsPanel() {
+  updatePanel() {
     const panelBody = document.getElementById('notifications-panel-body');
     if (!panelBody) return;
     
-    if (notificationsList.length === 0) {
+    if (CalendarApp.notificationsList.length === 0) {
       panelBody.innerHTML = '<div class="notifications-panel-empty">Нет уведомлений</div>';
       return;
     }
     
-    const icons = {
-      success: '✓',
-      error: '✕',
-      warning: '⚠',
-      info: 'ℹ'
-    };
+    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+    const iconColors = { success: '#10b981', error: '#ef4444', warning: '#f59e0b', info: '#3b82f6' };
     
-    const iconColors = {
-      success: '#10b981',
-      error: '#ef4444',
-      warning: '#f59e0b',
-      info: '#3b82f6'
-    };
-    
-    panelBody.innerHTML = notificationsList.map(notif => {
+    panelBody.innerHTML = CalendarApp.notificationsList.map(notif => {
       const date = new Date(notif.time);
       const timeStr = date.toLocaleString('ru-RU', {
         day: '2-digit',
@@ -1346,60 +1143,60 @@
             <div class="notification-item-message">${notif.message}</div>
             <div class="notification-item-time">${timeStr}</div>
           </div>
-          <button class="notification-item-close" onclick="removeNotification(${notif.id})">×</button>
+          <button class="notification-item-close" data-notification-id="${notif.id}">×</button>
         </div>
       `;
     }).join('');
     
-    // Добавляем обработчики клика для отметки как прочитанное и перехода
+    // Обработчик для кнопок закрытия уведомлений
+    panelBody.querySelectorAll('.notification-item-close').forEach(closeBtn => {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Предотвращаем всплытие события
+        const notifId = parseInt(closeBtn.dataset.notificationId);
+        if (notifId) {
+          NotificationManager.remove(notifId);
+        }
+      });
+    });
+    
+    // Обработчик для клика на элемент уведомления
     panelBody.querySelectorAll('.notification-item').forEach(item => {
       item.addEventListener('click', (e) => {
         if (e.target.classList.contains('notification-item-close')) return;
         const notifId = parseInt(item.dataset.id);
-        const notification = notificationsList.find(n => n.id === notifId);
-        markAsRead(notifId);
+        const notification = CalendarApp.notificationsList.find(n => n.id === notifId);
+        this.markAsRead(notifId);
         
-        // Если есть bookingId, открываем запись в календаре
         if (notification && notification.bookingId) {
-          openBookingById(notification.bookingId);
+          BookingModal.openById(notification.bookingId);
         }
       });
     });
-  }
+  },
   
-  // Функция для отметки уведомления как прочитанного
-  function markAsRead(id) {
-    const notification = notificationsList.find(n => n.id === id);
+  markAsRead(id) {
+    const notification = CalendarApp.notificationsList.find(n => n.id === id);
     if (notification && !notification.read) {
       notification.read = true;
-      saveNotifications();
+      this.save();
     }
-  }
+  },
   
-  // Функция для удаления уведомления
-  function removeNotification(id) {
-    notificationsList = notificationsList.filter(n => n.id !== id);
-    saveNotifications();
-  }
+  remove(id) {
+    CalendarApp.notificationsList = CalendarApp.notificationsList.filter(n => n.id !== id);
+    this.save();
+  },
   
-  // Функция для показа push-уведомлений
-  function showNotification(title, message, type = 'success', bookingId = null) {
-    // Добавляем в список
-    addNotificationToList(title, message, type, bookingId);
+  show(title, message, type = 'success', bookingId = null) {
+    this.addToList(title, message, type, bookingId);
     
-    // Показываем временное уведомление
     const container = document.getElementById('notification-container');
     if (!container) return;
     
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
     
-    const icons = {
-      success: '✓',
-      error: '✕',
-      warning: '⚠',
-      info: 'ℹ'
-    };
+    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
     
     notification.innerHTML = `
       <div class="notification-icon">${icons[type] || icons.success}</div>
@@ -1412,7 +1209,6 @@
     
     container.appendChild(notification);
     
-    // Автоматически скрываем через 5 секунд
     setTimeout(() => {
       notification.classList.add('hiding');
       setTimeout(() => {
@@ -1422,110 +1218,11 @@
       }, 300);
     }, 5000);
   }
-  
-  // Обработчики для панели уведомлений
-  document.getElementById('notifications-icon')?.addEventListener('click', () => {
-    const panel = document.getElementById('notifications-panel');
-    if (panel) {
-      panel.classList.toggle('open');
-      if (panel.classList.contains('open')) {
-        // Отмечаем все как прочитанные при открытии
-        notificationsList.forEach(n => n.read = true);
-        saveNotifications();
-      }
-    }
-  });
-  
-  document.getElementById('notifications-panel-close')?.addEventListener('click', () => {
-    const panel = document.getElementById('notifications-panel');
-    if (panel) {
-      panel.classList.remove('open');
-    }
-  });
-  
-  document.getElementById('notifications-clear-all')?.addEventListener('click', () => {
-    if (confirm('Удалить все уведомления?')) {
-      notificationsList = [];
-      saveNotifications();
-    }
-  });
-  
-  // Закрытие панели при клике вне её
-  document.addEventListener('click', (e) => {
-    const panel = document.getElementById('notifications-panel');
-    const icon = document.getElementById('notifications-icon');
-    if (panel && icon && !panel.contains(e.target) && !icon.contains(e.target)) {
-      panel.classList.remove('open');
-    }
-  });
-  
-  // Инициализация при загрузке страницы
-  updateNotificationsPanel();
-  updateNotificationsBadge();
-  
-  // Проверка новых записей каждые 30 секунд
-  let knownBookingIds = new Set(); // Множество ID записей, которые мы уже видели
-  let lastBookingCheck = Date.now();
-  
-  async function checkNewBookings() {
-    try {
-      const bookingsRes = await fetch('/api/bookings');
-      const bookingsResult = await bookingsRes.json();
-      
-      if (bookingsResult.success && bookingsResult.bookings) {
-        const currentBookings = bookingsResult.bookings;
-        
-        // Находим новые записи (те, которых нет в knownBookingIds)
-        const newBookings = currentBookings.filter(booking => {
-          const bookingId = String(booking.id);
-          if (!knownBookingIds.has(bookingId)) {
-            knownBookingIds.add(bookingId);
-            return true;
-          }
-          return false;
-        });
-        
-        // Показываем уведомления только для действительно новых записей
-        // и только если прошло больше 2 секунд с последней проверки (чтобы не показывать при первой загрузке)
-        if (newBookings.length > 0 && (Date.now() - lastBookingCheck) > 2000) {
-          newBookings.forEach(booking => {
-            const date = new Date(booking.date);
-            const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-            showNotification(
-              'Новая запись!',
-              `${booking.name} - ${booking.service} на ${dateStr} в ${booking.time}`,
-              'info',
-              booking.id // Передаем ID записи
-            );
-          });
-        }
-        
-        lastBookingCheck = Date.now();
-        bookings = currentBookings;
-        renderCalendar();
-      }
-    } catch (error) {
-      console.error('Ошибка проверки новых записей:', error);
-    }
-  }
-  
-  // Инициализируем список известных записей после загрузки данных
-  setTimeout(() => {
-    // Сохраняем ID всех текущих записей как уже известные
-    if (bookings && Array.isArray(bookings)) {
-      bookings.forEach(booking => {
-        knownBookingIds.add(String(booking.id));
-      });
-      console.log('Проверка новых записей инициализирована (' + bookings.length + ' известных записей, интервал: 30 секунд)');
-    } else {
-      console.log('Проверка новых записей инициализирована (0 известных записей, интервал: 30 секунд)');
-    }
-    // Проверяем новые записи каждые 30 секунд
-    setInterval(checkNewBookings, 30000);
-  }, 2000);
+};
 
-  // Функция применения дизайна на всех страницах
-  function applyDesign(design) {
+// ========== УПРАВЛЕНИЕ ДИЗАЙНОМ ==========
+const DesignManager = {
+  apply(design) {
     if (!design) return;
 
     const style = document.createElement('style');
@@ -1542,10 +1239,9 @@
     const pageBgSecondary = design.pageBgSecondary || '#ffffff';
     const pageBgImage = design.pageBgImage || '';
 
-    const isLightBg = isLightColor(cardBg);
+    const isLightBg = this.isLightColor(cardBg);
     const finalTextColor = isLightBg ? textColor : '#ffffff';
 
-    // Определяем фон страницы
     let bodyBg = pageBg;
     if (pageBgType === 'gradient') {
       bodyBg = `linear-gradient(135deg, ${pageBg}, ${pageBgSecondary})`;
@@ -1553,7 +1249,6 @@
       bodyBg = `url(${pageBgImage}) center/cover no-repeat`;
     }
 
-    // Применяем логотип в header, если есть
     if (design.logo) {
       const header = document.querySelector('header');
       const headerTitle = header ? header.querySelector('h1') : null;
@@ -1576,79 +1271,335 @@
     }
 
     style.textContent = `
-      body {
-        background: ${bodyBg} !important;
-      }
-      header {
-        background: linear-gradient(135deg, ${headerBg}, ${secondaryColor}) !important;
-        position: relative !important;
-      }
-      .card {
-        background: ${cardBg} !important;
-        color: ${finalTextColor} !important;
-      }
-      .card * {
-        color: inherit !important;
-      }
-      .card h2, .card h3, .card h4, .card h5, .card h6 {
-        color: ${finalTextColor} !important;
-      }
-      .card p, .card .description, .card .note, .card div, .card span:not(.price) {
-        color: ${finalTextColor} !important;
-      }
-      .card label {
-        color: ${finalTextColor} !important;
-      }
-      .btn-primary {
-        background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}) !important;
-        color: ${buttonTextColor} !important;
-      }
-      .btn-primary:hover {
-        background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}) !important;
-        filter: brightness(1.1);
-        color: ${buttonTextColor} !important;
-      }
-      input:focus, select:focus, textarea:focus {
-        border-color: ${primaryColor} !important;
-        box-shadow: 0 0 0 1px rgba(${hexToRgb(primaryColor)}, 0.35) !important;
-      }
-      input, select, textarea {
-        color: ${finalTextColor} !important;
-        background: ${isLightBg ? '#f9fafb' : 'rgba(255, 255, 255, 0.1)'} !important;
-      }
-      input::placeholder, textarea::placeholder {
-        color: ${isLightBg ? '#9ca3af' : 'rgba(255, 255, 255, 0.6)'} !important;
-      }
+      body { background: ${bodyBg} !important; }
+      header { background: linear-gradient(135deg, ${headerBg}, ${secondaryColor}) !important; position: relative !important; }
+      .card { background: ${cardBg} !important; color: ${finalTextColor} !important; }
+      .card * { color: inherit !important; }
+      .card h2, .card h3, .card h4, .card h5, .card h6 { color: ${finalTextColor} !important; }
+      .card p, .card .description, .card .note, .card div, .card span:not(.price) { color: ${finalTextColor} !important; }
+      .card label { color: ${finalTextColor} !important; }
+      .btn-primary { background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}) !important; color: ${buttonTextColor} !important; }
+      .btn-primary:hover { background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}) !important; filter: brightness(1.1); color: ${buttonTextColor} !important; }
+      input:focus, select:focus, textarea:focus { border-color: ${primaryColor} !important; box-shadow: 0 0 0 1px rgba(${this.hexToRgb(primaryColor)}, 0.35) !important; }
+      input, select, textarea { color: ${finalTextColor} !important; background: ${isLightBg ? '#f9fafb' : 'rgba(255, 255, 255, 0.1)'} !important; }
+      input::placeholder, textarea::placeholder { color: ${isLightBg ? '#9ca3af' : 'rgba(255, 255, 255, 0.6)'} !important; }
     `;
 
     const oldStyle = document.getElementById('salon-custom-design');
     if (oldStyle) oldStyle.remove();
     document.head.appendChild(style);
-  }
+  },
 
-  function isLightColor(hex) {
-    const rgb = hexToRgbArray(hex);
+  isLightColor(hex) {
+    const rgb = this.hexToRgbArray(hex);
     if (!rgb) return true;
     const brightness = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
     return brightness > 128;
-  }
+  },
 
-  function hexToRgbArray(hex) {
+  hexToRgbArray(hex) {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? [
       parseInt(result[1], 16),
       parseInt(result[2], 16),
       parseInt(result[3], 16)
     ] : null;
-  }
+  },
 
-  function hexToRgb(hex) {
+  hexToRgb(hex) {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? 
       `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` 
       : '249, 115, 182';
   }
+};
+
+// ========== УПРАВЛЕНИЕ НАВИГАЦИЕЙ ==========
+const NavigationManager = {
+  update(user) {
+    const salonPageLink = document.getElementById('salon-page-link');
+    if (salonPageLink && user && user.id) {
+      salonPageLink.href = `/booking?userId=${user.id}`;
+    }
+    
+    const usersLink = document.getElementById('users-link');
+    const isAdmin = user.role === 'admin' || user.username === 'admin';
+    if (usersLink) {
+      if (isAdmin) {
+        usersLink.classList.add('show');
+      } else {
+        usersLink.classList.remove('show');
+      }
+    }
+    
+    this.highlightActivePage();
+  },
+  
+  highlightActivePage() {
+    const currentPath = window.location.pathname;
+    const navLinks = document.querySelectorAll('.nav-links a, .header-top-links a');
+    
+    navLinks.forEach(link => {
+      if (link.id === 'logout-link' || link.href === '#' || !link.href) {
+        return;
+      }
+      
+      try {
+        const linkPath = new URL(link.href, window.location.origin).pathname;
+        const normalizedCurrent = currentPath.replace(/\/$/, '') || '/';
+        const normalizedLink = linkPath.replace(/\/$/, '') || '/';
+        
+        if (normalizedLink === normalizedCurrent) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      } catch (e) {
+        const href = link.getAttribute('href');
+        if (href && (href === currentPath || href.replace(/\/$/, '') === currentPath.replace(/\/$/, ''))) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      }
+    });
+  }
+};
+
+// ========== ПРОВЕРКА НОВЫХ ЗАПИСЕЙ ==========
+const BookingChecker = {
+  async check() {
+    try {
+      const bookingsResult = await API.getBookings();
+      
+      if (bookingsResult.success && bookingsResult.bookings) {
+        const currentBookings = bookingsResult.bookings;
+        
+        const newBookings = currentBookings.filter(booking => {
+          const bookingId = String(booking.id);
+          if (!CalendarApp.knownBookingIds.has(bookingId)) {
+            CalendarApp.knownBookingIds.add(bookingId);
+            return true;
+          }
+          return false;
+        });
+        
+        if (newBookings.length > 0 && (Date.now() - CalendarApp.lastBookingCheck) > 2000) {
+          newBookings.forEach(booking => {
+            const date = new Date(booking.date);
+            const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+            NotificationManager.show(
+              'Новая запись!',
+              `${booking.name} - ${booking.service} на ${dateStr} в ${booking.time}`,
+              'info',
+              booking.id
+            );
+          });
+        }
+        
+        CalendarApp.lastBookingCheck = Date.now();
+        CalendarApp.bookings = currentBookings;
+        CalendarRenderer.render();
+      }
+    } catch (error) {
+      console.error('Ошибка проверки новых записей:', error);
+    }
+  },
+  
+  start() {
+    setTimeout(() => {
+      if (CalendarApp.bookings && Array.isArray(CalendarApp.bookings)) {
+        console.log('Проверка новых записей инициализирована (' + CalendarApp.bookings.length + ' известных записей, интервал: 30 секунд)');
+      } else {
+        console.log('Проверка новых записей инициализирована (0 известных записей, интервал: 30 секунд)');
+      }
+      setInterval(() => this.check(), 30000);
+    }, 2000);
+  }
+};
+
+// ========== ИНИЦИАЛИЗАЦИЯ ==========
+document.addEventListener('DOMContentLoaded', () => {
+  // Загрузка данных
+  DataLoader.loadAll();
+  
+  // Обработчики календаря
+  document.getElementById('prev-week')?.addEventListener('click', () => {
+    // Проверяем, что currentWeekStart инициализирован
+    if (!CalendarApp.currentWeekStart) {
+      CalendarApp.currentWeekStart = Utils.getWeekStart(new Date());
+    }
+    CalendarApp.currentWeekStart.setDate(CalendarApp.currentWeekStart.getDate() - 7);
+    CalendarRenderer.render();
+  });
+
+  document.getElementById('next-week')?.addEventListener('click', () => {
+    // Проверяем, что currentWeekStart инициализирован
+    if (!CalendarApp.currentWeekStart) {
+      CalendarApp.currentWeekStart = Utils.getWeekStart(new Date());
+    }
+    CalendarApp.currentWeekStart.setDate(CalendarApp.currentWeekStart.getDate() + 7);
+    CalendarRenderer.render();
+  });
+
+  document.getElementById('calendar-master-filter')?.addEventListener('change', () => {
+    CalendarRenderer.render();
+  });
+
+  let resizeTimeout;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      // Проверяем, что currentWeekStart инициализирован перед рендерингом
+      if (!CalendarApp.currentWeekStart) {
+        CalendarApp.currentWeekStart = Utils.getWeekStart(new Date());
+      }
+      CalendarRenderer.render();
+    }, 250);
+  });
+
+  document.getElementById('create-booking-btn')?.addEventListener('click', () => {
+    BookingModal.openNewForm();
+  });
+
+  document.getElementById('calendar-grid')?.addEventListener('click', (e) => {
+    const target = e.target.closest(".cal-slot");
+    if (!target) return;
+    
+    if (target.classList.contains("cal-slot-busy")) {
+      const idx = target.dataset.bookingIndex;
+      if (idx !== undefined) {
+        BookingModal.open(Number(idx));
+      }
+    } else if (target.classList.contains("cal-slot-free")) {
+      const date = target.dataset.date;
+      const hour = parseInt(target.dataset.hour);
+      if (date && !isNaN(hour)) {
+        BookingModal.openNewForm(date, hour);
+      }
+    }
+  });
+
+  // Обработчики модального окна
+  document.getElementById('modal-close')?.addEventListener('click', () => BookingModal.close());
+  document.getElementById('booking-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'booking-modal') BookingModal.close();
+  });
+
+  document.getElementById('modal-prev-booking')?.addEventListener('click', () => {
+    if (CalendarApp.currentBookingIndex > 0) {
+      CalendarApp.currentBookingIndex--;
+      const booking = CalendarApp.sameTimeBookings[CalendarApp.currentBookingIndex];
+      BookingModal.displayBooking(booking);
+      BookingModal.updateBookingsNavigation();
+      BookingModal.renderOtherBookingsList();
+    }
+  });
+
+  document.getElementById('modal-next-booking')?.addEventListener('click', () => {
+    if (CalendarApp.currentBookingIndex < CalendarApp.sameTimeBookings.length - 1) {
+      CalendarApp.currentBookingIndex++;
+      const booking = CalendarApp.sameTimeBookings[CalendarApp.currentBookingIndex];
+      BookingModal.displayBooking(booking);
+      BookingModal.updateBookingsNavigation();
+      BookingModal.renderOtherBookingsList();
+    }
+  });
+
+  document.getElementById('edit-booking-btn')?.addEventListener('click', () => {
+    if (CalendarApp.currentEditingBookingId) {
+      BookingModal.openEditForm(CalendarApp.currentEditingBookingId);
+    }
+  });
+
+  document.getElementById('delete-booking-btn')?.addEventListener('click', async () => {
+    if (!CalendarApp.currentEditingBookingId) return;
+    
+    if (!confirm('Вы уверены, что хотите удалить эту запись?')) {
+      return;
+    }
+    
+    try {
+      const result = await API.deleteBooking(CalendarApp.currentEditingBookingId);
+      if (result.success) {
+        NotificationManager.show('Запись удалена', 'Запись успешно удалена из календаря', 'info');
+        
+        setTimeout(async () => {
+          const bookingsResult = await API.getBookings();
+          if (bookingsResult.success) {
+            CalendarApp.bookings = bookingsResult.bookings;
+            CalendarRenderer.render();
+          }
+          BookingModal.close();
+        }, 500);
+      } else {
+        alert('Ошибка при удалении записи: ' + (result.message || 'Неизвестная ошибка'));
+      }
+    } catch (error) {
+      console.error('Ошибка удаления записи:', error);
+      alert('Ошибка при удалении записи. Попробуйте позже.');
+    }
+  });
+
+  document.getElementById('cancel-booking-form')?.addEventListener('click', () => BookingModal.close());
+
+  // Обработчики формы
+  document.getElementById('new-booking-service')?.addEventListener('change', () => BookingForm.generateSlots());
+  document.getElementById('new-booking-date')?.addEventListener('change', () => BookingForm.generateSlots());
+  document.getElementById('new-booking-master')?.addEventListener('change', () => BookingForm.generateSlots());
+
+  document.getElementById('new-booking-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await BookingForm.submit();
+  });
+
+  // Обработчики уведомлений
+  document.getElementById('logout-link')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    await API.logout();
+    window.location.href = '/';
+  });
+
+  document.getElementById('notifications-icon')?.addEventListener('click', () => {
+    const panel = document.getElementById('notifications-panel');
+    if (panel) {
+      panel.classList.toggle('open');
+      if (panel.classList.contains('open')) {
+        CalendarApp.notificationsList.forEach(n => n.read = true);
+        NotificationManager.save();
+      }
+    }
+  });
+
+  document.getElementById('notifications-panel-close')?.addEventListener('click', () => {
+    const panel = document.getElementById('notifications-panel');
+    if (panel) {
+      panel.classList.remove('open');
+    }
+  });
+
+  document.getElementById('notifications-clear-all')?.addEventListener('click', () => {
+    if (confirm('Удалить все уведомления?')) {
+      CalendarApp.notificationsList = [];
+      NotificationManager.save();
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    const panel = document.getElementById('notifications-panel');
+    const icon = document.getElementById('notifications-icon');
+    if (panel && icon && !panel.contains(e.target) && !icon.contains(e.target)) {
+      panel.classList.remove('open');
+    }
+  });
+
+  // Инициализация уведомлений
+  NotificationManager.updatePanel();
+  NotificationManager.updateBadge();
+  
+  // Запуск проверки новых записей
+  BookingChecker.start();
+});
 </script>
 </body>
 </html>
-
