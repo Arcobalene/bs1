@@ -39,7 +39,7 @@
       <div class="services-list" id="services-list"></div>
       <div class="divider"></div>
       <h2 id="section-masters-heading">Мастера</h2>
-      <p class="note" id="masters-hint" style="margin-bottom: 12px; display: none;">Нажмите на имя, чтобы просмотреть работы</p>
+      <p class="note" id="masters-hint" style="margin-bottom: 12px; display: none;">Нажмите на карточку или фото, чтобы просмотреть работы</p>
       <div class="masters-list" id="masters-list"></div>
       <p class="note">
         После отправки заявки администратор свяжется с вами в мессенджере или по телефону для подтверждения времени.
@@ -564,6 +564,24 @@
         color: ${finalTextColor} !important;
         opacity: 0.7;
       }
+      .master-card {
+        background: ${isLightBg ? '#f9fafb' : 'rgba(255, 255, 255, 0.05)'} !important;
+        border-color: ${isLightBg ? '#e5e7eb' : 'rgba(255, 255, 255, 0.1)'} !important;
+      }
+      .master-card:hover {
+        border-color: ${isLightBg ? '#d1d5db' : 'rgba(255, 255, 255, 0.2)'} !important;
+      }
+      .master-card-name {
+        color: ${finalTextColor} !important;
+      }
+      .master-card-role {
+        color: ${finalTextColor} !important;
+        opacity: 0.7;
+      }
+      .master-card-photo-placeholder {
+        color: ${isLightBg ? '#9ca3af' : 'rgba(255, 255, 255, 0.5)'} !important;
+        background: ${isLightBg ? 'linear-gradient(135deg, #e5e7eb, #d1d5db)' : 'rgba(255, 255, 255, 0.1)'} !important;
+      }
       input:focus, select:focus, textarea:focus {
         border-color: ${primaryColor} !important;
         box-shadow: 0 0 0 1px rgba(${hexToRgb(primaryColor)}, 0.35) !important;
@@ -729,20 +747,68 @@
       mastersListEl.innerHTML = "";
       if (masters && masters.length > 0) {
         masters.forEach((m) => {
-          const row = document.createElement("div");
-          row.className = "master-item";
-          const nameSpan = document.createElement("span");
-          nameSpan.textContent = m.name;
-          nameSpan.style.cursor = 'pointer';
-          nameSpan.style.textDecoration = 'underline';
-          nameSpan.title = 'Нажмите, чтобы посмотреть фото работ';
-          nameSpan.onclick = () => openMasterPhotosModal(m);
-          const roleSpan = document.createElement("span");
-          roleSpan.className = "role";
-          roleSpan.textContent = m.role || 'Мастер';
-          row.appendChild(nameSpan);
-          row.appendChild(roleSpan);
-          mastersListEl.appendChild(row);
+          // Создаем карточку мастера
+          const card = document.createElement("div");
+          card.className = "master-card";
+          
+          // Получаем первое фото мастера, если есть
+          const photos = m.photos || [];
+          const firstPhoto = photos.length > 0 ? photos[0] : null;
+          
+          // Контейнер для фото
+          const photoContainer = document.createElement("div");
+          photoContainer.className = "master-card-photo";
+          
+          if (firstPhoto && firstPhoto.filename) {
+            const photoImg = document.createElement("img");
+            photoImg.src = `/api/masters/photos/${m.id}/${firstPhoto.filename}`;
+            photoImg.alt = m.name;
+            photoImg.onerror = function() {
+              // Если фото не загрузилось, показываем placeholder
+              this.style.display = 'none';
+              photoContainer.innerHTML = '<div class="master-card-photo-placeholder">👤</div>';
+            };
+            photoContainer.appendChild(photoImg);
+            photoContainer.onclick = () => openMasterPhotosModal(m);
+            photoContainer.style.cursor = 'pointer';
+            photoContainer.title = 'Нажмите, чтобы посмотреть фото работ';
+          } else {
+            // Placeholder если фото нет
+            photoContainer.innerHTML = '<div class="master-card-photo-placeholder">👤</div>';
+            photoContainer.onclick = () => {
+              if (photos.length > 0) {
+                openMasterPhotosModal(m);
+              }
+            };
+            photoContainer.style.cursor = photos.length > 0 ? 'pointer' : 'default';
+            photoContainer.title = photos.length > 0 ? 'Нажмите, чтобы посмотреть фото работ' : '';
+          }
+          
+          // Контейнер для информации
+          const infoContainer = document.createElement("div");
+          infoContainer.className = "master-card-info";
+          
+          const nameDiv = document.createElement("div");
+          nameDiv.className = "master-card-name";
+          nameDiv.textContent = m.name;
+          if (photos.length > 0) {
+            nameDiv.style.cursor = 'pointer';
+            nameDiv.style.textDecoration = 'underline';
+            nameDiv.title = 'Нажмите, чтобы посмотреть фото работ';
+            nameDiv.onclick = () => openMasterPhotosModal(m);
+          }
+          
+          const roleDiv = document.createElement("div");
+          roleDiv.className = "master-card-role";
+          roleDiv.textContent = m.role || 'Мастер';
+          
+          infoContainer.appendChild(nameDiv);
+          infoContainer.appendChild(roleDiv);
+          
+          card.appendChild(photoContainer);
+          card.appendChild(infoContainer);
+          
+          mastersListEl.appendChild(card);
         });
       } else {
         // Получаем название секции из дизайна, если есть
