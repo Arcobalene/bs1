@@ -461,18 +461,25 @@
         }
       }
       header {
-        background: linear-gradient(135deg, ${headerBg}, ${secondaryColor}) !important;
+        background: rgba(${hexToRgb(headerBg)}, 0.25) !important;
+        backdrop-filter: blur(20px) !important;
+        -webkit-backdrop-filter: blur(20px) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.18) !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important;
         position: relative !important;
-        background-attachment: scroll !important;
       }
       @media (max-width: 768px) {
         header {
-          background: linear-gradient(135deg, ${headerBg}, ${secondaryColor}) !important;
+          background: rgba(${hexToRgb(headerBg)}, 0.25) !important;
+          backdrop-filter: blur(20px) !important;
+          -webkit-backdrop-filter: blur(20px) !important;
         }
       }
       @media (max-width: 480px) {
         header {
-          background: linear-gradient(135deg, ${headerBg}, ${secondaryColor}) !important;
+          background: rgba(${hexToRgb(headerBg)}, 0.25) !important;
+          backdrop-filter: blur(20px) !important;
+          -webkit-backdrop-filter: blur(20px) !important;
         }
       }
       .card {

@@ -27,14 +27,17 @@ body {
 }
 
 header {
-  background: linear-gradient(135deg, #f973b6, #a855f7);
+  background: rgba(249, 115, 182, 0.25);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   color: white;
   padding: 24px 16px 48px;
   text-align: center;
   position: sticky;
   top: 0;
   z-index: 1000;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 header h1 {
