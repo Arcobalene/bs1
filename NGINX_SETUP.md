@@ -15,19 +15,31 @@
 
 Поскольку nginx уже обрабатывает HTTPS, Node.js должен работать только по HTTP.
 
-В `.env` файле или переменных окружения установите:
+**Важно:** По умолчанию приложение настроено для работы за nginx reverse proxy:
+- `USE_HTTPS=false` - по умолчанию отключен
+- `TRUST_PROXY=true` - по умолчанию включен
+- HTTPS автоматически определяется через заголовок `X-Forwarded-Proto` от nginx
 
-```env
-USE_HTTPS=false
-PORT=3000
-BEHIND_HTTPS_PROXY=true
-TRUST_PROXY=true
+**Если нужно явно указать переменные окружения**, установите их при запуске:
+
+```bash
+# При запуске напрямую
+USE_HTTPS=false TRUST_PROXY=true node server.js
+
+# Или в systemd service файле
+Environment="USE_HTTPS=false"
+Environment="TRUST_PROXY=true"
+
+# Или в docker-compose
+environment:
+  - USE_HTTPS=false
+  - TRUST_PROXY=true
 ```
 
 **Объяснение переменных:**
-- `USE_HTTPS=false` - отключает встроенный HTTPS сервер в Node.js
-- `BEHIND_HTTPS_PROXY=true` - сообщает приложению, что оно работает за HTTPS прокси (для secure cookies)
-- `TRUST_PROXY=true` - включает поддержку заголовков от reverse proxy (по умолчанию уже включено)
+- `USE_HTTPS=false` - отключает встроенный HTTPS сервер в Node.js (по умолчанию false)
+- `TRUST_PROXY=true` - включает поддержку заголовков от reverse proxy (по умолчанию true)
+- `BEHIND_HTTPS_PROXY=true` - необязательно, HTTPS определяется автоматически через `X-Forwarded-Proto`
 
 ### 2. Убедитесь, что приложение слушает на правильном адресе
 
@@ -35,42 +47,65 @@ TRUST_PROXY=true
 
 Убедитесь, что Node.js приложение слушает на всех интерфейсах (0.0.0.0), а не только на localhost:
 
-```env
-HOST=0.0.0.0  # или просто не указывайте, по умолчанию слушает на всех интерфейсах
-PORT=3000
+```bash
+# При запуске можно указать порт
+PORT=3000 node server.js
+
+# По умолчанию приложение слушает на 0.0.0.0:3000 (все интерфейсы)
 ```
 
 ### 3. Проверка работы
 
-После настройки:
+После запуска приложения:
 
 1. Приложение должно запускаться только на HTTP (порт 3000)
-2. Secure cookies будут работать правильно (благодаря `BEHIND_HTTPS_PROXY=true`)
+2. Secure cookies будут работать автоматически (определяется через `X-Forwarded-Proto` от nginx)
 3. HSTS заголовки будут добавляться для HTTPS запросов
 4. `req.secure` будет правильно определяться через заголовок `X-Forwarded-Proto`
 
-## Полный пример .env файла
+## Пример запуска приложения
 
-```env
-# Отключить встроенный HTTPS (nginx обрабатывает SSL)
-USE_HTTPS=false
+### Запуск напрямую
 
-# Порт для HTTP (nginx проксирует на этот порт)
-PORT=3000
+```bash
+# Минимальная команда (все работает по умолчанию)
+node server.js
 
-# Работа за HTTPS прокси
-BEHIND_HTTPS_PROXY=true
-TRUST_PROXY=true
+# С явным указанием порта (если нужно)
+PORT=3000 node server.js
+```
 
-# Остальные настройки...
-NODE_ENV=production
-SESSION_SECRET=your-secret-key-here
-DB_TYPE=postgres
-DB_HOST=db
-DB_PORT=5432
-DB_NAME=beauty_studio
-DB_USER=beauty_user
-DB_PASSWORD=beauty_password
+### Запуск через systemd (пример service файла)
+
+Создайте `/etc/systemd/system/beauty-studio.service`:
+
+```ini
+[Unit]
+Description=Beauty Studio Booking System
+After=network.target
+
+[Service]
+Type=simple
+User=nodejs
+WorkingDirectory=/path/to/beauty-studio
+ExecStart=/usr/bin/node server.js
+Environment="NODE_ENV=production"
+Environment="PORT=3000"
+Environment="USE_HTTPS=false"
+Environment="TRUST_PROXY=true"
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Запуск через PM2
+
+```bash
+# Установка переменных окружения для PM2
+pm2 start server.js --name beauty-studio --env production \
+  --update-env \
+  -- PORT=3000 USE_HTTPS=false TRUST_PROXY=true
 ```
 
 ## Как это работает

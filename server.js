@@ -28,6 +28,7 @@ const PORT = process.env.PORT || 3000;
 const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
 
 // Настройка HTTPS
+// По умолчанию отключен (предполагается использование nginx reverse proxy)
 const USE_HTTPS = process.env.USE_HTTPS === 'true';
 const SSL_CERT_PATH = process.env.SSL_CERT_PATH || '/etc/letsencrypt/live';
 const SSL_DOMAIN = process.env.SSL_DOMAIN || process.env.DOMAIN || 'localhost';
@@ -38,7 +39,7 @@ let httpsOptions = null;
 // Функция для загрузки SSL сертификатов
 function loadSSLCertificates() {
   if (!USE_HTTPS) {
-    console.log('ℹ️  HTTPS отключен (USE_HTTPS=false)');
+    // Не выводим сообщение, т.к. это нормально при работе за nginx reverse proxy
     return null;
   }
 
@@ -233,7 +234,8 @@ const upload = multer({
 // Настройка trust proxy для работы за reverse proxy (nginx, etc.)
 // Это позволяет Express правильно определять req.secure на основе X-Forwarded-Proto
 // Должно быть до других middleware, которые используют req.secure
-const TRUST_PROXY = process.env.TRUST_PROXY !== 'false'; // По умолчанию true
+// По умолчанию включен (для работы за nginx reverse proxy)
+const TRUST_PROXY = process.env.TRUST_PROXY !== 'false';
 if (TRUST_PROXY) {
   app.set('trust proxy', 1); // Доверять первому прокси
   console.log('✅ Trust proxy включен (для работы за nginx reverse proxy)');
@@ -244,11 +246,16 @@ const isDevelopment = process.env.NODE_ENV !== 'production';
 
 // Определяем, используется ли HTTPS (для secure cookies и заголовков)
 // Учитываем как прямой HTTPS, так и HTTPS через reverse proxy (X-Forwarded-Proto)
+// Если USE_HTTPS=false, но приложение работает за nginx с HTTPS, автоматически определяем через X-Forwarded-Proto
 const isHttpsDirect = USE_HTTPS && httpsOptions !== null;
-const isHttpsBehindProxy = TRUST_PROXY && process.env.BEHIND_HTTPS_PROXY === 'true';
+// Автоматически определяем HTTPS за прокси, если не включен прямой HTTPS
+// Это позволяет работать за nginx без дополнительных настроек
+const isHttpsBehindProxy = TRUST_PROXY && (!USE_HTTPS || process.env.BEHIND_HTTPS_PROXY === 'true');
 const isHttps = isHttpsDirect || isHttpsBehindProxy;
 
-if (isHttpsBehindProxy) {
+if (isHttpsBehindProxy && !USE_HTTPS) {
+  console.log('✅ HTTPS определяется автоматически через reverse proxy (X-Forwarded-Proto заголовок от nginx)');
+} else if (isHttpsBehindProxy && process.env.BEHIND_HTTPS_PROXY === 'true') {
   console.log('✅ HTTPS определяется через reverse proxy (BEHIND_HTTPS_PROXY=true)');
 }
 
