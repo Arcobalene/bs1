@@ -193,7 +193,7 @@ const CalendarApp = {
   sameTimeBookings: [],
   knownBookingIds: new Set(),
   lastBookingCheck: Date.now(),
-  notificationsList: JSON.parse(localStorage.getItem('notifications') || '[]'),
+  notificationsList: [],
   WEEK_DAYS: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
   get START_HOUR() {
     // Используем настройки рабочего времени из профиля пользователя, если доступны
@@ -299,6 +299,40 @@ const API = {
 
   async logout() {
     await fetch('/api/logout', { method: 'POST' });
+  },
+
+  async getNotifications() {
+    const res = await fetch('/api/notifications');
+    return await res.json();
+  },
+
+  async createNotification(notificationData) {
+    const res = await fetch('/api/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(notificationData)
+    });
+    return await res.json();
+  },
+
+  async markNotificationAsRead(id) {
+    const res = await fetch(`/api/notifications/${id}/read`, { method: 'PUT' });
+    return await res.json();
+  },
+
+  async markAllNotificationsAsRead() {
+    const res = await fetch('/api/notifications/read-all', { method: 'PUT' });
+    return await res.json();
+  },
+
+  async deleteNotification(id) {
+    const res = await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
+    return await res.json();
+  },
+
+  async deleteAllNotifications() {
+    const res = await fetch('/api/notifications', { method: 'DELETE' });
+    return await res.json();
   }
 };
 
@@ -340,6 +374,9 @@ const DataLoader = {
           CalendarApp.services = servicesResult.services;
         }
       }
+      
+      // Загрузка уведомлений
+      await NotificationManager.load();
       
       // Обработка URL параметров
       this.handleURLParams();
@@ -1090,29 +1127,67 @@ const BookingForm = {
 
 // ========== УПРАВЛЕНИЕ УВЕДОМЛЕНИЯМИ ==========
 const NotificationManager = {
-  save() {
-    localStorage.setItem('notifications', JSON.stringify(CalendarApp.notificationsList));
+  async load() {
+    try {
+      const result = await API.getNotifications();
+      if (result.success) {
+        CalendarApp.notificationsList = result.notifications || [];
+        this.updatePanel();
+        this.updateBadge();
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки уведомлений:', error);
+    }
+  },
+
+  async save() {
     this.updatePanel();
     this.updateBadge();
   },
   
-  addToList(title, message, type = 'success', bookingId = null) {
-    const notification = {
-      id: Date.now(),
-      title,
-      message,
-      type,
-      time: new Date().toISOString(),
-      read: false,
-      bookingId
-    };
-    
-    CalendarApp.notificationsList.unshift(notification);
-    if (CalendarApp.notificationsList.length > 50) {
-      CalendarApp.notificationsList = CalendarApp.notificationsList.slice(0, 50);
+  async addToList(title, message, type = 'success', bookingId = null) {
+    try {
+      // Создаем уведомление на сервере
+      const result = await API.createNotification({
+        title,
+        message,
+        type,
+        bookingId
+      });
+      
+      if (result.success && result.notification) {
+        const notification = {
+          id: result.notification.id,
+          title,
+          message,
+          type,
+          time: result.notification.time,
+          read: false,
+          bookingId
+        };
+        
+        CalendarApp.notificationsList.unshift(notification);
+        if (CalendarApp.notificationsList.length > 100) {
+          CalendarApp.notificationsList = CalendarApp.notificationsList.slice(0, 100);
+        }
+        
+        await this.save();
+      }
+    } catch (error) {
+      console.error('Ошибка создания уведомления:', error);
+      // В случае ошибки создаем локальное уведомление
+      const notification = {
+        id: Date.now(),
+        title,
+        message,
+        type,
+        time: new Date().toISOString(),
+        read: false,
+        bookingId
+      };
+      CalendarApp.notificationsList.unshift(notification);
+      await this.save();
     }
-    
-    this.save();
   },
   
   updateBadge() {
@@ -1190,21 +1265,35 @@ const NotificationManager = {
     });
   },
   
-  markAsRead(id) {
+  async markAsRead(id) {
     const notification = CalendarApp.notificationsList.find(n => n.id === id);
     if (notification && !notification.read) {
-      notification.read = true;
-      this.save();
+      try {
+        await API.markNotificationAsRead(id);
+        notification.read = true;
+        await this.save();
+      } catch (error) {
+        console.error('Ошибка обновления уведомления:', error);
+        notification.read = true;
+        await this.save();
+      }
     }
   },
   
-  remove(id) {
-    CalendarApp.notificationsList = CalendarApp.notificationsList.filter(n => n.id !== id);
-    this.save();
+  async remove(id) {
+    try {
+      await API.deleteNotification(id);
+      CalendarApp.notificationsList = CalendarApp.notificationsList.filter(n => n.id !== id);
+      await this.save();
+    } catch (error) {
+      console.error('Ошибка удаления уведомления:', error);
+      CalendarApp.notificationsList = CalendarApp.notificationsList.filter(n => n.id !== id);
+      await this.save();
+    }
   },
   
-  show(title, message, type = 'success', bookingId = null) {
-    this.addToList(title, message, type, bookingId);
+  async show(title, message, type = 'success', bookingId = null) {
+    await this.addToList(title, message, type, bookingId);
     
     const container = document.getElementById('notification-container');
     if (!container) return;
@@ -1635,13 +1724,20 @@ document.addEventListener('DOMContentLoaded', () => {
     window.location.href = '/';
   });
 
-  document.getElementById('notifications-icon')?.addEventListener('click', () => {
+  document.getElementById('notifications-icon')?.addEventListener('click', async () => {
     const panel = document.getElementById('notifications-panel');
     if (panel) {
       panel.classList.toggle('open');
       if (panel.classList.contains('open')) {
-        CalendarApp.notificationsList.forEach(n => n.read = true);
-        NotificationManager.save();
+        try {
+          await API.markAllNotificationsAsRead();
+          CalendarApp.notificationsList.forEach(n => n.read = true);
+          await NotificationManager.save();
+        } catch (error) {
+          console.error('Ошибка обновления уведомлений:', error);
+          CalendarApp.notificationsList.forEach(n => n.read = true);
+          await NotificationManager.save();
+        }
       }
     }
   });
@@ -1653,10 +1749,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('notifications-clear-all')?.addEventListener('click', () => {
+  document.getElementById('notifications-clear-all')?.addEventListener('click', async () => {
     if (confirm('Удалить все уведомления?')) {
-      CalendarApp.notificationsList = [];
-      NotificationManager.save();
+      try {
+        await API.deleteAllNotifications();
+        CalendarApp.notificationsList = [];
+        await NotificationManager.save();
+      } catch (error) {
+        console.error('Ошибка удаления уведомлений:', error);
+        CalendarApp.notificationsList = [];
+        await NotificationManager.save();
+      }
     }
   });
 
@@ -1668,7 +1771,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Инициализация уведомлений
+  // Инициализация уведомлений (уже загружены в DataLoader.loadAll)
   NotificationManager.updatePanel();
   NotificationManager.updateBadge();
   

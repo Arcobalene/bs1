@@ -238,6 +238,29 @@ async function initDatabase() {
       console.log('Поле work_hours уже существует или ошибка миграции:', error.message);
     }
 
+    // Таблица уведомлений
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        type VARCHAR(20) DEFAULT 'success',
+        booking_id INTEGER,
+        read BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL
+      )
+    `);
+
+    // Индекс для ускорения запросов уведомлений
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+      CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(user_id, read);
+    `);
+
     console.log('База данных PostgreSQL инициализирована');
   } catch (error) {
     console.error('Ошибка инициализации БД:', error);
@@ -729,6 +752,89 @@ async function migrateFromJSON() {
   }
 }
 
+// Функции для работы с уведомлениями
+const notifications = {
+  getByUserId: async (userId, limit = 100) => {
+    requirePool();
+    const result = await pool.query(
+      'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2',
+      [userId, limit]
+    );
+    return result.rows.map(row => ({
+      id: row.id,
+      title: row.title,
+      message: row.message,
+      type: row.type,
+      bookingId: row.booking_id,
+      read: row.read,
+      time: row.created_at.toISOString()
+    }));
+  },
+
+  create: async (notificationData) => {
+    requirePool();
+    const { userId, title, message, type = 'success', bookingId = null } = notificationData;
+    
+    const result = await pool.query(`
+      INSERT INTO notifications (user_id, title, message, type, booking_id)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, created_at
+    `, [
+      userId,
+      title,
+      message,
+      type,
+      bookingId || null
+    ]);
+    
+    return {
+      id: result.rows[0].id,
+      time: result.rows[0].created_at.toISOString()
+    };
+  },
+
+  markAsRead: async (id, userId) => {
+    requirePool();
+    await pool.query(
+      'UPDATE notifications SET read = true WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+  },
+
+  markAllAsRead: async (userId) => {
+    requirePool();
+    await pool.query(
+      'UPDATE notifications SET read = true WHERE user_id = $1 AND read = false',
+      [userId]
+    );
+  },
+
+  remove: async (id, userId) => {
+    requirePool();
+    await pool.query(
+      'DELETE FROM notifications WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+  },
+
+  removeAll: async (userId) => {
+    requirePool();
+    await pool.query(
+      'DELETE FROM notifications WHERE user_id = $1',
+      [userId]
+    );
+  },
+
+  getUnreadCount: async (userId) => {
+    requirePool();
+    const result = await pool.query(
+      'SELECT COUNT(*) as count FROM notifications WHERE user_id = $1 AND read = false',
+      [userId]
+    );
+    return parseInt(result.rows[0].count);
+  }
+};
+
 // Экспортируем функцию инициализации
 module.exports = {
   pool,
@@ -736,6 +842,7 @@ module.exports = {
   services,
   masters,
   bookings,
+  notifications,
   migrateFromJSON,
   initDatabase
 };

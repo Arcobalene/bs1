@@ -7,7 +7,7 @@ const multer = require('multer');
 const Minio = require('minio');
 const https = require('https');
 const http = require('http');
-const { users: dbUsers, services, masters, bookings, migrateFromJSON } = require('./database');
+const { users: dbUsers, services, masters, bookings, notifications, migrateFromJSON } = require('./database');
 const { 
   timeToMinutes, 
   formatTime, 
@@ -1917,6 +1917,101 @@ app.delete('/api/bookings/:id', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Ошибка удаления записи:', error);
     res.status(500).json({ success: false, message: 'Ошибка сервера при удалении записи' });
+  }
+});
+
+// API: Получить уведомления пользователя
+app.get('/api/notifications', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const notificationsList = await notifications.getByUserId(userId, 100);
+    res.json({ success: true, notifications: notificationsList });
+  } catch (error) {
+    console.error('Ошибка получения уведомлений:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера при получении уведомлений' });
+  }
+});
+
+// API: Создать уведомление
+app.post('/api/notifications', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const { title, message, type = 'success', bookingId = null } = req.body;
+    
+    if (!title || !message) {
+      return res.status(400).json({ success: false, message: 'Заголовок и сообщение обязательны' });
+    }
+    
+    const result = await notifications.create({
+      userId,
+      title: sanitizeString(title, 255),
+      message: sanitizeString(message, 1000),
+      type: type || 'success',
+      bookingId: bookingId ? parseInt(bookingId) : null
+    });
+    
+    res.json({ success: true, notification: result });
+  } catch (error) {
+    console.error('Ошибка создания уведомления:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера при создании уведомления' });
+  }
+});
+
+// API: Отметить уведомление как прочитанное
+app.put('/api/notifications/:id/read', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const idValidation = validateId(req.params.id, 'ID уведомления');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, message: idValidation.message });
+    }
+    
+    await notifications.markAsRead(idValidation.id, userId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Ошибка обновления уведомления:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера при обновлении уведомления' });
+  }
+});
+
+// API: Отметить все уведомления как прочитанные
+app.put('/api/notifications/read-all', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    await notifications.markAllAsRead(userId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Ошибка обновления уведомлений:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера при обновлении уведомлений' });
+  }
+});
+
+// API: Удалить уведомление
+app.delete('/api/notifications/:id', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    const idValidation = validateId(req.params.id, 'ID уведомления');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, message: idValidation.message });
+    }
+    
+    await notifications.remove(idValidation.id, userId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Ошибка удаления уведомления:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера при удалении уведомления' });
+  }
+});
+
+// API: Удалить все уведомления
+app.delete('/api/notifications', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.userId;
+    await notifications.removeAll(userId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Ошибка удаления уведомлений:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера при удалении уведомлений' });
   }
 });
 
