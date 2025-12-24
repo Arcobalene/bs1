@@ -616,8 +616,12 @@ footer {
   align-items: center;
   justify-content: flex-start;
   min-height: 26px;
+  height: 100%; /* Заполняет всю высоту объединенных ячеек */
   border-right: 1px solid #e5e7eb;
   border-bottom: 1px solid #e5e7eb;
+  border: 1px solid #b91c1c;
+  border-radius: 4px;
+  z-index: 1; /* Чтобы было поверх других элементов */
 }
 
 .cal-corner {

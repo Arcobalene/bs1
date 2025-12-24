@@ -386,100 +386,105 @@
 
     const selectedMaster = document.getElementById('calendar-master-filter')?.value || "";
     
-    // Создаем карту для отслеживания занятых ячеек объединенными записями
-    // Ключ: `${dateISO}_${hour}`, значение: true
-    const occupiedBySpan = new Set();
+    // Карта для отслеживания занятых ячеек
+    // Используем объект для быстрого доступа
+    const occupiedCells = {};
 
+    // Сначала подготовим данные о записях
+    const bookingsByDay = {};
+    weekDates.forEach((d) => {
+      const iso = dateToISO(d);
+      bookingsByDay[iso] = bookings.filter(b => {
+        if (b.date !== iso) return false;
+        if (selectedMaster && b.master !== selectedMaster) return false;
+        return true;
+      });
+    });
+
+    // Создаем строки для каждого часа
     for (let hour = startHour; hour < endHour; hour++) {
+      // Ячейка времени
       const hourCell = document.createElement("div");
       hourCell.className = "cal-cell cal-hour-label";
       hourCell.textContent = `${String(hour).padStart(2, "0")}:00`;
       grid.appendChild(hourCell);
 
+      // Ячейки для каждого дня
       weekDates.forEach((d) => {
         const iso = dateToISO(d);
         const cellKey = `${iso}_${hour}`;
         
-        const cell = document.createElement("div");
-        
-        // Если эта ячейка занята объединенной записью из предыдущего часа, делаем её пустой
-        // Она будет перекрыта объединенной записью благодаря grid-row: span
-        if (occupiedBySpan.has(cellKey)) {
-          cell.className = "cal-cell";
-          grid.appendChild(cell);
+        // Пропускаем, если ячейка уже занята объединенной записью
+        if (occupiedCells[cellKey]) {
           return;
         }
         
+        const cell = document.createElement("div");
         cell.className = "cal-cell cal-slot";
 
-        // Фильтруем записи, которые начинаются именно в этом часе (чтобы избежать дублирования)
-        const bookingsForCell = bookings.filter((b) => {
-          if (b.date !== iso) return false;
-          // Если выбран мастер, показываем только его записи
-          if (selectedMaster && b.master !== selectedMaster) return false;
+        // Ищем запись, которая начинается в этот час
+        const bookingsForThisHour = bookingsByDay[iso]?.filter(b => {
           const startM = timeToMinutes(b.time);
           if (startM === null) return false;
           const cellStart = hour * 60;
           const cellEnd = (hour + 1) * 60;
-          // Показываем запись только в ячейке, где она начинается
           return startM >= cellStart && startM < cellEnd;
-        });
+        }) || [];
 
-        if (bookingsForCell.length) {
+        if (bookingsForThisHour.length) {
           cell.classList.add("cal-slot-busy");
           
-          // Если записей несколько, показываем их все (разные мастера могут работать одновременно)
-          if (bookingsForCell.length === 1) {
-            // Одна запись - показываем только имя клиента и время
-            const b = bookingsForCell[0];
+          if (bookingsForThisHour.length === 1) {
+            const b = bookingsForThisHour[0];
             const displayParts = [];
             
-            // Имя клиента
             if (b.name) {
               displayParts.push(b.name);
             }
             
-            // Время записи
             const timeStr = b.time + (b.endTime ? `-${b.endTime}` : '');
             displayParts.push(timeStr);
-            
             cell.textContent = displayParts.join(" · ");
             
-            // Вычисляем количество часов для объединения ячеек
+            // РАСЧЕТ ОБЪЕДИНЕНИЯ ЯЧЕЕК
             const startM = timeToMinutes(b.time);
             const endM = b.endTime ? timeToMinutes(b.endTime) : (startM + 60);
+            
             if (startM !== null && endM !== null && endM > startM) {
-              // Вычисляем продолжительность в минутах и часах
               const durationMinutes = endM - startM;
-              // Округляем вверх до полных часов для span
-              const durationHours = Math.max(1, Math.ceil(durationMinutes / 60));
+              // Округляем ВВЕРХ до полных часов
+              const durationHours = Math.ceil(durationMinutes / 60);
               
-              // Вычисляем номер строки в grid
-              // Строка 1 = заголовки (пустая ячейка + 7 дней)
-              // Строка 2 = час startHour (например, 10:00)
-              // Строка 3 = час startHour+1 (например, 11:00)
-              // Итак, строка для текущего часа = (hour - startHour) + 2
+              // ВАЖНО: в CSS Grid строки считаются с 1
+              // У нас есть:
+              // - Строка 1: заголовки (8 ячеек)
+              // - Далее строки для каждого часа, начиная с 2
+              // Каждая логическая строка содержит 8 ячеек (час + 7 дней)
+              // Но в CSS Grid каждая ячейка занимает одну позицию в потоке
+              // Структура: элемент 0-7 (строка 1), элементы 8-15 (строка 2), элементы 16-23 (строка 3)...
+              // Номер строки = floor(индекс элемента / 8) + 1
+              // Для часа h: индекс первого элемента строки = (h - startHour) * 8 + 8 (после заголовков)
+              // Номер строки = (h - startHour) + 2
+              
+              // Номер строки для текущего часа
               const rowStart = (hour - startHour) + 2;
               
               // Количество строк для объединения
-              // Не должно превышать количество оставшихся часов до конца календаря
-              const remainingHours = endHour - hour;
-              const rowSpan = Math.min(durationHours, remainingHours);
+              const rowSpan = Math.min(durationHours, endHour - hour);
               
-              // Объединяем ячейки по вертикали через grid-row
-              // Используем синтаксис: start / span count
               if (rowSpan > 1) {
+                // Объединяем ячейки
                 cell.style.gridRow = `${rowStart} / span ${rowSpan}`;
                 
-                // Помечаем последующие ячейки как занятые объединенной записью
+                // Помечаем последующие ячейки как занятые
                 for (let h = hour + 1; h < hour + rowSpan && h < endHour; h++) {
                   const occupiedKey = `${iso}_${h}`;
-                  occupiedBySpan.add(occupiedKey);
+                  occupiedCells[occupiedKey] = true;
                 }
               }
             }
             
-            // Подробная информация в title (для всплывающей подсказки)
+            // Всплывающая подсказка
             const fullInfo = [];
             if (b.time) fullInfo.push(`Время: ${b.time}${b.endTime ? '-' + b.endTime : ''}`);
             if (b.name) fullInfo.push(`Клиент: ${b.name}`);
@@ -495,28 +500,14 @@
               cell.style.cursor = "pointer";
             }
           } else {
-            // Несколько записей - показываем количество записей
-            cell.textContent = `${bookingsForCell.length} записей`;
-            
-            // Подробная информация в title
-            const fullInfo = bookingsForCell.map(b => {
-              const parts = [];
-              if (b.time) parts.push(b.time + (b.endTime ? `-${b.endTime}` : ''));
-              if (b.name) parts.push(b.name);
-              if (b.service) parts.push(b.service);
-              if (b.master) parts.push(`👤 ${b.master}`);
-              return parts.join(' · ');
-            });
-            cell.title = fullInfo.join('\n');
-            
-            // При клике открываем первую запись
-            const b = bookingsForCell[0];
-            const bookingIndex = bookings.indexOf(b);
+            // Несколько записей в один час
+            cell.textContent = `${bookingsForThisHour.length} записей`;
+            const booking = bookingsForThisHour[0];
+            const bookingIndex = bookings.indexOf(booking);
             if (bookingIndex !== -1) {
               cell.dataset.bookingIndex = String(bookingIndex);
               cell.style.cursor = "pointer";
             }
-            // Добавляем индикатор множественных записей
             cell.dataset.multipleBookings = "true";
           }
         } else {
