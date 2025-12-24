@@ -385,6 +385,10 @@
     });
 
     const selectedMaster = document.getElementById('calendar-master-filter')?.value || "";
+    
+    // Создаем карту занятых ячеек для отслеживания объединенных записей
+    // Ключ: `${dateISO}_${hour}`, значение: количество часов span
+    const occupiedCells = new Map();
 
     for (let hour = startHour; hour < endHour; hour++) {
       const hourCell = document.createElement("div");
@@ -393,9 +397,17 @@
       grid.appendChild(hourCell);
 
       weekDates.forEach((d) => {
+        const iso = dateToISO(d);
+        const cellKey = `${iso}_${hour}`;
+        
+        // Проверяем, не занята ли эта ячейка объединенной записью из предыдущего часа
+        if (occupiedCells.has(cellKey)) {
+          // Эта ячейка уже занята объединенной записью - пропускаем её
+          return;
+        }
+        
         const cell = document.createElement("div");
         cell.className = "cal-cell cal-slot";
-        const iso = dateToISO(d);
 
         // Фильтруем записи, которые начинаются именно в этом часе (чтобы избежать дублирования)
         const bookingsForCell = bookings.filter((b) => {
@@ -433,21 +445,34 @@
             // Вычисляем количество часов для объединения ячеек
             const startM = timeToMinutes(b.time);
             const endM = b.endTime ? timeToMinutes(b.endTime) : (startM + 60);
-            if (startM !== null && endM !== null) {
-              // Вычисляем продолжительность в часах
+            if (startM !== null && endM !== null && endM > startM) {
+              // Вычисляем продолжительность в минутах и часах
               const durationMinutes = endM - startM;
+              // Округляем вверх до полных часов для span
               const durationHours = Math.max(1, Math.ceil(durationMinutes / 60));
               
-              // Вычисляем номер строки (первая строка = 1, это заголовки)
-              // Строка для текущего часа: (hour - startHour) + 2
+              // Вычисляем номер строки в grid
+              // Строка 1 = заголовки (пустая ячейка + 7 дней)
+              // Строка 2 = час startHour (например, 10:00)
+              // Строка 3 = час startHour+1 (например, 11:00)
+              // Итак, строка для текущего часа = (hour - startHour) + 2
               const rowStart = (hour - startHour) + 2;
-              // Количество строк для объединения (но не больше, чем до конца календаря)
-              const maxRows = (endHour - hour);
-              const rowSpan = Math.min(durationHours, maxRows);
               
-              // Объединяем ячейки по вертикали, если запись длится больше часа
+              // Количество строк для объединения
+              // Не должно превышать количество оставшихся часов до конца календаря
+              const remainingHours = endHour - hour;
+              const rowSpan = Math.min(durationHours, remainingHours);
+              
+              // Объединяем ячейки по вертикали через grid-row
+              // Используем синтаксис: start / span count
               if (rowSpan > 1) {
                 cell.style.gridRow = `${rowStart} / span ${rowSpan}`;
+                
+                // Помечаем последующие ячейки как занятые объединенной записью
+                for (let h = hour + 1; h < hour + rowSpan && h < endHour; h++) {
+                  const occupiedKey = `${iso}_${h}`;
+                  occupiedCells.set(occupiedKey, rowSpan);
+                }
               }
             }
             
