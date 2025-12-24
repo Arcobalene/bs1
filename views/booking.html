@@ -39,7 +39,7 @@
       <div class="services-list" id="services-list"></div>
       <div class="divider"></div>
       <h2 id="section-masters-heading">Мастера</h2>
-      <p class="note" id="masters-hint" style="margin-bottom: 12px; display: none;">Нажмите на карточку или фото, чтобы просмотреть работы</p>
+      <p class="note" id="masters-hint" style="margin-bottom: 12px; display: none;">Нажмите на карточку мастера, чтобы просмотреть фото работ</p>
       <div class="masters-list" id="masters-list"></div>
       <p class="note">
         После отправки заявки администратор свяжется с вами в мессенджере или по телефону для подтверждения времени.
@@ -751,28 +751,8 @@
           const card = document.createElement("div");
           card.className = "master-card";
           
-          // Получаем первое фото мастера, если есть
+          // Получаем фото работ мастера
           const photos = m.photos || [];
-          const firstPhoto = photos.length > 0 ? photos[0] : null;
-          
-          // Контейнер для фото
-          const photoContainer = document.createElement("div");
-          photoContainer.className = "master-card-photo";
-          
-          if (firstPhoto && firstPhoto.filename) {
-            const photoImg = document.createElement("img");
-            photoImg.src = `/api/masters/photos/${m.id}/${firstPhoto.filename}`;
-            photoImg.alt = m.name;
-            photoImg.onerror = function() {
-              // Если фото не загрузилось, показываем placeholder
-              this.style.display = 'none';
-              photoContainer.innerHTML = '<div class="master-card-photo-placeholder">👤</div>';
-            };
-            photoContainer.appendChild(photoImg);
-          } else {
-            // Placeholder если фото нет
-            photoContainer.innerHTML = '<div class="master-card-photo-placeholder">👤</div>';
-          }
           
           // Контейнер для информации
           const infoContainer = document.createElement("div");
@@ -789,7 +769,6 @@
           infoContainer.appendChild(nameDiv);
           infoContainer.appendChild(roleDiv);
           
-          card.appendChild(photoContainer);
           card.appendChild(infoContainer);
           
           // Делаем всю карточку кликабельной, если есть фото работ
