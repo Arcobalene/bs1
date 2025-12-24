@@ -7,7 +7,6 @@ const multer = require('multer');
 const Minio = require('minio');
 const https = require('https');
 const http = require('http');
-const fs = require('fs');
 const { users: dbUsers, services, masters, bookings, migrateFromJSON } = require('./database');
 const { 
   timeToMinutes, 
