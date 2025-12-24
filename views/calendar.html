@@ -417,53 +417,51 @@
           
           // Если записей несколько, показываем их все (разные мастера могут работать одновременно)
           if (bookingsForCell.length === 1) {
-            // Одна запись - показываем как обычно
+            // Одна запись - показываем только имя клиента и время
             const b = bookingsForCell[0];
-            const parts = [];
-            if (b.service) parts.push(b.service);
-            if (b.master && b.master.trim()) {
-              parts.push(`👤 ${b.master}`);
-            } else {
-              parts.push('👤 Без мастера');
+            const displayParts = [];
+            
+            // Имя клиента
+            if (b.name) {
+              displayParts.push(b.name);
             }
-            if (b.name) parts.push(b.name);
-            cell.textContent = parts.join(" · ");
-            cell.title = `${b.time}${b.endTime ? '-' + b.endTime : ''} · ${b.service}${b.master ? ' · ' + b.master : ''} · ${b.name}`;
+            
+            // Время записи
+            const timeStr = b.time + (b.endTime ? `-${b.endTime}` : '');
+            displayParts.push(timeStr);
+            
+            cell.textContent = displayParts.join(" · ");
+            
+            // Подробная информация в title (для всплывающей подсказки)
+            const fullInfo = [];
+            if (b.time) fullInfo.push(`Время: ${b.time}${b.endTime ? '-' + b.endTime : ''}`);
+            if (b.name) fullInfo.push(`Клиент: ${b.name}`);
+            if (b.service) fullInfo.push(`Услуга: ${b.service}`);
+            if (b.master && b.master.trim()) {
+              fullInfo.push(`Мастер: ${b.master}`);
+            }
+            cell.title = fullInfo.join('\n');
+            
             const bookingIndex = bookings.indexOf(b);
             if (bookingIndex !== -1) {
               cell.dataset.bookingIndex = String(bookingIndex);
               cell.style.cursor = "pointer";
             }
-            
-            // Адаптация для мобильных - более короткий текст
-            if (isMobile) {
-              const shortParts = [];
-              if (b.name) shortParts.push(b.name);
-              if (b.service) shortParts.push(b.service);
-              cell.textContent = shortParts.join(" / ");
-            }
           } else {
-            // Несколько записей - показываем количество и список мастеров
-            const mastersList = [...new Set(bookingsForCell.map(b => b.master || 'Без мастера'))];
-            const parts = [];
-            parts.push(`${bookingsForCell.length} записей`);
+            // Несколько записей - показываем количество записей
+            cell.textContent = `${bookingsForCell.length} записей`;
             
-            // Адаптация для мобильных
-            if (isMobile) {
-              // На мобильных показываем только количество
-              cell.textContent = `${bookingsForCell.length} записей`;
-            } else {
-              if (mastersList.length <= 3) {
-                parts.push(`👤 ${mastersList.join(', ')}`);
-              } else {
-                parts.push(`👤 ${mastersList.slice(0, 2).join(', ')} +${mastersList.length - 2}`);
-              }
-              cell.textContent = parts.join(" · ");
-            }
+            // Подробная информация в title
+            const fullInfo = bookingsForCell.map(b => {
+              const parts = [];
+              if (b.time) parts.push(b.time + (b.endTime ? `-${b.endTime}` : ''));
+              if (b.name) parts.push(b.name);
+              if (b.service) parts.push(b.service);
+              if (b.master) parts.push(`👤 ${b.master}`);
+              return parts.join(' · ');
+            });
+            cell.title = fullInfo.join('\n');
             
-            cell.title = bookingsForCell.map(b => 
-              `${b.time}${b.endTime ? '-' + b.endTime : ''} · ${b.master || 'Без мастера'}: ${b.name} - ${b.service}`
-            ).join('\n');
             // При клике открываем первую запись
             const b = bookingsForCell[0];
             const bookingIndex = bookings.indexOf(b);
@@ -473,9 +471,6 @@
             }
             // Добавляем индикатор множественных записей
             cell.dataset.multipleBookings = "true";
-            if (!isMobile) {
-              cell.style.fontSize = "0.85em";
-            }
           }
         } else {
           // Свободный слот - можно создать запись
