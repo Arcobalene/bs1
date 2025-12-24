@@ -1482,7 +1482,7 @@ header {
 
   .calendar-scroll-container {
     width: 100% !important;
-    max-width: calc(100vw - 24px) !important;
+    max-width: 100% !important;
     overflow-x: auto !important;
     overflow-y: visible;
     -webkit-overflow-scrolling: touch;
@@ -1512,8 +1512,8 @@ header {
   }
 
   .calendar-grid {
-    min-width: 680px !important;
-    width: 680px !important;
+    min-width: 700px !important;
+    width: 700px !important;
     max-width: none !important;
     margin: 0 !important;
     box-sizing: border-box !important;
@@ -1874,12 +1874,12 @@ header {
 
   /* Оптимизация календаря на очень маленьких экранах */
   .calendar-scroll-container {
-    max-width: calc(100vw - 16px) !important;
+    max-width: 100% !important;
   }
 
   .calendar-grid {
-    min-width: 650px !important;
-    width: 650px !important;
+    min-width: 700px !important;
+    width: 700px !important;
     max-width: none !important;
     font-size: 0.9em;
   }
