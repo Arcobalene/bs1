@@ -385,6 +385,10 @@
     });
 
     const selectedMaster = document.getElementById('calendar-master-filter')?.value || "";
+    
+    // Создаем карту для отслеживания занятых ячеек объединенными записями
+    // Ключ: `${dateISO}_${hour}`, значение: true
+    const occupiedBySpan = new Set();
 
     for (let hour = startHour; hour < endHour; hour++) {
       const hourCell = document.createElement("div");
@@ -393,9 +397,20 @@
       grid.appendChild(hourCell);
 
       weekDates.forEach((d) => {
-        const cell = document.createElement("div");
-        cell.className = "cal-cell cal-slot";
         const iso = dateToISO(d);
+        const cellKey = `${iso}_${hour}`;
+        
+        const cell = document.createElement("div");
+        
+        // Если эта ячейка занята объединенной записью из предыдущего часа, делаем её пустой
+        // Она будет перекрыта объединенной записью благодаря grid-row: span
+        if (occupiedBySpan.has(cellKey)) {
+          cell.className = "cal-cell";
+          grid.appendChild(cell);
+          return;
+        }
+        
+        cell.className = "cal-cell cal-slot";
 
         // Фильтруем записи, которые начинаются именно в этом часе (чтобы избежать дублирования)
         const bookingsForCell = bookings.filter((b) => {
@@ -456,6 +471,11 @@
               if (rowSpan > 1) {
                 cell.style.gridRow = `${rowStart} / span ${rowSpan}`;
                 
+                // Помечаем последующие ячейки как занятые объединенной записью
+                for (let h = hour + 1; h < hour + rowSpan && h < endHour; h++) {
+                  const occupiedKey = `${iso}_${h}`;
+                  occupiedBySpan.add(occupiedKey);
+                }
               }
             }
             
