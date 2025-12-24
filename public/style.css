@@ -504,8 +504,38 @@ footer {
 
 .calendar-wrapper {
   margin-top: 8px;
+}
+
+/* Контейнер для горизонтальной прокрутки календаря */
+.calendar-scroll-container {
+  width: 100%;
   overflow-x: auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-sizing: border-box;
+  /* Стилизация полосы прокрутки */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(168, 85, 247, 0.3) transparent;
+}
+
+.calendar-scroll-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.calendar-scroll-container::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+.calendar-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.3);
+  border-radius: 4px;
+}
+
+.calendar-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(168, 85, 247, 0.5);
 }
 
 .calendar-grid {
@@ -514,6 +544,10 @@ footer {
   overflow: hidden;
   background: #f9fafb;
   display: grid;
+  min-width: 900px; /* Минимальная ширина больше ширины экрана телефона */
+  width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .cal-cell {
@@ -1323,47 +1357,50 @@ header {
   }
 
   .calendar-wrapper {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .calendar-scroll-container {
+    width: 100% !important;
+    max-width: calc(100vw - 24px) !important;
     overflow-x: auto !important;
     overflow-y: visible;
     -webkit-overflow-scrolling: touch;
     margin: 0 !important;
     padding: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    position: relative;
     box-sizing: border-box !important;
-    /* Ограничиваем wrapper шириной viewport минус отступы контейнера (12px с каждой стороны = 24px) */
-    max-width: calc(100vw - 24px) !important;
-    /* Добавляем визуальный индикатор скролла */
     scrollbar-width: thin;
     scrollbar-color: rgba(168, 85, 247, 0.3) transparent;
   }
 
-  .calendar-wrapper::-webkit-scrollbar {
+  .calendar-scroll-container::-webkit-scrollbar {
     height: 8px;
   }
 
-  .calendar-wrapper::-webkit-scrollbar-track {
+  .calendar-scroll-container::-webkit-scrollbar-track {
     background: #f3f4f6;
     border-radius: 4px;
   }
 
-  .calendar-wrapper::-webkit-scrollbar-thumb {
+  .calendar-scroll-container::-webkit-scrollbar-thumb {
     background: rgba(168, 85, 247, 0.3);
     border-radius: 4px;
   }
 
-  .calendar-wrapper::-webkit-scrollbar-thumb:hover {
+  .calendar-scroll-container::-webkit-scrollbar-thumb:hover {
     background: rgba(168, 85, 247, 0.5);
   }
 
   .calendar-grid {
     min-width: 680px !important;
     width: 680px !important;
-    max-width: 680px !important;
-    margin: 0 auto !important;
+    max-width: none !important;
+    margin: 0 !important;
     box-sizing: border-box !important;
-    /* Предотвращаем выход за границы */
     flex-shrink: 0;
   }
 
@@ -1702,10 +1739,15 @@ header {
   }
 
   /* Оптимизация календаря на очень маленьких экранах */
+  .calendar-scroll-container {
+    max-width: calc(100vw - 16px) !important;
+  }
+
   .calendar-grid {
-    min-width: 600px;
-    width: 600px;
-    max-width: none;
+    min-width: 650px !important;
+    width: 650px !important;
+    max-width: none !important;
+    font-size: 0.9em;
   }
 
   .admin-calendar-card {
@@ -1727,8 +1769,12 @@ header {
   }
 
   .calendar-wrapper {
-    margin: 0;
-    width: 100%;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .calendar-scroll-container {
     max-width: calc(100vw - 16px) !important;
   }
 
