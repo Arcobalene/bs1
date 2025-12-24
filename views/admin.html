@@ -167,6 +167,11 @@
               <p class="note">Цвет фона карточек</p>
         </div>
       </div>
+      <div>
+        <label for="design-header-opacity">Прозрачность заголовка: <span id="header-opacity-value">25</span>%</label>
+        <input type="range" id="design-header-opacity" min="0" max="100" value="25" step="5" />
+        <p class="note">Регулирует прозрачность фона заголовка (0% - полностью прозрачный, 100% - полностью непрозрачный)</p>
+      </div>
           <div>
             <label for="design-text-color">Цвет текста</label>
             <input type="color" id="design-text-color" value="#222222" />
@@ -588,6 +593,7 @@
     primaryColor: '#f973b6',
     secondaryColor: '#a855f7',
     headerBg: '#f973b6',
+    headerOpacity: 25,
     cardBg: '#ffffff',
     textColor: '#222222',
     buttonTextColor: '#ffffff',
@@ -635,6 +641,9 @@
     document.getElementById('design-primary-color').value = designSettings.primaryColor || '#f973b6';
     document.getElementById('design-secondary-color').value = designSettings.secondaryColor || '#a855f7';
     document.getElementById('design-header-bg').value = designSettings.headerBg || '#f973b6';
+    const headerOpacityValue = designSettings.headerOpacity !== undefined ? designSettings.headerOpacity : 25;
+    document.getElementById('design-header-opacity').value = headerOpacityValue;
+    document.getElementById('header-opacity-value').textContent = headerOpacityValue;
     document.getElementById('design-card-bg').value = designSettings.cardBg || '#ffffff';
     document.getElementById('design-text-color').value = designSettings.textColor || '#222222';
     document.getElementById('design-button-text-color').value = designSettings.buttonTextColor || '#ffffff';
@@ -660,6 +669,15 @@
     
     // Показываем/скрываем дополнительные поля в зависимости от типа фона
     updatePageBgFields();
+    
+    // Обработчик для ползунка прозрачности header
+    const headerOpacitySlider = document.getElementById('design-header-opacity');
+    const headerOpacityValueSpan = document.getElementById('header-opacity-value');
+    if (headerOpacitySlider && headerOpacityValueSpan) {
+      headerOpacitySlider.addEventListener('input', (e) => {
+        headerOpacityValueSpan.textContent = e.target.value;
+      });
+    }
     
     // Показываем текущий логотип, если есть
     if (designSettings.logo) {
@@ -828,6 +846,7 @@
         primaryColor: document.getElementById('design-primary-color').value,
         secondaryColor: document.getElementById('design-secondary-color').value,
         headerBg: document.getElementById('design-header-bg').value,
+        headerOpacity: parseInt(document.getElementById('design-header-opacity').value) || 25,
         cardBg: document.getElementById('design-card-bg').value,
         textColor: document.getElementById('design-text-color').value,
         buttonTextColor: document.getElementById('design-button-text-color').value,
@@ -903,6 +922,7 @@
         primaryColor: '#f973b6',
         secondaryColor: '#a855f7',
         headerBg: '#f973b6',
+        headerOpacity: 25,
         cardBg: '#ffffff',
         textColor: '#222222',
         buttonTextColor: '#ffffff',
@@ -936,6 +956,15 @@
   // Загружаем настройки дизайна при загрузке страницы
   loadDesignSettings();
 
+  // Обработчик для ползунка прозрачности header (работает независимо от загрузки)
+  const headerOpacitySlider = document.getElementById('design-header-opacity');
+  const headerOpacityValueSpan = document.getElementById('header-opacity-value');
+  if (headerOpacitySlider && headerOpacityValueSpan) {
+    headerOpacitySlider.addEventListener('input', (e) => {
+      headerOpacityValueSpan.textContent = e.target.value;
+    });
+  }
+
   // Функция применения дизайна на всех страницах
   function applyDesign(design) {
     if (!design) return;
@@ -946,6 +975,7 @@
     const primaryColor = design.primaryColor || '#f973b6';
     const secondaryColor = design.secondaryColor || '#a855f7';
     const headerBg = design.headerBg || '#f973b6';
+    const headerOpacity = design.headerOpacity !== undefined ? design.headerOpacity : 25;
     const cardBg = design.cardBg || '#ffffff';
     const textColor = design.textColor || '#222222';
     const buttonTextColor = design.buttonTextColor || '#ffffff';
@@ -1034,7 +1064,7 @@
         }
       }
       header {
-        background: rgba(${hexToRgb(headerBg)}, 0.25) !important;
+        background: rgba(${hexToRgb(headerBg)}, ${(design.headerOpacity || 25) / 100}) !important;
         backdrop-filter: blur(20px) !important;
         -webkit-backdrop-filter: blur(20px) !important;
         border-bottom: 1px solid rgba(255, 255, 255, 0.18) !important;
@@ -1043,14 +1073,14 @@
       }
       @media (max-width: 768px) {
         header {
-          background: rgba(${hexToRgb(headerBg)}, 0.25) !important;
+          background: rgba(${hexToRgb(headerBg)}, ${(design.headerOpacity || 25) / 100}) !important;
           backdrop-filter: blur(20px) !important;
           -webkit-backdrop-filter: blur(20px) !important;
         }
       }
       @media (max-width: 480px) {
         header {
-          background: rgba(${hexToRgb(headerBg)}, 0.25) !important;
+          background: rgba(${hexToRgb(headerBg)}, ${(design.headerOpacity || 25) / 100}) !important;
           backdrop-filter: blur(20px) !important;
           -webkit-backdrop-filter: blur(20px) !important;
         }

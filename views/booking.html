@@ -401,6 +401,7 @@
     const primaryColor = design.primaryColor || '#f973b6';
     const secondaryColor = design.secondaryColor || '#a855f7';
     const headerBg = design.headerBg || '#f973b6';
+    const headerOpacity = design.headerOpacity !== undefined ? design.headerOpacity : 25;
     const cardBg = design.cardBg || '#ffffff';
     const textColor = design.textColor || '#222222';
     const buttonTextColor = design.buttonTextColor || '#ffffff';
@@ -538,7 +539,7 @@
         }
       }
       header {
-        background: rgba(${hexToRgb(headerBg)}, 0.25) !important;
+        background: rgba(${hexToRgb(headerBg)}, ${headerOpacity / 100}) !important;
         backdrop-filter: blur(20px) !important;
         -webkit-backdrop-filter: blur(20px) !important;
         border-bottom: 1px solid rgba(255, 255, 255, 0.18) !important;
@@ -547,14 +548,14 @@
       }
       @media (max-width: 768px) {
         header {
-          background: rgba(${hexToRgb(headerBg)}, 0.25) !important;
+          background: rgba(${hexToRgb(headerBg)}, ${headerOpacity / 100}) !important;
           backdrop-filter: blur(20px) !important;
           -webkit-backdrop-filter: blur(20px) !important;
         }
       }
       @media (max-width: 480px) {
         header {
-          background: rgba(${hexToRgb(headerBg)}, 0.25) !important;
+          background: rgba(${hexToRgb(headerBg)}, ${headerOpacity / 100}) !important;
           backdrop-filter: blur(20px) !important;
           -webkit-backdrop-filter: blur(20px) !important;
         }
