@@ -488,13 +488,13 @@ const CalendarRenderer = {
 
   setupGridLayout(grid) {
     const isMobile = window.innerWidth <= 768;
-    const timeColumnWidth = isMobile ? "50px" : "80px";
+    const timeColumnWidth = isMobile ? "45px" : "80px";
     
     if (isMobile) {
-      grid.style.minWidth = "700px";
-      grid.style.width = "700px";
+      grid.style.minWidth = "680px";
+      grid.style.width = "680px";
       grid.style.maxWidth = "none";
-      grid.style.gridTemplateColumns = `${timeColumnWidth} repeat(7, 93px)`;
+      grid.style.gridTemplateColumns = `${timeColumnWidth} repeat(7, 91px)`;
     } else {
       grid.style.minWidth = "";
       grid.style.width = "";

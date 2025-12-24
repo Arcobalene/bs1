@@ -1512,8 +1512,8 @@ header {
   }
 
   .calendar-grid {
-    min-width: 700px !important;
-    width: 700px !important;
+    min-width: 680px !important;
+    width: 680px !important;
     max-width: none !important;
     margin: 0 !important;
     box-sizing: border-box !important;
@@ -1875,11 +1875,13 @@ header {
   /* Оптимизация календаря на очень маленьких экранах */
   .calendar-scroll-container {
     max-width: 100% !important;
+    width: 100% !important;
+    overflow-x: auto !important;
   }
 
   .calendar-grid {
-    min-width: 700px !important;
-    width: 700px !important;
+    min-width: 680px !important;
+    width: 680px !important;
     max-width: none !important;
     font-size: 0.9em;
   }
@@ -1909,7 +1911,9 @@ header {
   }
 
   .calendar-scroll-container {
-    max-width: calc(100vw - 16px) !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    overflow-x: auto !important;
   }
 
   .container {
