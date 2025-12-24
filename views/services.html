@@ -592,6 +592,7 @@
     const primaryColor = design.primaryColor || '#f973b6';
     const secondaryColor = design.secondaryColor || '#a855f7';
     const headerBg = design.headerBg || '#f973b6';
+    const headerOpacity = design.headerOpacity !== undefined ? design.headerOpacity : 25;
     const cardBg = design.cardBg || '#ffffff';
     const textColor = design.textColor || '#222222';
     const buttonTextColor = design.buttonTextColor || '#ffffff';
@@ -608,8 +609,23 @@
     if (pageBgType === 'gradient') {
       bodyBg = `linear-gradient(135deg, ${pageBg}, ${pageBgSecondary})`;
     } else if (pageBgType === 'image' && pageBgImage) {
-      bodyBg = `url(${pageBgImage}) center/cover no-repeat`;
+      bodyBg = `url(${pageBgImage})`;
     }
+
+    // Проверяем, является ли фон изображением
+    const isImageBg = pageBgType === 'image' && pageBgImage;
+    const bgImageStyles = isImageBg ? `
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        background-attachment: fixed !important;
+      ` : '';
+    const bgImageStylesMobile = isImageBg ? `
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        background-attachment: scroll !important;
+      ` : '';
 
     // Применяем логотип в header, если есть
     const logoContainer = document.getElementById('logo-container');
@@ -629,12 +645,54 @@
     }
 
     style.textContent = `
-      body {
+      html {
         background: ${bodyBg} !important;
+        min-height: 100% !important;
+        ${bgImageStyles}
+      }
+      body {
+        background: transparent !important;
+        min-height: 100% !important;
+      }
+      @media (max-width: 768px) {
+        html {
+          background: ${bodyBg} !important;
+          ${bgImageStylesMobile}
+        }
+        body {
+          background: transparent !important;
+        }
+      }
+      @media (max-width: 480px) {
+        html {
+          background: ${bodyBg} !important;
+          ${bgImageStylesMobile}
+        }
+        body {
+          background: transparent !important;
+        }
       }
       header {
-        background: linear-gradient(135deg, ${headerBg}, ${secondaryColor}) !important;
+        background: rgba(${hexToRgb(headerBg)}, ${headerOpacity / 100}) !important;
+        backdrop-filter: blur(20px) !important;
+        -webkit-backdrop-filter: blur(20px) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.18) !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important;
         position: relative !important;
+      }
+      @media (max-width: 768px) {
+        header {
+          background: rgba(${hexToRgb(headerBg)}, ${headerOpacity / 100}) !important;
+          backdrop-filter: blur(20px) !important;
+          -webkit-backdrop-filter: blur(20px) !important;
+        }
+      }
+      @media (max-width: 480px) {
+        header {
+          background: rgba(${hexToRgb(headerBg)}, ${headerOpacity / 100}) !important;
+          backdrop-filter: blur(20px) !important;
+          -webkit-backdrop-filter: blur(20px) !important;
+        }
       }
       .card {
         background: ${cardBg} !important;
