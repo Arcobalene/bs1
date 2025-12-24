@@ -448,13 +448,15 @@ const CalendarRenderer = {
       hourCell.textContent = `${String(hour).padStart(2, "0")}:00`;
       grid.appendChild(hourCell);
 
-      weekDates.forEach((d) => {
+      weekDates.forEach((d, dayIdx) => {
         const iso = Utils.dateToISO(d);
         const cellKey = `${iso}_${hour}`;
         
         if (occupiedCells[cellKey]) return;
         
-        const cell = this.createTimeSlotCell(iso, hour, bookingsByDay[iso], occupiedCells);
+        // Индекс колонки: 2 (после колонки часов) + индекс дня (0-6)
+        const columnIndex = dayIdx + 2;
+        const cell = this.createTimeSlotCell(iso, hour, bookingsByDay[iso], occupiedCells, columnIndex);
         grid.appendChild(cell);
       });
     }
@@ -502,7 +504,7 @@ const CalendarRenderer = {
     return bookingsByDay;
   },
 
-  createTimeSlotCell(iso, hour, dayBookings, occupiedCells) {
+  createTimeSlotCell(iso, hour, dayBookings, occupiedCells, columnIndex) {
     const cell = document.createElement("div");
     cell.className = "cal-cell cal-slot";
 
@@ -518,7 +520,7 @@ const CalendarRenderer = {
       cell.classList.add("cal-slot-busy");
       
       if (bookingsForThisHour.length === 1) {
-        this.renderSingleBooking(cell, bookingsForThisHour[0], hour, iso, occupiedCells);
+        this.renderSingleBooking(cell, bookingsForThisHour[0], hour, iso, occupiedCells, columnIndex);
       } else {
         this.renderMultipleBookings(cell, bookingsForThisHour);
       }
@@ -533,7 +535,7 @@ const CalendarRenderer = {
     return cell;
   },
 
-  renderSingleBooking(cell, booking, hour, iso, occupiedCells) {
+  renderSingleBooking(cell, booking, hour, iso, occupiedCells, columnIndex) {
     const displayParts = [];
     if (booking.name) displayParts.push(booking.name);
     const timeStr = booking.time + (booking.endTime ? `-${booking.endTime}` : '');
@@ -550,7 +552,9 @@ const CalendarRenderer = {
       const rowSpan = Math.min(durationHours, CalendarApp.END_HOUR - hour);
       
       if (rowSpan > 1) {
+        // Указываем и строку и колонку, чтобы ячейка не сдвигалась
         cell.style.gridRow = `${rowStart} / span ${rowSpan}`;
+        cell.style.gridColumn = columnIndex;
         for (let h = hour + 1; h < hour + rowSpan && h < CalendarApp.END_HOUR; h++) {
           occupiedCells[`${iso}_${h}`] = true;
         }
