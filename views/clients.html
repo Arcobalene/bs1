@@ -323,22 +323,34 @@
     }
 
     style.textContent = `
-      body {
+      html {
         background: ${bodyBg} !important;
+        min-height: 100% !important;
+      }
+      body {
+        background: transparent !important;
+        min-height: 100% !important;
       }
       @media (max-width: 768px) {
-        body {
+        html {
           background: ${bodyBg} !important;
+        }
+        body {
+          background: transparent !important;
         }
       }
       @media (max-width: 480px) {
-        body {
+        html {
           background: ${bodyBg} !important;
+        }
+        body {
+          background: transparent !important;
         }
       }
       header {
         background: linear-gradient(135deg, ${headerBg}, ${secondaryColor}) !important;
         position: relative !important;
+        background-attachment: scroll !important;
       }
       @media (max-width: 768px) {
         header {
