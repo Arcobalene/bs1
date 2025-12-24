@@ -963,7 +963,7 @@
     if (pageBgType === 'gradient') {
       bodyBg = `linear-gradient(135deg, ${pageBg}, ${pageBgSecondary})`;
     } else if (pageBgType === 'image' && pageBgImage) {
-      bodyBg = `url(${pageBgImage}) center/cover no-repeat`;
+      bodyBg = `url(${pageBgImage})`;
     }
 
     // Применяем логотип в header, если есть
@@ -989,11 +989,27 @@
       if (logoImg) logoImg.remove();
     }
 
+    // Проверяем, является ли фон изображением
+    const isImageBg = pageBgType === 'image' && pageBgImage;
+    const bgImageStyles = isImageBg ? `
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        background-attachment: fixed !important;
+      ` : '';
+    const bgImageStylesMobile = isImageBg ? `
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        background-attachment: scroll !important;
+      ` : '';
+
     // Добавляем CSS для всех элементов через style элемент
     style.textContent = `
       html {
         background: ${bodyBg} !important;
         min-height: 100% !important;
+        ${bgImageStyles}
       }
       body {
         background: transparent !important;
@@ -1002,6 +1018,7 @@
       @media (max-width: 768px) {
         html {
           background: ${bodyBg} !important;
+          ${bgImageStylesMobile}
         }
         body {
           background: transparent !important;
@@ -1010,6 +1027,7 @@
       @media (max-width: 480px) {
         html {
           background: ${bodyBg} !important;
+          ${bgImageStylesMobile}
         }
         body {
           background: transparent !important;
