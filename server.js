@@ -2,10 +2,12 @@ const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
 const path = require('path');
+const fs = require('fs');
 const multer = require('multer');
 const Minio = require('minio');
 const https = require('https');
 const http = require('http');
+const fs = require('fs');
 const { users: dbUsers, services, masters, bookings, migrateFromJSON } = require('./database');
 const { 
   timeToMinutes, 
@@ -24,6 +26,77 @@ const {
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
+
+// Настройка HTTPS
+const USE_HTTPS = process.env.USE_HTTPS === 'true';
+const SSL_CERT_PATH = process.env.SSL_CERT_PATH || '/etc/letsencrypt/live';
+const SSL_DOMAIN = process.env.SSL_DOMAIN || process.env.DOMAIN || 'localhost';
+const FORCE_HTTPS = process.env.FORCE_HTTPS !== 'false'; // По умолчанию true, если USE_HTTPS включен
+
+let httpsOptions = null;
+
+// Функция для загрузки SSL сертификатов
+function loadSSLCertificates() {
+  if (!USE_HTTPS) {
+    console.log('ℹ️  HTTPS отключен (USE_HTTPS=false)');
+    return null;
+  }
+
+  // Пути к сертификатам Let's Encrypt
+  const certPath = path.join(SSL_CERT_PATH, SSL_DOMAIN, 'fullchain.pem');
+  const keyPath = path.join(SSL_CERT_PATH, SSL_DOMAIN, 'privkey.pem');
+  
+  // Альтернативные пути (если указаны через переменные окружения)
+  const customCertPath = process.env.SSL_CERT_FILE;
+  const customKeyPath = process.env.SSL_KEY_FILE;
+
+  let certFile, keyFile;
+
+  if (customCertPath && customKeyPath) {
+    certFile = customCertPath;
+    keyFile = customKeyPath;
+    console.log(`🔒 Используются кастомные SSL сертификаты`);
+  } else {
+    certFile = certPath;
+    keyFile = keyPath;
+    console.log(`🔒 Используются Let's Encrypt сертификаты для домена: ${SSL_DOMAIN}`);
+  }
+
+  try {
+    if (!fs.existsSync(certFile)) {
+      console.error(`❌ SSL сертификат не найден: ${certFile}`);
+      console.error(`   Убедитесь, что сертификат установлен или установите USE_HTTPS=false для отключения HTTPS`);
+      return null;
+    }
+
+    if (!fs.existsSync(keyFile)) {
+      console.error(`❌ SSL приватный ключ не найден: ${keyFile}`);
+      return null;
+    }
+
+    const options = {
+      cert: fs.readFileSync(certFile, 'utf8'),
+      key: fs.readFileSync(keyFile, 'utf8')
+    };
+
+    console.log(`✅ SSL сертификаты загружены успешно`);
+    console.log(`   Сертификат: ${certFile}`);
+    console.log(`   Ключ: ${keyFile}`);
+    return options;
+  } catch (error) {
+    console.error(`❌ Ошибка загрузки SSL сертификатов:`, error.message);
+    return null;
+  }
+}
+
+// Загружаем SSL сертификаты
+if (USE_HTTPS) {
+  httpsOptions = loadSSLCertificates();
+  if (!httpsOptions && USE_HTTPS) {
+    console.warn('⚠️  HTTPS включен, но сертификаты не загружены. Приложение запустится без HTTPS.');
+  }
+}
 
 // Validate critical environment variables
 const SESSION_SECRET = process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production';
@@ -178,10 +251,28 @@ app.use(express.static('public', { maxAge: process.env.NODE_ENV === 'production'
 // Определяем режим разработки (должно быть до использования)
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
+// Редирект HTTP на HTTPS (если включен HTTPS и FORCE_HTTPS)
+if (USE_HTTPS && httpsOptions && FORCE_HTTPS) {
+  app.use((req, res, next) => {
+    // Пропускаем редирект для healthcheck и локальных подключений
+    if (req.path === '/health' || req.headers.host?.startsWith('localhost') || req.headers.host?.startsWith('127.0.0.1')) {
+      return next();
+    }
+    
+    // Редирект только если запрос не HTTPS (через прокси может быть заголовок X-Forwarded-Proto)
+    const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    if (!isSecure) {
+      const host = req.headers.host || req.hostname;
+      return res.redirect(301, `https://${host}${req.originalUrl}`);
+    }
+    next();
+  });
+}
+
 // Настройка сессий
-// Определяем, используется ли HTTPS
+// Определяем, используется ли HTTPS (для secure cookies)
+const isHttps = USE_HTTPS && httpsOptions !== null;
 // ВАЖНО: secure: true только для HTTPS, иначе cookie не установится в браузере
-const isHttps = process.env.HTTPS_ENABLED === 'true';
 const cookieSecure = isHttps; // secure: true только для HTTPS
 
 app.use(session({
@@ -2812,21 +2903,58 @@ app.use((req, res) => {
     await initDemoAccount();
     
     // Запускаем сервер
-    app.listen(PORT, () => {
-      console.log(`Сервер запущен на http://localhost:${PORT}`);
-      console.log(`Окружение: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`База данных: ${process.env.DB_TYPE || 'SQLite'}`);
-      console.log('');
-      console.log('Доступные страницы:');
-      console.log(`  Главная: http://localhost:${PORT}/`);
-      console.log(`  Вход: http://localhost:${PORT}/login`);
-      console.log(`  Регистрация: http://localhost:${PORT}/register`);
-      console.log('');
-      console.log('Демо-аккаунт:');
-      console.log('  Логин: admin');
-      console.log('  Пароль: admin123');
-      console.log('');
-    });
+    if (USE_HTTPS && httpsOptions) {
+      // Запускаем HTTPS сервер
+      const httpsServer = https.createServer(httpsOptions, app);
+      httpsServer.listen(HTTPS_PORT, () => {
+        console.log(`🔒 HTTPS сервер запущен на https://localhost:${HTTPS_PORT}`);
+        console.log(`Окружение: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`База данных: ${process.env.DB_TYPE || 'SQLite'}`);
+        console.log('');
+        console.log('Доступные страницы (HTTPS):');
+        console.log(`  Главная: https://localhost:${HTTPS_PORT}/`);
+        console.log(`  Вход: https://localhost:${HTTPS_PORT}/login`);
+        console.log(`  Регистрация: https://localhost:${HTTPS_PORT}/register`);
+        console.log('');
+        console.log('Демо-аккаунт:');
+        console.log('  Логин: admin');
+        console.log('  Пароль: admin123');
+        console.log('');
+        
+        // Если включен FORCE_HTTPS, запускаем HTTP сервер только для редиректа
+        if (FORCE_HTTPS) {
+          const httpServer = http.createServer((req, res) => {
+            const host = req.headers.host || 'localhost';
+            const httpsUrl = `https://${host.replace(/:\d+$/, '')}:${HTTPS_PORT}${req.url}`;
+            res.writeHead(301, { 'Location': httpsUrl });
+            res.end();
+          });
+          httpServer.listen(PORT, () => {
+            console.log(`↪️  HTTP редирект запущен на http://localhost:${PORT} (редирект на HTTPS)`);
+          });
+        }
+      });
+    } else {
+      // Запускаем обычный HTTP сервер
+      app.listen(PORT, () => {
+        console.log(`Сервер запущен на http://localhost:${PORT}`);
+        if (USE_HTTPS) {
+          console.log('⚠️  HTTPS включен, но сертификаты не найдены. Используется HTTP.');
+        }
+        console.log(`Окружение: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`База данных: ${process.env.DB_TYPE || 'SQLite'}`);
+        console.log('');
+        console.log('Доступные страницы:');
+        console.log(`  Главная: http://localhost:${PORT}/`);
+        console.log(`  Вход: http://localhost:${PORT}/login`);
+        console.log(`  Регистрация: http://localhost:${PORT}/register`);
+        console.log('');
+        console.log('Демо-аккаунт:');
+        console.log('  Логин: admin');
+        console.log('  Пароль: admin123');
+        console.log('');
+      });
+    }
   } catch (error) {
     console.error('Ошибка инициализации:', error);
     process.exit(1);

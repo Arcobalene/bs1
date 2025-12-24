@@ -6,14 +6,26 @@ services:
     container_name: beauty-studio
     ports:
       - "${PORT:-3000}:3000"
+      - "${HTTPS_PORT:-3443}:${HTTPS_PORT:-3443}"
     volumes:
       - ./views:/app/views
       - ./public:/app/public
+      # Монтируем SSL сертификаты только если USE_HTTPS=true
+      # Раскомментируйте следующую строку и укажите правильный путь к сертификатам на хосте:
+      # - /etc/letsencrypt/live:/etc/letsencrypt/live:ro
     restart: unless-stopped
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
       - PORT=3000
+      - USE_HTTPS=${USE_HTTPS:-false}
+      - HTTPS_PORT=${HTTPS_PORT:-3443}
+      - DOMAIN=${DOMAIN:-}
+      - SSL_DOMAIN=${SSL_DOMAIN:-${DOMAIN:-localhost}}
+      - SSL_CERT_PATH=${SSL_CERT_PATH:-/etc/letsencrypt/live}
+      - SSL_CERT_FILE=${SSL_CERT_FILE:-}
+      - SSL_KEY_FILE=${SSL_KEY_FILE:-}
+      - FORCE_HTTPS=${FORCE_HTTPS:-true}
       - DB_TYPE=postgres
       - DB_HOST=db
       - DB_PORT=5432
