@@ -612,6 +612,10 @@ footer {
   white-space: normal;
   overflow-wrap: break-word;
   word-break: break-word;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 26px;
 }
 
 .cal-corner {

@@ -397,19 +397,17 @@
         cell.className = "cal-cell cal-slot";
         const iso = dateToISO(d);
 
-        // Фильтруем записи для этой ячейки
+        // Фильтруем записи, которые начинаются именно в этом часе (не все пересекающиеся)
         const bookingsForCell = bookings.filter((b) => {
           if (b.date !== iso) return false;
           // Если выбран мастер, показываем только его записи
           if (selectedMaster && b.master !== selectedMaster) return false;
           const startM = timeToMinutes(b.time);
           if (startM === null) return false;
-          // Если endTime не указан, считаем что запись занимает 1 час
-          const endM = b.endTime ? timeToMinutes(b.endTime) : (startM + 60);
-          if (endM === null) return false;
           const cellStart = hour * 60;
           const cellEnd = (hour + 1) * 60;
-          return startM < cellEnd && endM > cellStart;
+          // Запись должна начинаться именно в этой ячейке (в этом часе)
+          return startM >= cellStart && startM < cellEnd;
         });
 
         if (bookingsForCell.length) {
@@ -431,6 +429,20 @@
             displayParts.push(timeStr);
             
             cell.textContent = displayParts.join(" · ");
+            
+            // Вычисляем количество часов для объединения ячеек
+            const startM = timeToMinutes(b.time);
+            const endM = b.endTime ? timeToMinutes(b.endTime) : (startM + 60);
+            if (startM !== null && endM !== null) {
+              const durationHours = Math.ceil((endM - startM) / 60);
+              // Объединяем ячейки по вертикали (grid-row)
+              // +2 потому что первая строка - заголовки (пустая ячейка + дни недели)
+              const rowStart = (hour - startHour) + 2;
+              const rowSpan = Math.min(durationHours, (endHour - hour));
+              if (rowSpan > 1) {
+                cell.style.gridRow = `${rowStart} / span ${rowSpan}`;
+              }
+            }
             
             // Подробная информация в title (для всплывающей подсказки)
             const fullInfo = [];
