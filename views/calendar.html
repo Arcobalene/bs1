@@ -397,20 +397,16 @@
         cell.className = "cal-cell cal-slot";
         const iso = dateToISO(d);
 
-        // Фильтруем записи для этой ячейки
-        // Показываем запись только в ячейке, где она начинается (чтобы избежать дублирования)
+        // Фильтруем записи, которые начинаются именно в этом часе (чтобы избежать дублирования)
         const bookingsForCell = bookings.filter((b) => {
           if (b.date !== iso) return false;
           // Если выбран мастер, показываем только его записи
           if (selectedMaster && b.master !== selectedMaster) return false;
           const startM = timeToMinutes(b.time);
           if (startM === null) return false;
-          // Если endTime не указан, считаем что запись занимает 1 час
-          const endM = b.endTime ? timeToMinutes(b.endTime) : (startM + 60);
-          if (endM === null) return false;
           const cellStart = hour * 60;
           const cellEnd = (hour + 1) * 60;
-          // Показываем запись только в ячейке, где она начинается (чтобы не дублировать)
+          // Показываем запись только в ячейке, где она начинается
           return startM >= cellStart && startM < cellEnd;
         });
 
@@ -433,6 +429,27 @@
             displayParts.push(timeStr);
             
             cell.textContent = displayParts.join(" · ");
+            
+            // Вычисляем количество часов для объединения ячеек
+            const startM = timeToMinutes(b.time);
+            const endM = b.endTime ? timeToMinutes(b.endTime) : (startM + 60);
+            if (startM !== null && endM !== null) {
+              // Вычисляем продолжительность в часах
+              const durationMinutes = endM - startM;
+              const durationHours = Math.max(1, Math.ceil(durationMinutes / 60));
+              
+              // Вычисляем номер строки (первая строка = 1, это заголовки)
+              // Строка для текущего часа: (hour - startHour) + 2
+              const rowStart = (hour - startHour) + 2;
+              // Количество строк для объединения (но не больше, чем до конца календаря)
+              const maxRows = (endHour - hour);
+              const rowSpan = Math.min(durationHours, maxRows);
+              
+              // Объединяем ячейки по вертикали, если запись длится больше часа
+              if (rowSpan > 1) {
+                cell.style.gridRow = `${rowStart} / span ${rowSpan}`;
+              }
+            }
             
             // Подробная информация в title (для всплывающей подсказки)
             const fullInfo = [];

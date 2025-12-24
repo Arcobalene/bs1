@@ -616,6 +616,8 @@ footer {
   align-items: center;
   justify-content: flex-start;
   min-height: 26px;
+  border-right: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .cal-corner {
