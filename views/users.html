@@ -421,9 +421,29 @@
       body {
         background: ${bodyBg} !important;
       }
+      @media (max-width: 768px) {
+        body {
+          background: ${bodyBg} !important;
+        }
+      }
+      @media (max-width: 480px) {
+        body {
+          background: ${bodyBg} !important;
+        }
+      }
       header {
         background: linear-gradient(135deg, ${headerBg}, ${secondaryColor}) !important;
         position: relative !important;
+      }
+      @media (max-width: 768px) {
+        header {
+          background: linear-gradient(135deg, ${headerBg}, ${secondaryColor}) !important;
+        }
+      }
+      @media (max-width: 480px) {
+        header {
+          background: linear-gradient(135deg, ${headerBg}, ${secondaryColor}) !important;
+        }
       }
       .card {
         background: ${cardBg} !important;
