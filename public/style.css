@@ -238,6 +238,10 @@ header p {
   border-color: #d1d5db;
 }
 
+.master-card[style*="cursor: pointer"]:hover {
+  background: #f3f4f6;
+}
+
 .master-card-photo {
   width: 80px;
   height: 80px;
@@ -250,6 +254,7 @@ header p {
   justify-content: center;
   flex-shrink: 0;
   position: relative;
+  pointer-events: none;
 }
 
 .master-card-photo img {
@@ -280,12 +285,14 @@ header p {
   color: #111827;
   margin-bottom: 4px;
   word-wrap: break-word;
+  pointer-events: none;
 }
 
 .master-card-role {
   font-size: 0.85rem;
   color: #6b7280;
   word-wrap: break-word;
+  pointer-events: none;
 }
 
 .service-item {

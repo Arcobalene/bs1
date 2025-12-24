@@ -769,19 +769,9 @@
               photoContainer.innerHTML = '<div class="master-card-photo-placeholder">👤</div>';
             };
             photoContainer.appendChild(photoImg);
-            photoContainer.onclick = () => openMasterPhotosModal(m);
-            photoContainer.style.cursor = 'pointer';
-            photoContainer.title = 'Нажмите, чтобы посмотреть фото работ';
           } else {
             // Placeholder если фото нет
             photoContainer.innerHTML = '<div class="master-card-photo-placeholder">👤</div>';
-            photoContainer.onclick = () => {
-              if (photos.length > 0) {
-                openMasterPhotosModal(m);
-              }
-            };
-            photoContainer.style.cursor = photos.length > 0 ? 'pointer' : 'default';
-            photoContainer.title = photos.length > 0 ? 'Нажмите, чтобы посмотреть фото работ' : '';
           }
           
           // Контейнер для информации
@@ -791,12 +781,6 @@
           const nameDiv = document.createElement("div");
           nameDiv.className = "master-card-name";
           nameDiv.textContent = m.name;
-          if (photos.length > 0) {
-            nameDiv.style.cursor = 'pointer';
-            nameDiv.style.textDecoration = 'underline';
-            nameDiv.title = 'Нажмите, чтобы посмотреть фото работ';
-            nameDiv.onclick = () => openMasterPhotosModal(m);
-          }
           
           const roleDiv = document.createElement("div");
           roleDiv.className = "master-card-role";
@@ -807,6 +791,13 @@
           
           card.appendChild(photoContainer);
           card.appendChild(infoContainer);
+          
+          // Делаем всю карточку кликабельной, если есть фото работ
+          if (photos.length > 0) {
+            card.style.cursor = 'pointer';
+            card.title = 'Нажмите, чтобы посмотреть фото работ';
+            card.onclick = () => openMasterPhotosModal(m);
+          }
           
           mastersListEl.appendChild(card);
         });
