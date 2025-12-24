@@ -195,8 +195,20 @@ const CalendarApp = {
   lastBookingCheck: Date.now(),
   notificationsList: JSON.parse(localStorage.getItem('notifications') || '[]'),
   WEEK_DAYS: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
-  START_HOUR: 10,
-  END_HOUR: 20
+  get START_HOUR() {
+    // Используем настройки рабочего времени из профиля пользователя, если доступны
+    if (this.currentUser && this.currentUser.workHours) {
+      return this.currentUser.workHours.startHour || 10;
+    }
+    return 10; // По умолчанию
+  },
+  get END_HOUR() {
+    // Используем настройки рабочего времени из профиля пользователя, если доступны
+    if (this.currentUser && this.currentUser.workHours) {
+      return this.currentUser.workHours.endHour || 20;
+    }
+    return 20; // По умолчанию
+  }
 };
 
 // ========== УТИЛИТЫ ==========
@@ -949,8 +961,8 @@ const BookingForm = {
       console.error('Ошибка загрузки записей:', error);
     }
 
-    const startOfDay = 10 * 60;
-    const endOfDay = 20 * 60;
+    const startOfDay = CalendarApp.START_HOUR * 60;
+    const endOfDay = CalendarApp.END_HOUR * 60;
     const step = 30;
     const freeSlots = [];
 

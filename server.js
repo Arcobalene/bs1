@@ -698,6 +698,22 @@ app.get('/api/user', requireAuth, async (req, res) => {
       }
     }
     
+    // Получаем время работы салона
+    let workHours = { startHour: 10, endHour: 20 }; // Значения по умолчанию
+    if (user.work_hours) {
+      try {
+        workHours = typeof user.work_hours === 'string' 
+          ? JSON.parse(user.work_hours) 
+          : user.work_hours;
+        // Проверяем, что это валидный объект
+        if (!workHours.startHour || !workHours.endHour) {
+          workHours = { startHour: 10, endHour: 20 };
+        }
+      } catch (e) {
+        console.error('Ошибка парсинга work_hours:', e);
+      }
+    }
+    
     const userData = {
       id: user.id,
       username: user.username,
@@ -711,6 +727,7 @@ app.get('/api/user', requireAuth, async (req, res) => {
       salonPhone: user.salon_phone || '',
       salonDisplayPhone: user.salon_display_phone || '',
       salonDesign: salonDesign,
+      workHours: workHours,
       services: userServices,
       masters: userMasters,
       createdAt: user.created_at
@@ -770,7 +787,7 @@ app.post('/api/masters', requireAuth, async (req, res) => {
 // API: Обновить информацию о салоне
 app.post('/api/salon', requireAuth, async (req, res) => {
   try {
-    const { salonName, salonAddress, salonLat, salonLng, salonPhone, salonDisplayPhone } = req.body;
+    const { salonName, salonAddress, salonLat, salonLng, salonPhone, salonDisplayPhone, workHours } = req.body;
     const user = await dbUsers.getById(req.session.userId);
     
     if (!user) {
@@ -810,13 +827,35 @@ app.post('/api/salon', requireAuth, async (req, res) => {
       }
     }
     
+    // Валидация рабочего времени
+    let workHoursData = undefined;
+    if (workHours !== undefined) {
+      const startHour = parseInt(workHours.startHour);
+      const endHour = parseInt(workHours.endHour);
+      
+      if (isNaN(startHour) || isNaN(endHour)) {
+        return res.status(400).json({ success: false, message: 'Некорректное время работы: часы должны быть числами' });
+      }
+      
+      if (startHour < 0 || startHour > 23 || endHour < 0 || endHour > 23) {
+        return res.status(400).json({ success: false, message: 'Часы работы должны быть в диапазоне от 0 до 23' });
+      }
+      
+      if (startHour >= endHour) {
+        return res.status(400).json({ success: false, message: 'Время начала работы должно быть меньше времени окончания' });
+      }
+      
+      workHoursData = { startHour, endHour };
+    }
+    
     await dbUsers.update(req.session.userId, {
       salonName: salonName !== undefined ? sanitizeString(salonName, 255) : undefined,
       salonAddress: salonAddress !== undefined ? sanitizeString(salonAddress, 500) : undefined,
       salonLat: salonLat !== undefined ? (salonLat ? parseFloat(salonLat) : null) : undefined,
       salonLng: salonLng !== undefined ? (salonLng ? parseFloat(salonLng) : null) : undefined,
       salonPhone: normalizedPhone,
-      salonDisplayPhone: normalizedDisplayPhone
+      salonDisplayPhone: normalizedDisplayPhone,
+      workHours: workHoursData
     });
 
     res.json({ success: true });

@@ -220,6 +220,24 @@ async function initDatabase() {
       console.log('Поле bot_token уже существует или ошибка миграции:', error.message);
     }
 
+    // Миграция: добавление поля work_hours для хранения времени работы салона
+    try {
+      await client.query(`
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'users' AND column_name = 'work_hours'
+          ) THEN
+            ALTER TABLE users ADD COLUMN work_hours JSONB DEFAULT '{"startHour": 10, "endHour": 20}'::jsonb;
+          END IF;
+        END $$;
+      `);
+      console.log('Миграция work_hours выполнена');
+    } catch (error) {
+      console.log('Поле work_hours уже существует или ошибка миграции:', error.message);
+    }
+
     console.log('База данных PostgreSQL инициализирована');
   } catch (error) {
     console.error('Ошибка инициализации БД:', error);
@@ -396,6 +414,13 @@ const users = {
     if (userData.botToken !== undefined) {
       updates.push(`bot_token = $${paramIndex++}`);
       values.push(userData.botToken);
+    }
+    if (userData.workHours !== undefined) {
+      updates.push(`work_hours = $${paramIndex++}::jsonb`);
+      const workHoursValue = typeof userData.workHours === 'string' 
+        ? userData.workHours 
+        : JSON.stringify(userData.workHours);
+      values.push(workHoursValue);
     }
 
     if (updates.length === 0) return;
