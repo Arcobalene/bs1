@@ -230,27 +230,30 @@ const upload = multer({
   }
 });
 
-// Security headers
-app.use((req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  if (process.env.NODE_ENV === 'production') {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  }
-  next();
-});
-
-// Body parsing with limits
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.static('public', { maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0 }));
+// Настройка trust proxy для работы за reverse proxy (nginx, etc.)
+// Это позволяет Express правильно определять req.secure на основе X-Forwarded-Proto
+// Должно быть до других middleware, которые используют req.secure
+const TRUST_PROXY = process.env.TRUST_PROXY !== 'false'; // По умолчанию true
+if (TRUST_PROXY) {
+  app.set('trust proxy', 1); // Доверять первому прокси
+  console.log('✅ Trust proxy включен (для работы за nginx reverse proxy)');
+}
 
 // Определяем режим разработки (должно быть до использования)
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
+// Определяем, используется ли HTTPS (для secure cookies и заголовков)
+// Учитываем как прямой HTTPS, так и HTTPS через reverse proxy (X-Forwarded-Proto)
+const isHttpsDirect = USE_HTTPS && httpsOptions !== null;
+const isHttpsBehindProxy = TRUST_PROXY && process.env.BEHIND_HTTPS_PROXY === 'true';
+const isHttps = isHttpsDirect || isHttpsBehindProxy;
+
+if (isHttpsBehindProxy) {
+  console.log('✅ HTTPS определяется через reverse proxy (BEHIND_HTTPS_PROXY=true)');
+}
+
 // Редирект HTTP на HTTPS (если включен HTTPS и FORCE_HTTPS)
+// Примечание: если вы используете nginx как reverse proxy, редирект должен обрабатываться nginx
 if (USE_HTTPS && httpsOptions && FORCE_HTTPS) {
   app.use((req, res, next) => {
     // Пропускаем редирект для healthcheck и локальных подключений
@@ -268,11 +271,31 @@ if (USE_HTTPS && httpsOptions && FORCE_HTTPS) {
   });
 }
 
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  
+  // HSTS заголовок только для HTTPS (прямого или через прокси)
+  // Проверяем через req.secure (работает с trust proxy) или заголовок X-Forwarded-Proto
+  const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  if ((process.env.NODE_ENV === 'production' || isHttps) && isSecure) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  
+  next();
+});
+
+// Body parsing with limits
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.static('public', { maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0 }));
+
 // Настройка сессий
-// Определяем, используется ли HTTPS (для secure cookies)
-const isHttps = USE_HTTPS && httpsOptions !== null;
 // ВАЖНО: secure: true только для HTTPS, иначе cookie не установится в браузере
-const cookieSecure = isHttps; // secure: true только для HTTPS
+const cookieSecure = isHttps; // secure: true только для HTTPS (определено выше)
 
 app.use(session({
   secret: SESSION_SECRET,
