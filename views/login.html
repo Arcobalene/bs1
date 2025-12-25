@@ -8,21 +8,39 @@
 </head>
 <body>
 <header>
+  <a href="/" class="home-link" title="На главную">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+      <polyline points="9 22 9 12 15 12 15 22"></polyline>
+    </svg>
+    Главная
+  </a>
   <h1>Beauty Studio</h1>
   <p>Вход в систему</p>
   <div class="nav-links">
     <a href="/">На главную</a>
-    <a href="/register">Регистрация</a>
+    <a href="/register">Регистрация салона</a>
+    <a href="/register/master">Регистрация мастера</a>
+    <a href="/register-client">Регистрация клиента</a>
   </div>
 </header>
 
 <div class="container">
+  <div class="breadcrumbs">
+    <a href="/">Главная</a>
+    <span class="separator">/</span>
+    <span class="current">Вход</span>
+  </div>
+  
   <div class="card" style="max-width: 400px; margin: 0 auto;">
     <h2>Вход в систему</h2>
-    <p class="description">Войдите в свой аккаунт.</p>
-    <p class="note" style="margin-bottom: 16px;">
-      <a href="/register/master" style="color: #a855f7;">Регистрация мастера</a> | 
-      <a href="/register" style="color: #a855f7;">Регистрация салона</a>
+    <p class="description">Войдите в свой аккаунт владельца салона или мастера.</p>
+    <p class="note" style="margin-bottom: 16px; text-align: center;">
+      <a href="/register" style="color: #a855f7; margin: 0 8px;">Регистрация салона</a>
+      <span style="color: #9ca3af;">|</span>
+      <a href="/register/master" style="color: #a855f7; margin: 0 8px;">Регистрация мастера</a>
+      <span style="color: #9ca3af;">|</span>
+      <a href="/register-client" style="color: #a855f7; margin: 0 8px;">Регистрация клиента</a>
     </p>
 
     <form id="login-form">

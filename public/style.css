@@ -540,6 +540,90 @@ input[type="range"]::-ms-thumb {
   display: none !important;
 }
 
+/* Breadcrumbs (хлебные крошки) */
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.breadcrumbs a {
+  color: #a855f7;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.breadcrumbs a:hover {
+  color: #9333ea;
+  text-decoration: underline;
+}
+
+.breadcrumbs span {
+  color: #6b7280;
+}
+
+.breadcrumbs .separator {
+  color: #9ca3af;
+  margin: 0 4px;
+}
+
+.breadcrumbs .current {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+/* Улучшенная навигация с иконками */
+.nav-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-links a i {
+  font-size: 0.9em;
+}
+
+/* Кнопка "На главную" */
+.home-link {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  color: white;
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  z-index: 10;
+}
+
+.home-link:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .home-link {
+    position: static;
+    margin-bottom: 12px;
+  }
+  
+  .breadcrumbs {
+    font-size: 0.85rem;
+    padding: 8px 12px;
+  }
+}
+
 /* Главные вкладки админ-панели */
 .main-tabs {
   display: flex;
