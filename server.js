@@ -1882,25 +1882,35 @@ app.delete('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => 
 // API: Получить список мастеров салона (для владельца)
 app.get('/api/salon/masters', requireAuth, async (req, res) => {
   try {
-    console.log('Запрос списка мастеров салона, userId:', req.session.userId);
+    console.log('[GET /api/salon/masters] Запрос получен');
+    console.log('[GET /api/salon/masters] Session userId:', req.session.userId);
+    console.log('[GET /api/salon/masters] Session:', JSON.stringify(req.session));
     
-    if (!req.session.userId) {
-      console.log('userId не установлен в сессии');
+    if (!req.session || !req.session.userId) {
+      console.log('[GET /api/salon/masters] userId не установлен в сессии');
       return res.status(401).json({ success: false, message: 'Требуется авторизация' });
     }
     
-    const user = await dbUsers.getById(req.session.userId);
+    const sessionUserId = req.session.userId;
+    console.log('[GET /api/salon/masters] Запрос пользователя из БД, ID:', sessionUserId);
+    
+    const user = await dbUsers.getById(sessionUserId);
     
     if (!user) {
-      console.log('Пользователь не найден, userId:', req.session.userId);
+      console.log('[GET /api/salon/masters] Пользователь не найден, userId:', sessionUserId);
       return res.status(401).json({ success: false, message: 'Пользователь не найден' });
     }
     
-    console.log('Пользователь найден:', { id: user.id, username: user.username, role: user.role });
+    console.log('[GET /api/salon/masters] Пользователь найден:', { 
+      id: user.id, 
+      username: user.username, 
+      role: user.role,
+      idType: typeof user.id
+    });
     
     // Владельцы салонов имеют роль 'user' или 'admin'
     if (user.role !== 'user' && user.role !== 'admin') {
-      console.log('Неправильная роль пользователя:', user.role);
+      console.log('[GET /api/salon/masters] Неправильная роль пользователя:', user.role);
       return res.status(403).json({ success: false, message: 'Доступ запрещен. Только владельцы салонов могут просматривать список мастеров.' });
     }
 
@@ -1908,19 +1918,19 @@ app.get('/api/salon/masters', requireAuth, async (req, res) => {
     const salonUserId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
     
     if (!salonUserId || isNaN(salonUserId) || salonUserId <= 0) {
-      console.error('Неверный ID пользователя:', user.id, 'тип:', typeof user.id);
+      console.error('[GET /api/salon/masters] Неверный ID пользователя:', user.id, 'тип:', typeof user.id, 'преобразованный:', salonUserId);
       return res.status(500).json({ success: false, message: 'Ошибка сервера: неверный ID пользователя' });
     }
 
-    console.log('Получение мастеров для салона, salonUserId:', salonUserId, 'тип:', typeof salonUserId);
+    console.log('[GET /api/salon/masters] Получение мастеров для салона, salonUserId:', salonUserId);
     const salonMastersList = await salonMasters.getBySalonId(salonUserId);
-    console.log('Найдено мастеров в салоне:', salonMastersList.length);
+    console.log('[GET /api/salon/masters] Найдено мастеров в салоне:', salonMastersList.length);
     
-    res.json({ success: true, masters: salonMastersList });
+    return res.json({ success: true, masters: salonMastersList });
   } catch (error) {
-    console.error('Ошибка получения мастеров салона:', error);
-    console.error('Stack trace:', error.stack);
-    res.status(500).json({ success: false, message: 'Ошибка сервера', error: error.message });
+    console.error('[GET /api/salon/masters] ОШИБКА:', error);
+    console.error('[GET /api/salon/masters] Stack trace:', error.stack);
+    return res.status(500).json({ success: false, message: 'Ошибка сервера', error: error.message });
   }
 });
 
