@@ -959,7 +959,11 @@ app.get('/api/masters/search', requireAuth, async (req, res) => {
       return res.status(401).json({ success: false, message: 'Пользователь не найден' });
     }
     
-    if (user.role !== 'user') {
+    console.log('Пользователь найден для поиска мастеров:', { id: user.id, username: user.username, role: user.role });
+    
+    // Владельцы салонов имеют роль 'user' или 'admin'
+    if (user.role !== 'user' && user.role !== 'admin') {
+      console.log('Доступ запрещен для роли:', user.role);
       return res.status(403).json({ success: false, message: 'Доступ запрещен. Только владельцы салонов могут искать мастеров.' });
     }
 
@@ -1813,7 +1817,12 @@ app.post('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => {
     const masterUserId = idValidation.id;
 
     const user = await dbUsers.getById(req.session.userId);
-    if (!user || user.role !== 'user') {
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Пользователь не найден' });
+    }
+    
+    // Владельцы салонов имеют роль 'user' или 'admin'
+    if (user.role !== 'user' && user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Доступ запрещен. Только владелец салона может добавлять мастеров.' });
     }
 
@@ -1853,7 +1862,12 @@ app.delete('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => 
     const masterUserId = idValidation.id;
 
     const user = await dbUsers.getById(req.session.userId);
-    if (!user || user.role !== 'user') {
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Пользователь не найден' });
+    }
+    
+    // Владельцы салонов имеют роль 'user' или 'admin'
+    if (user.role !== 'user' && user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Доступ запрещен' });
     }
 
@@ -1876,7 +1890,8 @@ app.get('/api/salon/masters', requireAuth, async (req, res) => {
       return res.status(401).json({ success: false, message: 'Пользователь не найден' });
     }
     
-    if (user.role !== 'user') {
+    // Владельцы салонов имеют роль 'user' или 'admin'
+    if (user.role !== 'user' && user.role !== 'admin') {
       console.log('Неправильная роль пользователя:', user.role);
       return res.status(403).json({ success: false, message: 'Доступ запрещен. Только владельцы салонов могут просматривать список мастеров.' });
     }
