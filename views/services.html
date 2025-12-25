@@ -249,12 +249,30 @@
   async function loadSalonMasters() {
     try {
       const response = await fetch('/api/salon/masters');
+      
+      if (!response.ok) {
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          console.error('Ошибка загрузки мастеров салона:', errorData);
+        } catch (e) {
+          console.error('Не удалось распарсить ответ с ошибкой:', e);
+        }
+        console.error('Ошибка загрузки приглашенных мастеров:', errorMessage);
+        // Не показываем ошибку пользователю, просто не загружаем список
+        return;
+      }
+      
       const result = await response.json();
       if (result.success) {
         renderSalonMasters(result.masters);
+      } else {
+        console.error('Ошибка от сервера при загрузке мастеров:', result.message);
       }
     } catch (error) {
       console.error('Ошибка загрузки приглашенных мастеров:', error);
+      // Не показываем ошибку пользователю, просто не загружаем список
     }
   }
 

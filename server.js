@@ -935,6 +935,81 @@ app.post('/api/masters', requireAuth, async (req, res) => {
   }
 });
 
+// API: Поиск мастеров для добавления к салону (ВАЖНО: должен быть ПЕРЕД /api/masters/:userId)
+app.get('/api/masters/search', requireAuth, async (req, res) => {
+  try {
+    console.log('Поиск мастеров - запрос:', req.query);
+    const { q } = req.query;
+    
+    // Проверяем наличие параметра q
+    if (q === undefined || q === null) {
+      console.log('Параметр q отсутствует');
+      return res.status(400).json({ success: false, message: 'Параметр поиска не указан' });
+    }
+    
+    const searchTerm = String(q).trim();
+    console.log('Поисковый запрос после trim:', searchTerm, 'длина:', searchTerm.length);
+    
+    if (searchTerm.length < 2) {
+      return res.status(400).json({ success: false, message: 'Введите минимум 2 символа для поиска' });
+    }
+
+    const user = await dbUsers.getById(req.session.userId);
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Пользователь не найден' });
+    }
+    
+    if (user.role !== 'user') {
+      return res.status(403).json({ success: false, message: 'Доступ запрещен. Только владельцы салонов могут искать мастеров.' });
+    }
+
+    const searchQuery = `%${searchTerm.toLowerCase()}%`;
+    
+    // Нормализуем номер телефона для поиска (удаляем все нецифровые символы)
+    const phoneDigits = searchTerm.replace(/\D/g, '');
+    const phonePattern = phoneDigits.length >= 2 ? `%${phoneDigits}%` : null;
+    
+    // Формируем условия поиска
+    let query = `
+      SELECT id, username, email, salon_phone, created_at
+      FROM users
+      WHERE role = 'master'
+        AND is_active = true
+        AND (
+          LOWER(username) LIKE $1 
+          OR LOWER(COALESCE(email, '')) LIKE $1
+    `;
+    
+    const queryParams = [searchQuery];
+    let paramIndex = 2;
+    
+    // Добавляем поиск по телефону, если есть хотя бы 2 цифры
+    if (phonePattern) {
+      query += ` OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(salon_phone, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE $${paramIndex}`;
+      queryParams.push(phonePattern);
+      paramIndex++;
+    }
+    
+    query += `
+        )
+      ORDER BY username
+      LIMIT 20
+    `;
+    
+    console.log('SQL запрос:', query);
+    console.log('Параметры запроса:', queryParams);
+    
+    const result = await pool.query(query, queryParams);
+    console.log('Найдено мастеров:', result.rows.length);
+
+    res.json({ success: true, masters: result.rows });
+  } catch (error) {
+    console.error('Ошибка поиска мастеров:', error);
+    console.error('Stack trace:', error.stack);
+    res.status(500).json({ success: false, message: 'Ошибка сервера', error: error.message });
+  }
+});
+
 // API: Обновить информацию о салоне
 app.post('/api/salon', requireAuth, async (req, res) => {
   try {
@@ -1127,8 +1202,14 @@ app.get('/api/services/:userId', async (req, res) => {
 });
 
 // API: Получить мастеров (публичный доступ)
+// ВАЖНО: этот маршрут должен быть ПОСЛЕ /api/masters/search, чтобы не перехватывать запросы поиска
 app.get('/api/masters/:userId', async (req, res) => {
   try {
+    // Проверяем, не является ли userId словом "search" (защита от конфликта маршрутов)
+    if (req.params.userId === 'search') {
+      return res.status(404).json({ success: false, masters: [], message: 'Маршрут не найден' });
+    }
+    
     const idValidation = validateId(req.params.userId, 'ID пользователя');
     if (!idValidation.valid) {
       return res.status(400).json({ success: false, masters: [], message: idValidation.message });
@@ -1722,81 +1803,6 @@ app.delete('/api/masters/:masterId/photos/:filename', requireAuth, async (req, r
 
 // ========== API для управления мастерами в салоне ==========
 
-// API: Поиск мастеров для добавления к салону
-app.get('/api/masters/search', requireAuth, async (req, res) => {
-  try {
-    console.log('Поиск мастеров - запрос:', req.query);
-    const { q } = req.query;
-    
-    // Проверяем наличие параметра q
-    if (q === undefined || q === null) {
-      console.log('Параметр q отсутствует');
-      return res.status(400).json({ success: false, message: 'Параметр поиска не указан' });
-    }
-    
-    const searchTerm = String(q).trim();
-    console.log('Поисковый запрос после trim:', searchTerm, 'длина:', searchTerm.length);
-    
-    if (searchTerm.length < 2) {
-      return res.status(400).json({ success: false, message: 'Введите минимум 2 символа для поиска' });
-    }
-
-    const user = await dbUsers.getById(req.session.userId);
-    if (!user) {
-      return res.status(401).json({ success: false, message: 'Пользователь не найден' });
-    }
-    
-    if (user.role !== 'user') {
-      return res.status(403).json({ success: false, message: 'Доступ запрещен. Только владельцы салонов могут искать мастеров.' });
-    }
-
-    const searchQuery = `%${searchTerm.toLowerCase()}%`;
-    
-    // Нормализуем номер телефона для поиска (удаляем все нецифровые символы)
-    const phoneDigits = searchTerm.replace(/\D/g, '');
-    const phonePattern = phoneDigits.length >= 2 ? `%${phoneDigits}%` : null;
-    
-    // Формируем условия поиска
-    let query = `
-      SELECT id, username, email, salon_phone, created_at
-      FROM users
-      WHERE role = 'master'
-        AND is_active = true
-        AND (
-          LOWER(username) LIKE $1 
-          OR LOWER(COALESCE(email, '')) LIKE $1
-    `;
-    
-    const queryParams = [searchQuery];
-    let paramIndex = 2;
-    
-    // Добавляем поиск по телефону, если есть хотя бы 2 цифры
-    if (phonePattern) {
-      query += ` OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(salon_phone, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE $${paramIndex}`;
-      queryParams.push(phonePattern);
-      paramIndex++;
-    }
-    
-    query += `
-        )
-      ORDER BY username
-      LIMIT 20
-    `;
-    
-    console.log('SQL запрос:', query);
-    console.log('Параметры запроса:', queryParams);
-    
-    const result = await pool.query(query, queryParams);
-    console.log('Найдено мастеров:', result.rows.length);
-
-    res.json({ success: true, masters: result.rows });
-  } catch (error) {
-    console.error('Ошибка поиска мастеров:', error);
-    console.error('Stack trace:', error.stack);
-    res.status(500).json({ success: false, message: 'Ошибка сервера', error: error.message });
-  }
-});
-
 // API: Добавить мастера к салону
 app.post('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => {
   try {
@@ -1862,16 +1868,28 @@ app.delete('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => 
 // API: Получить список мастеров салона (для владельца)
 app.get('/api/salon/masters', requireAuth, async (req, res) => {
   try {
+    console.log('Запрос списка мастеров салона, userId:', req.session.userId);
     const user = await dbUsers.getById(req.session.userId);
-    if (!user || user.role !== 'user') {
-      return res.status(403).json({ success: false, message: 'Доступ запрещен' });
+    
+    if (!user) {
+      console.log('Пользователь не найден, userId:', req.session.userId);
+      return res.status(401).json({ success: false, message: 'Пользователь не найден' });
+    }
+    
+    if (user.role !== 'user') {
+      console.log('Неправильная роль пользователя:', user.role);
+      return res.status(403).json({ success: false, message: 'Доступ запрещен. Только владельцы салонов могут просматривать список мастеров.' });
     }
 
+    console.log('Получение мастеров для салона, salonUserId:', user.id);
     const salonMastersList = await salonMasters.getBySalonId(user.id);
+    console.log('Найдено мастеров в салоне:', salonMastersList.length);
+    
     res.json({ success: true, masters: salonMastersList });
   } catch (error) {
     console.error('Ошибка получения мастеров салона:', error);
-    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    console.error('Stack trace:', error.stack);
+    res.status(500).json({ success: false, message: 'Ошибка сервера', error: error.message });
   }
 });
 
