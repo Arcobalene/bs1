@@ -1738,7 +1738,7 @@ app.get('/api/masters/search', requireAuth, async (req, res) => {
     const searchTerm = q.trim();
     const searchQuery = `%${searchTerm.toLowerCase()}%`;
     
-    // Нормализуем номер телефона для поиска (удаляем все нецифровые символы, кроме +)
+    // Нормализуем номер телефона для поиска (удаляем все нецифровые символы)
     const phoneDigits = searchTerm.replace(/\D/g, '');
     const phonePattern = phoneDigits.length >= 2 ? `%${phoneDigits}%` : null;
     
@@ -1750,15 +1750,17 @@ app.get('/api/masters/search', requireAuth, async (req, res) => {
         AND is_active = true
         AND (
           LOWER(username) LIKE $1 
-          OR LOWER(email) LIKE $1
+          OR LOWER(COALESCE(email, '')) LIKE $1
     `;
     
     const queryParams = [searchQuery];
+    let paramIndex = 2;
     
     // Добавляем поиск по телефону, если есть хотя бы 2 цифры
     if (phonePattern) {
-      query += ` OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(salon_phone, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE $${queryParams.length + 1}`;
+      query += ` OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(salon_phone, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE $${paramIndex}`;
       queryParams.push(phonePattern);
+      paramIndex++;
     }
     
     query += `
@@ -1772,7 +1774,8 @@ app.get('/api/masters/search', requireAuth, async (req, res) => {
     res.json({ success: true, masters: result.rows });
   } catch (error) {
     console.error('Ошибка поиска мастеров:', error);
-    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    console.error('Stack trace:', error.stack);
+    res.status(500).json({ success: false, message: 'Ошибка сервера', error: error.message });
   }
 });
 

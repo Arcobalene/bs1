@@ -238,6 +238,7 @@
       renderServices();
       renderMasters();
       loadSalonMasters(); // Загружаем список приглашенных мастеров
+      setupMasterSearchHandlers(); // Устанавливаем обработчики поиска мастеров
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
       window.location.href = '/';
@@ -327,19 +328,32 @@
     });
   }
 
-  // Поиск мастеров
-  document.getElementById('master-search-btn')?.addEventListener('click', searchMasters);
-  document.getElementById('master-search-input')?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      searchMasters();
+  // Поиск мастеров - устанавливаем обработчики после загрузки DOM
+  function setupMasterSearchHandlers() {
+    const searchBtn = document.getElementById('master-search-btn');
+    const searchInput = document.getElementById('master-search-input');
+    
+    if (searchBtn) {
+      searchBtn.addEventListener('click', searchMasters);
     }
-  });
+    
+    if (searchInput) {
+      searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          searchMasters();
+        }
+      });
+    }
+  }
 
   async function searchMasters() {
     const input = document.getElementById('master-search-input');
     const resultsDiv = document.getElementById('master-search-results');
-    if (!input || !resultsDiv) return;
+    if (!input || !resultsDiv) {
+      console.error('Не найдены элементы для поиска мастеров');
+      return;
+    }
 
     const query = input.value.trim();
     if (query.length < 2) {
@@ -347,8 +361,15 @@
       return;
     }
 
+    resultsDiv.innerHTML = '<p style="color: #6b7280; font-size: 0.9rem;">Поиск...</p>';
+
     try {
       const response = await fetch(`/api/masters/search?q=${encodeURIComponent(query)}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const result = await response.json();
       
       if (!result.success) {
@@ -394,7 +415,7 @@
       });
     } catch (error) {
       console.error('Ошибка поиска:', error);
-      resultsDiv.innerHTML = '<p style="color: #dc2626;">Ошибка поиска мастеров</p>';
+      resultsDiv.innerHTML = `<p style="color: #dc2626;">Ошибка поиска мастеров: ${error.message || 'Неизвестная ошибка'}</p>`;
     }
   }
 
@@ -1417,6 +1438,13 @@
 
   // Загружаем данные при загрузке страницы
   loadUserData();
+  
+  // Также устанавливаем обработчики при загрузке DOM (на случай, если элементы уже есть)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupMasterSearchHandlers);
+  } else {
+    setupMasterSearchHandlers();
+  }
   
   // Подсвечиваем активную страницу
   highlightActivePage();
