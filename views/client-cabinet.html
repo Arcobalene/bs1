@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Личный кабинет — Beauty Studio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 0;
+    }
+    
+    .tab {
+      padding: 12px 24px;
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      font-size: 1rem;
+      color: #6b7280;
+      transition: all 0.2s;
+      position: relative;
+      bottom: -2px;
+    }
+    
+    .tab:hover {
+      color: #a855f7;
+      background: rgba(168, 85, 247, 0.05);
+    }
+    
+    .tab.active {
+      color: #a855f7;
+      border-bottom-color: #a855f7;
+      font-weight: 600;
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
+    .booking-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      transition: all 0.2s;
+    }
+    
+    .booking-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      transform: translateY(-2px);
+    }
+    
+    .booking-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+    
+    .booking-service {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 8px;
+    }
+    
+    .booking-date-time {
+      color: #6b7280;
+      font-size: 0.95rem;
+    }
+    
+    .booking-salon {
+      color: #a855f7;
+      font-weight: 500;
+      margin-top: 8px;
+    }
+    
+    .booking-master {
+      color: #6b7280;
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+    
+    .booking-status {
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+    
+    .booking-status.active {
+      background: #dcfce7;
+      color: #166534;
+    }
+    
+    .booking-status.past {
+      background: #f3f4f6;
+      color: #6b7280;
+    }
+    
+    .salon-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .salon-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      transform: translateY(-2px);
+      border-color: #a855f7;
+    }
+    
+    .salon-name {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 8px;
+    }
+    
+    .salon-address {
+      color: #6b7280;
+      font-size: 0.95rem;
+      margin-bottom: 8px;
+    }
+    
+    .salon-phone {
+      color: #a855f7;
+      font-size: 0.9rem;
+      margin-top: 8px;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #6b7280;
+    }
+    
+    .empty-state-icon {
+      font-size: 4rem;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    
+    .phone-input-section {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid #e5e7eb;
+    }
+    
+    .phone-input-section h3 {
+      margin-bottom: 16px;
+      color: #1f2937;
+    }
+    
+    .phone-input-group {
+      display: flex;
+      gap: 12px;
+    }
+    
+    .phone-input-group input {
+      flex: 1;
+      padding: 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    
+    .phone-input-group button {
+      padding: 12px 24px;
+      white-space: nowrap;
+    }
+    
+    @media (max-width: 768px) {
+      .tabs {
+        flex-wrap: wrap;
+      }
+      
+      .tab {
+        padding: 10px 16px;
+        font-size: 0.9rem;
+      }
+      
+      .booking-header {
+        flex-direction: column;
+        gap: 8px;
+      }
+      
+      .phone-input-group {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Личный кабинет</h1>
+  <p>Управление вашими записями</p>
+  <div class="nav-links">
+    <a href="/">На главную</a>
+  </div>
+</header>
+
+<div class="container">
+  <!-- Ввод телефона -->
+  <div class="phone-input-section">
+    <h3>Введите ваш номер телефона</h3>
+    <div class="phone-input-group">
+      <input type="tel" id="client-phone-input" placeholder="+998XX XXX XX XX" />
+      <button type="button" class="btn-primary" id="load-bookings-btn">Загрузить записи</button>
+    </div>
+    <div id="phone-error" class="alert alert-error" style="display: none; margin-top: 12px;"></div>
+  </div>
+
+  <!-- Вкладки -->
+  <div class="tabs">
+    <button class="tab active" data-tab="bookings">Мои записи</button>
+    <button class="tab" data-tab="salons">Выбор салона</button>
+  </div>
+
+  <!-- Вкладка с активными записями -->
+  <div class="tab-content active" id="tab-bookings">
+    <div class="card">
+      <h2>Активные записи</h2>
+      <p class="description">Ваши предстоящие и прошедшие записи в салонах красоты.</p>
+      <div id="bookings-list">
+        <div class="empty-state">
+          <div class="empty-state-icon">📅</div>
+          <p>Введите номер телефона, чтобы увидеть ваши записи</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Вкладка с выбором салонов -->
+  <div class="tab-content" id="tab-salons">
+    <div class="card">
+      <h2>Выбор салона</h2>
+      <p class="description">Выберите салон красоты для записи.</p>
+      <div id="salons-list">
+        <div class="empty-state">
+          <div class="empty-state-icon">💇</div>
+          <p>Загрузка салонов...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  © 2025 Beauty Studio. Все права защищены.
+</footer>
+
+<script>
+  let currentPhone = '';
+  let allBookings = [];
+  let allSalons = [];
+
+  // Переключение вкладок
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabName = tab.dataset.tab;
+      
+      // Убираем активный класс у всех вкладок
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+      
+      // Добавляем активный класс выбранной вкладке
+      tab.classList.add('active');
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+      
+      // Если переключились на салоны и они еще не загружены
+      if (tabName === 'salons' && allSalons.length === 0) {
+        loadSalons();
+      }
+    });
+  });
+
+  // Загрузка записей по телефону
+  document.getElementById('load-bookings-btn').addEventListener('click', async () => {
+    const phoneInput = document.getElementById('client-phone-input');
+    const phone = phoneInput.value.trim();
+    const errorDiv = document.getElementById('phone-error');
+    
+    errorDiv.style.display = 'none';
+    
+    if (!phone) {
+      errorDiv.textContent = 'Пожалуйста, введите номер телефона';
+      errorDiv.style.display = 'block';
+      return;
+    }
+    
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 9) {
+      errorDiv.textContent = 'Пожалуйста, введите корректный номер телефона (минимум 9 цифр)';
+      errorDiv.style.display = 'block';
+      return;
+    }
+    
+    currentPhone = phone;
+    await loadBookings(phone);
+  });
+
+  // Загрузка записей клиента
+  async function loadBookings(phone) {
+    const bookingsList = document.getElementById('bookings-list');
+    bookingsList.innerHTML = '<p style="text-align: center; color: #6b7280;">Загрузка...</p>';
+    
+    try {
+      const response = await fetch(`/api/client/bookings?phone=${encodeURIComponent(phone)}`);
+      const result = await response.json();
+      
+      if (result.success) {
+        allBookings = result.bookings || [];
+        renderBookings();
+      } else {
+        bookingsList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">❌</div>
+            <p>${result.message || 'Ошибка загрузки записей'}</p>
+          </div>
+        `;
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки записей:', error);
+      bookingsList.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">❌</div>
+          <p>Ошибка соединения. Попробуйте позже.</p>
+        </div>
+      `;
+    }
+  }
+
+  // Отображение записей
+  function renderBookings() {
+    const bookingsList = document.getElementById('bookings-list');
+    
+    if (allBookings.length === 0) {
+      bookingsList.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📅</div>
+          <p>У вас пока нет записей</p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Сортируем записи: сначала будущие, потом прошедшие
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    const sortedBookings = allBookings.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      
+      if (dateA.getTime() !== dateB.getTime()) {
+        return dateA - dateB;
+      }
+      
+      return a.time.localeCompare(b.time);
+    });
+    
+    bookingsList.innerHTML = sortedBookings.map(booking => {
+      const bookingDate = new Date(booking.date);
+      const isPast = bookingDate < today || (bookingDate.getTime() === today.getTime() && booking.time < now.toTimeString().slice(0, 5));
+      const statusClass = isPast ? 'past' : 'active';
+      const statusText = isPast ? 'Прошедшая' : 'Активная';
+      
+      const dateStr = formatDate(booking.date);
+      const timeStr = formatTime(booking.time);
+      
+      return `
+        <div class="booking-card">
+          <div class="booking-header">
+            <div>
+              <div class="booking-service">${escapeHtml(booking.service)}</div>
+              <div class="booking-date-time">📅 ${dateStr} в ${timeStr}</div>
+              ${booking.salonName ? `<div class="booking-salon">🏢 ${escapeHtml(booking.salonName)}</div>` : ''}
+              ${booking.master ? `<div class="booking-master">👤 Мастер: ${escapeHtml(booking.master)}</div>` : ''}
+              ${booking.comment ? `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 0.9rem;">💬 ${escapeHtml(booking.comment)}</div>` : ''}
+            </div>
+            <span class="booking-status ${statusClass}">${statusText}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Загрузка списка салонов
+  async function loadSalons() {
+    const salonsList = document.getElementById('salons-list');
+    salonsList.innerHTML = '<p style="text-align: center; color: #6b7280;">Загрузка...</p>';
+    
+    try {
+      const response = await fetch('/api/salons');
+      const result = await response.json();
+      
+      if (result.success) {
+        allSalons = result.salons || [];
+        renderSalons();
+      } else {
+        salonsList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">❌</div>
+            <p>${result.message || 'Ошибка загрузки салонов'}</p>
+          </div>
+        `;
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки салонов:', error);
+      salonsList.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">❌</div>
+          <p>Ошибка соединения. Попробуйте позже.</p>
+        </div>
+      `;
+    }
+  }
+
+  // Отображение салонов
+  function renderSalons() {
+    const salonsList = document.getElementById('salons-list');
+    
+    if (allSalons.length === 0) {
+      salonsList.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">💇</div>
+          <p>Салонов пока нет в системе</p>
+        </div>
+      `;
+      return;
+    }
+    
+    salonsList.innerHTML = allSalons.map(salon => {
+      const salonUrl = `/booking?userId=${salon.id}`;
+      return `
+        <div class="salon-card" onclick="window.location.href='${salonUrl}'">
+          <div class="salon-name">${escapeHtml(salon.name || 'Салон красоты')}</div>
+          ${salon.address ? `<div class="salon-address">📍 ${escapeHtml(salon.address)}</div>` : ''}
+          ${salon.phone ? `<div class="salon-phone">📞 ${escapeHtml(salon.phone)}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Вспомогательные функции
+  function formatDate(dateStr) {
+    const date = new Date(dateStr);
+    const days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+    const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+    
+    const day = date.getDate();
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    const dayOfWeek = days[date.getDay()];
+    
+    return `${day} ${month} ${year}, ${dayOfWeek}`;
+  }
+
+  function formatTime(timeStr) {
+    return timeStr.slice(0, 5);
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // Загружаем салоны при загрузке страницы
+  loadSalons();
+</script>
+</body>
+</html>
+

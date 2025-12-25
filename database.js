@@ -493,6 +493,20 @@ const users = {
   delete: async (id) => {
     requirePool();
     await pool.query('DELETE FROM users WHERE id = $1', [id]);
+  },
+
+  // Получить все салоны (пользователи с role='user' или без роли)
+  getAllSalons: async () => {
+    requirePool();
+    const result = await pool.query(`
+      SELECT id, username, salon_name, salon_address, salon_display_phone, salon_phone, salon_lat, salon_lng
+      FROM users
+      WHERE (role = 'user' OR role IS NULL)
+        AND is_active = true
+        AND (salon_name IS NOT NULL OR salon_name != '')
+      ORDER BY salon_name, username
+    `);
+    return result.rows;
   }
 };
 
@@ -846,6 +860,37 @@ const bookings = {
   deleteByUserId: async (userId) => {
     requirePool();
     await pool.query('DELETE FROM bookings WHERE user_id = $1', [userId]);
+  },
+
+  // Получить записи клиента по телефону
+  getByPhone: async (phone) => {
+    requirePool();
+    if (!phone) return [];
+    
+    // Нормализуем номер: удаляем все нецифровые символы
+    const phoneDigits = phone.replace(/\D/g, '');
+    
+    if (phoneDigits.length < 9) {
+      return [];
+    }
+    
+    // Ищем записи, где телефон совпадает (с учетом различных форматов)
+    // Используем несколько вариантов поиска для лучшего совпадения
+    const last10Digits = phoneDigits.length >= 10 ? phoneDigits.substring(phoneDigits.length - 10) : phoneDigits;
+    const last9Digits = phoneDigits.length >= 9 ? phoneDigits.substring(phoneDigits.length - 9) : phoneDigits;
+    
+    const result = await pool.query(`
+      SELECT DISTINCT b.*, u.salon_name, u.salon_address
+      FROM bookings b
+      JOIN users u ON b.user_id = u.id
+      WHERE 
+        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(b.phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE $1
+        OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(b.phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE $2
+        OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(b.phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE $3
+      ORDER BY b.date DESC, b.time DESC
+    `, [`%${phoneDigits}%`, `%${last10Digits}%`, `%${last9Digits}%`]);
+    
+    return result.rows;
   }
 };
 

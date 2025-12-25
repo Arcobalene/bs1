@@ -636,6 +636,11 @@ app.get('/clients', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'clients.html'));
 });
 
+// Страница личного кабинета клиента
+app.get('/client-cabinet', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'client-cabinet.html'));
+});
+
 // API: Регистрация
 app.post('/api/register', async (req, res) => {
   try {
@@ -2645,6 +2650,68 @@ app.get('/api/clients', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Ошибка получения клиентов:', error);
     res.status(500).json({ success: false, clients: [] });
+  }
+});
+
+// API: Получить записи клиента по телефону
+app.get('/api/client/bookings', async (req, res) => {
+  try {
+    const phone = req.query.phone;
+    
+    if (!phone) {
+      return res.status(400).json({ success: false, message: 'Номер телефона не указан', bookings: [] });
+    }
+    
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 9) {
+      return res.status(400).json({ success: false, message: 'Некорректный номер телефона', bookings: [] });
+    }
+    
+    const clientBookings = await bookings.getByPhone(phone);
+    
+    // Преобразуем snake_case в camelCase и добавляем информацию о салоне
+    const formattedBookings = clientBookings.map(booking => ({
+      id: booking.id,
+      name: booking.name,
+      phone: booking.phone,
+      service: booking.service,
+      master: booking.master || '',
+      date: booking.date,
+      time: booking.time,
+      endTime: booking.end_time || null,
+      comment: booking.comment || '',
+      salonName: booking.salon_name || '',
+      salonAddress: booking.salon_address || '',
+      createdAt: booking.created_at
+    }));
+    
+    res.json({ success: true, bookings: formattedBookings });
+  } catch (error) {
+    console.error('Ошибка получения записей клиента:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера', bookings: [] });
+  }
+});
+
+// API: Получить список всех салонов
+app.get('/api/salons', async (req, res) => {
+  try {
+    const salons = await dbUsers.getAllSalons();
+    
+    // Преобразуем snake_case в camelCase
+    const formattedSalons = salons.map(salon => ({
+      id: salon.id,
+      username: salon.username,
+      name: salon.salon_name || salon.username,
+      address: salon.salon_address || '',
+      phone: salon.salon_display_phone || salon.salon_phone || '',
+      lat: salon.salon_lat || null,
+      lng: salon.salon_lng || null
+    }));
+    
+    res.json({ success: true, salons: formattedSalons });
+  } catch (error) {
+    console.error('Ошибка получения списка салонов:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера', salons: [] });
   }
 });
 
