@@ -82,6 +82,22 @@
 
       <h4 style="font-size:0.9rem; margin-top:16px;">Текущие мастера</h4>
       <div id="admin-masters-list" class="admin-list"></div>
+
+      <div style="margin-top: 32px; padding-top: 24px; border-top: 2px solid #e5e7eb;">
+        <h4 style="font-size:1rem; margin-bottom:12px;">Пригласить зарегистрированного мастера</h4>
+        <p class="note" style="margin-bottom: 16px;">Поиск и добавление мастеров, которые зарегистрированы в системе</p>
+        
+        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <input type="text" id="master-search-input" placeholder="Введите логин или email мастера (минимум 2 символа)" style="flex: 1;" />
+          <button type="button" class="btn-secondary" id="master-search-btn">Поиск</button>
+        </div>
+        
+        <div id="master-search-results" style="margin-top: 16px;"></div>
+        <div id="salon-masters-list" style="margin-top: 24px;">
+          <h4 style="font-size:0.9rem; margin-bottom:12px;">Мастера в вашем салоне</h4>
+          <p style="text-align: center; color: #6b7280;">Загрузка...</p>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -221,9 +237,196 @@
       
       renderServices();
       renderMasters();
+      loadSalonMasters(); // Загружаем список приглашенных мастеров
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
       window.location.href = '/';
+    }
+  }
+
+  // Загрузка списка приглашенных мастеров
+  async function loadSalonMasters() {
+    try {
+      const response = await fetch('/api/salon/masters');
+      const result = await response.json();
+      if (result.success) {
+        renderSalonMasters(result.masters);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки приглашенных мастеров:', error);
+    }
+  }
+
+  function renderSalonMasters(salonMastersList) {
+    const list = document.getElementById('salon-masters-list');
+    if (!list) return;
+
+    const heading = list.querySelector('h4');
+    if (!heading) return;
+
+    // Очищаем список, кроме заголовка
+    const items = list.querySelectorAll(':not(h4)');
+    items.forEach(item => item.remove());
+
+    if (salonMastersList.length === 0) {
+      const p = document.createElement('p');
+      p.style.cssText = 'text-align: center; color: #6b7280;';
+      p.textContent = 'Нет приглашенных мастеров';
+      list.appendChild(p);
+      return;
+    }
+
+    salonMastersList.forEach((master) => {
+      const row = document.createElement('div');
+      row.className = 'admin-list-item';
+      row.style.padding = '12px';
+      row.style.marginBottom = '8px';
+      row.style.border = '1px solid #e5e7eb';
+      row.style.borderRadius = '8px';
+      
+      const main = document.createElement('div');
+      main.style.flex = '1';
+      
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = master.username;
+      nameSpan.style.fontWeight = '600';
+      nameSpan.style.fontSize = '1rem';
+      
+      const metaSpan = document.createElement('span');
+      metaSpan.style.fontSize = '0.85rem';
+      metaSpan.style.color = '#6b7280';
+      metaSpan.textContent = master.email || 'Email не указан';
+      
+      main.appendChild(nameSpan);
+      main.appendChild(document.createElement('br'));
+      main.appendChild(metaSpan);
+      
+      const actions = document.createElement('div');
+      actions.style.display = 'flex';
+      actions.style.gap = '8px';
+      
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.textContent = 'Удалить';
+      removeBtn.className = 'btn-secondary';
+      removeBtn.style.fontSize = '0.85rem';
+      removeBtn.style.padding = '6px 12px';
+      removeBtn.onclick = () => removeMasterFromSalon(master.master_user_id);
+      
+      actions.appendChild(removeBtn);
+      
+      row.appendChild(main);
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
+  }
+
+  // Поиск мастеров
+  document.getElementById('master-search-btn')?.addEventListener('click', searchMasters);
+  document.getElementById('master-search-input')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      searchMasters();
+    }
+  });
+
+  async function searchMasters() {
+    const input = document.getElementById('master-search-input');
+    const resultsDiv = document.getElementById('master-search-results');
+    if (!input || !resultsDiv) return;
+
+    const query = input.value.trim();
+    if (query.length < 2) {
+      resultsDiv.innerHTML = '<p style="color: #6b7280; font-size: 0.9rem;">Введите минимум 2 символа для поиска</p>';
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/masters/search?q=${encodeURIComponent(query)}`);
+      const result = await response.json();
+      
+      if (!result.success) {
+        resultsDiv.innerHTML = `<p style="color: #dc2626;">${result.message || 'Ошибка поиска'}</p>`;
+        return;
+      }
+
+      if (result.masters.length === 0) {
+        resultsDiv.innerHTML = '<p style="color: #6b7280;">Мастера не найдены</p>';
+        return;
+      }
+
+      resultsDiv.innerHTML = '';
+      result.masters.forEach((master) => {
+        const item = document.createElement('div');
+        item.style.cssText = 'padding: 12px; margin-bottom: 8px; border: 1px solid #e5e7eb; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;';
+        
+        const info = document.createElement('div');
+        info.innerHTML = `
+          <strong>${master.username}</strong><br/>
+          <span style="color: #6b7280; font-size: 0.9rem;">${master.email || 'Email не указан'}</span>
+        `;
+        
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.textContent = 'Добавить';
+        addBtn.className = 'btn-primary';
+        addBtn.style.fontSize = '0.85rem';
+        addBtn.style.padding = '6px 12px';
+        addBtn.onclick = () => addMasterToSalon(master.id);
+        
+        item.appendChild(info);
+        item.appendChild(addBtn);
+        resultsDiv.appendChild(item);
+      });
+    } catch (error) {
+      console.error('Ошибка поиска:', error);
+      resultsDiv.innerHTML = '<p style="color: #dc2626;">Ошибка поиска мастеров</p>';
+    }
+  }
+
+  async function addMasterToSalon(masterUserId) {
+    try {
+      const response = await fetch(`/api/salon/masters/${masterUserId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert('Мастер успешно добавлен к вашему салону');
+        loadSalonMasters();
+        // Очищаем результаты поиска
+        document.getElementById('master-search-results').innerHTML = '';
+        document.getElementById('master-search-input').value = '';
+      } else {
+        alert(result.message || 'Ошибка добавления мастера');
+      }
+    } catch (error) {
+      console.error('Ошибка добавления мастера:', error);
+      alert('Ошибка добавления мастера');
+    }
+  }
+
+  async function removeMasterFromSalon(masterUserId) {
+    if (!confirm('Вы уверены, что хотите удалить мастера из салона?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/salon/masters/${masterUserId}`, {
+        method: 'DELETE'
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert('Мастер удален из салона');
+        loadSalonMasters();
+      } else {
+        alert(result.message || 'Ошибка удаления мастера');
+      }
+    } catch (error) {
+      console.error('Ошибка удаления мастера:', error);
+      alert('Ошибка удаления мастера');
     }
   }
 

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Личный кабинет мастера — Beauty Studio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header>
+  <div class="header-top-links">
+    <a href="#" id="logout-link" class="logout-link" title="Выход">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16 17v-3h-5v-4h5V7l5 5-5 5zM14 2a2 2 0 012 2v2h-2V4H5v16h11v-2h2v2a2 2 0 01-2 2H5a2 2 0 01-2-2V4a2 2 0 012-2h9z"/>
+      </svg>
+    </a>
+  </div>
+  <h1>Beauty Studio</h1>
+  <p>Личный кабинет мастера</p>
+  <div class="nav-links">
+    <a href="/master">Главная</a>
+    <a href="/master/calendar">Календарь</a>
+    <a href="/master/profile">Профиль</a>
+  </div>
+</header>
+
+<div class="container">
+  <div class="user-info">
+    <h3 id="user-name">Загрузка...</h3>
+    <p id="user-email"></p>
+  </div>
+
+  <!-- Главные вкладки -->
+  <div class="main-tabs">
+    <button class="main-tab-button active" data-main-tab="salons">Мои салоны</button>
+    <button class="main-tab-button" data-main-tab="bookings">Записи</button>
+    <button class="main-tab-button" data-main-tab="profile">Профиль</button>
+  </div>
+
+  <!-- Вкладка: Мои салоны -->
+  <div class="main-tab-content active" id="salons-tab">
+    <div class="card">
+      <h2>Мои салоны</h2>
+      <p class="description">Список салонов, где вы работаете</p>
+      
+      <div id="salons-list" style="margin-top: 16px;">
+        <p style="text-align: center; color: #6b7280;">Загрузка...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Вкладка: Записи -->
+  <div class="main-tab-content" id="bookings-tab" style="display: none;">
+    <div class="card">
+      <h2>Мои записи</h2>
+      <p class="description">Все ваши записи в салонах</p>
+      
+      <div id="bookings-list" style="margin-top: 16px;">
+        <p style="text-align: center; color: #6b7280;">Загрузка...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Вкладка: Профиль -->
+  <div class="main-tab-content" id="profile-tab" style="display: none;">
+    <div class="card">
+      <h2>Профиль мастера</h2>
+      <p class="description">Обновите информацию о себе</p>
+
+      <form id="profile-form">
+        <div>
+          <label for="profile-email">Email</label>
+          <input type="email" id="profile-email" placeholder="your@email.com" />
+        </div>
+
+        <div>
+          <label for="profile-phone">Телефон</label>
+          <input type="tel" id="profile-phone" placeholder="+998XX XXX XX XX" />
+        </div>
+
+        <button type="submit" class="btn-primary">Сохранить изменения</button>
+        <div id="profile-alert" class="alert" style="display: none;"></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<footer>
+  © 2025 Beauty Studio. Все права защищены.
+</footer>
+
+<script>
+  let currentUser = null;
+
+  // Проверка авторизации и загрузка данных
+  async function loadUserData() {
+    try {
+      const response = await fetch('/api/user');
+      const result = await response.json();
+      
+      if (!result.success) {
+        window.location.href = '/login';
+        return;
+      }
+
+      currentUser = result.user;
+      
+      if (currentUser.role !== 'master') {
+        window.location.href = '/admin';
+        return;
+      }
+
+      document.getElementById('user-name').textContent = `Добро пожаловать, ${currentUser.username}!`;
+      document.getElementById('user-email').textContent = currentUser.email || 'Email не указан';
+      
+      loadSalons();
+      loadBookings();
+      loadProfile();
+    } catch (error) {
+      console.error('Ошибка загрузки данных:', error);
+      window.location.href = '/login';
+    }
+  }
+
+  async function loadSalons() {
+    try {
+      const response = await fetch('/api/master/salons');
+      const result = await response.json();
+      
+      if (result.success) {
+        renderSalons(result.salons);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки салонов:', error);
+    }
+  }
+
+  function renderSalons(salons) {
+    const list = document.getElementById('salons-list');
+    if (!list) return;
+
+    if (salons.length === 0) {
+      list.innerHTML = '<p style="text-align: center; color: #6b7280;">Вы еще не добавлены ни в один салон. Ожидайте приглашения от владельца салона.</p>';
+      return;
+    }
+
+    list.innerHTML = '';
+    salons.forEach((salon) => {
+      const item = document.createElement('div');
+      item.className = 'admin-list-item';
+      item.style.padding = '16px';
+      item.style.marginBottom = '12px';
+      item.style.border = '1px solid #e5e7eb';
+      item.style.borderRadius = '8px';
+      
+      item.innerHTML = `
+        <div>
+          <h4 style="margin: 0 0 8px 0;">${salon.salon_name || salon.salon_username}</h4>
+          ${salon.salon_address ? `<p style="margin: 4px 0; color: #6b7280; font-size: 0.9rem;">${salon.salon_address}</p>` : ''}
+          <p style="margin: 4px 0; color: #6b7280; font-size: 0.85rem;">
+            Добавлен: ${new Date(salon.created_at).toLocaleDateString('ru-RU')}
+          </p>
+        </div>
+      `;
+      
+      list.appendChild(item);
+    });
+  }
+
+  async function loadBookings() {
+    try {
+      const response = await fetch('/api/master/bookings');
+      const result = await response.json();
+      
+      if (result.success) {
+        renderBookings(result.bookings);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки записей:', error);
+    }
+  }
+
+  function renderBookings(bookings) {
+    const list = document.getElementById('bookings-list');
+    if (!list) return;
+
+    if (bookings.length === 0) {
+      list.innerHTML = '<p style="text-align: center; color: #6b7280;">У вас пока нет записей</p>';
+      return;
+    }
+
+    list.innerHTML = '';
+    bookings.forEach((booking) => {
+      const item = document.createElement('div');
+      item.className = 'admin-list-item';
+      item.style.padding = '16px';
+      item.style.marginBottom = '12px';
+      item.style.border = '1px solid #e5e7eb';
+      item.style.borderRadius = '8px';
+      
+      const date = new Date(booking.date);
+      const dateStr = date.toLocaleDateString('ru-RU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      
+      item.innerHTML = `
+        <div>
+          <h4 style="margin: 0 0 8px 0;">${booking.name}</h4>
+          <p style="margin: 4px 0; color: #6b7280;">
+            <strong>Салон:</strong> ${booking.salon_name || 'Не указан'}<br/>
+            <strong>Услуга:</strong> ${booking.service}<br/>
+            <strong>Дата:</strong> ${dateStr}<br/>
+            <strong>Время:</strong> ${booking.time}${booking.end_time ? ` - ${booking.end_time}` : ''}<br/>
+            <strong>Телефон:</strong> ${booking.phone}
+            ${booking.comment ? `<br/><strong>Комментарий:</strong> ${booking.comment}` : ''}
+          </p>
+        </div>
+      `;
+      
+      list.appendChild(item);
+    });
+  }
+
+  function loadProfile() {
+    if (!currentUser) return;
+    
+    document.getElementById('profile-email').value = currentUser.email || '';
+    document.getElementById('profile-phone').value = currentUser.salonPhone || '';
+  }
+
+  // Обработка формы профиля
+  document.getElementById('profile-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const alert = document.getElementById('profile-alert');
+    alert.style.display = 'none';
+
+    const email = document.getElementById('profile-email').value;
+    const phone = document.getElementById('profile-phone').value;
+
+    try {
+      const response = await fetch('/api/master/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, salonPhone: phone })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert.className = 'alert alert-success';
+        alert.textContent = 'Профиль обновлен';
+        alert.style.display = 'block';
+        loadUserData();
+      } else {
+        alert.className = 'alert alert-error';
+        alert.textContent = result.message || 'Ошибка обновления профиля';
+        alert.style.display = 'block';
+      }
+    } catch (error) {
+      alert.className = 'alert alert-error';
+      alert.textContent = 'Ошибка соединения';
+      alert.style.display = 'block';
+    }
+  });
+
+  // Переключение вкладок
+  document.querySelectorAll('.main-tab-button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabName = btn.dataset.mainTab;
+      
+      document.querySelectorAll('.main-tab-button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      document.querySelectorAll('.main-tab-content').forEach(tab => {
+        tab.style.display = 'none';
+        tab.classList.remove('active');
+      });
+      
+      const targetTab = document.getElementById(`${tabName}-tab`);
+      if (targetTab) {
+        targetTab.style.display = 'block';
+        targetTab.classList.add('active');
+      }
+    });
+  });
+
+  // Выход
+  const logoutLink = document.getElementById('logout-link');
+  if (logoutLink) {
+    logoutLink.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await fetch('/api/logout', { method: 'POST' });
+      window.location.href = '/';
+    });
+  }
+
+  // Загружаем данные при загрузке страницы
+  loadUserData();
+</script>
+</body>
+</html>
+

@@ -7,7 +7,7 @@ const multer = require('multer');
 const Minio = require('minio');
 const https = require('https');
 const http = require('http');
-const { users: dbUsers, services, masters, bookings, notifications, migrateFromJSON } = require('./database');
+const { pool, users: dbUsers, services, masters, salonMasters, bookings, notifications, migrateFromJSON } = require('./database');
 const { 
   timeToMinutes, 
   formatTime, 
@@ -504,6 +504,42 @@ async function requireAdmin(req, res, next) {
   }
 }
 
+// Middleware для проверки прав мастера
+async function requireMaster(req, res, next) {
+  if (!req.session.userId) {
+    if (req.path && req.path.startsWith('/api/')) {
+      return res.status(401).json({ success: false, message: 'Требуется авторизация' });
+    }
+    if (req.accepts && req.accepts('html')) {
+      return res.redirect('/login');
+    }
+    return res.status(401).json({ success: false, message: 'Требуется авторизация' });
+  }
+  try {
+    const user = await dbUsers.getById(req.session.userId);
+    const isMaster = user && user.role === 'master';
+    if (!isMaster) {
+      if (req.path && req.path.startsWith('/api/')) {
+        return res.status(403).json({ success: false, message: 'Доступ запрещен. Требуются права мастера.' });
+      }
+      if (req.accepts && req.accepts('html')) {
+        return res.status(403).send('Доступ запрещен. Требуются права мастера.');
+      }
+      return res.status(403).json({ success: false, message: 'Доступ запрещен. Требуются права мастера.' });
+    }
+    next();
+  } catch (error) {
+    console.error('Ошибка проверки прав мастера:', error);
+    if (req.path && req.path.startsWith('/api/')) {
+      return res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    }
+    if (req.accepts && req.accepts('html')) {
+      return res.status(500).send('Ошибка сервера');
+    }
+    return res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+}
+
 // Главная страница (лендинг)
 app.get('/', (req, res) => {
   if (req.session.userId) {
@@ -520,7 +556,16 @@ app.get('/booking', (req, res) => {
 // Страница входа
 app.get('/login', (req, res) => {
   if (req.session.userId) {
-    return res.redirect('/admin');
+    // Проверяем роль и редиректим соответственно
+    dbUsers.getById(req.session.userId).then(user => {
+      if (user && user.role === 'master') {
+        return res.redirect('/master');
+      }
+      return res.redirect('/admin');
+    }).catch(() => {
+      res.sendFile(path.join(__dirname, 'views', 'login.html'));
+    });
+    return;
   }
   res.sendFile(path.join(__dirname, 'views', 'login.html'));
 });
@@ -531,6 +576,39 @@ app.get('/register', (req, res) => {
     return res.redirect('/admin');
   }
   res.sendFile(path.join(__dirname, 'views', 'register.html'));
+});
+
+// Страница регистрации мастера
+app.get('/register/master', (req, res) => {
+  if (req.session.userId) {
+    const user = req.session.userId;
+    // Проверяем роль и редиректим соответственно
+    dbUsers.getById(user).then(u => {
+      if (u && u.role === 'master') {
+        return res.redirect('/master');
+      }
+      return res.redirect('/admin');
+    }).catch(() => {
+      res.sendFile(path.join(__dirname, 'views', 'register-master.html'));
+    });
+    return;
+  }
+  res.sendFile(path.join(__dirname, 'views', 'register-master.html'));
+});
+
+// Страница личного кабинета мастера
+app.get('/master', requireMaster, (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'master.html'));
+});
+
+// Страница календаря мастера (тот же файл, но другой маршрут для навигации)
+app.get('/master/calendar', requireMaster, (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'master.html'));
+});
+
+// Страница профиля мастера (тот же файл, но другой маршрут для навигации)
+app.get('/master/profile', requireMaster, (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'master.html'));
 });
 
 // Страница админки
@@ -621,6 +699,63 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
+// API: Регистрация мастера
+app.post('/api/register/master', async (req, res) => {
+  try {
+    const { username, password, email, phone } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ success: false, message: 'Заполните все обязательные поля' });
+    }
+
+    // Валидация
+    const usernameValidation = validateUsername(username);
+    if (!usernameValidation.valid) {
+      return res.status(400).json({ success: false, message: usernameValidation.message });
+    }
+
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ success: false, message: passwordValidation.message });
+    }
+
+    // Телефон опционален для мастера
+    let phoneValidation = { valid: true };
+    if (phone && phone.trim()) {
+      phoneValidation = validatePhone(phone);
+      if (!phoneValidation.valid) {
+        return res.status(400).json({ success: false, message: phoneValidation.message });
+      }
+    }
+
+    const existingUser = await dbUsers.getByUsername(usernameValidation.username);
+    if (existingUser) {
+      return res.status(409).json({ success: false, message: 'Пользователь с таким именем уже существует' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const userId = await dbUsers.create({
+      username: usernameValidation.username,
+      email: email ? email.trim() : '',
+      password: hashedPassword,
+      role: 'master',
+      isActive: true,
+      salonName: '',
+      salonAddress: '',
+      salonLat: null,
+      salonLng: null,
+      salonPhone: phone && phoneValidation.valid ? phone.trim() : null
+    });
+
+    req.session.userId = userId;
+    req.session.originalUserId = userId;
+    res.status(201).json({ success: true, message: 'Регистрация мастера успешна' });
+  } catch (error) {
+    console.error('Ошибка регистрации мастера:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера при регистрации' });
+  }
+});
+
 // API: Вход
 app.post('/api/login', async (req, res) => {
   try {
@@ -661,7 +796,12 @@ app.post('/api/login', async (req, res) => {
       });
     });
     
-    res.json({ success: true, message: 'Вход выполнен' });
+    // Возвращаем роль для правильного редиректа на фронтенде
+    res.json({ 
+      success: true, 
+      message: 'Вход выполнен',
+      role: user.role
+    });
   } catch (error) {
     console.error('Ошибка входа:', error);
     res.status(500).json({ success: false, message: 'Ошибка сервера при входе' });
@@ -682,9 +822,19 @@ app.get('/api/user', requireAuth, async (req, res) => {
       return res.json({ success: false });
     }
     
-    // Получаем услуги и мастеров
-    const userServices = await services.getByUserId(user.id);
-    const userMasters = await masters.getByUserId(user.id);
+    // Получаем данные в зависимости от роли
+    let userServices = [];
+    let userMasters = [];
+    let masterSalons = [];
+    
+    if (user.role === 'master') {
+      // Для мастера получаем список салонов, где он работает
+      masterSalons = await salonMasters.getByMasterId(user.id);
+    } else {
+      // Для владельца получаем услуги и мастеров
+      userServices = await services.getByUserId(user.id);
+      userMasters = await masters.getByUserId(user.id);
+    }
     
     // Получаем настройки дизайна
     let salonDesign = {};
@@ -730,6 +880,7 @@ app.get('/api/user', requireAuth, async (req, res) => {
       workHours: workHours,
       services: userServices,
       masters: userMasters,
+      masterSalons: masterSalons, // Список салонов для мастера
       createdAt: user.created_at
     };
 
@@ -1566,6 +1717,182 @@ app.delete('/api/masters/:masterId/photos/:filename', requireAuth, async (req, r
   } catch (error) {
     console.error('Ошибка удаления фото:', error);
     res.status(500).json({ success: false, message: 'Ошибка удаления фото' });
+  }
+});
+
+// ========== API для управления мастерами в салоне ==========
+
+// API: Поиск мастеров для добавления к салону
+app.get('/api/masters/search', requireAuth, async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim().length < 2) {
+      return res.status(400).json({ success: false, message: 'Введите минимум 2 символа для поиска' });
+    }
+
+    const user = await dbUsers.getById(req.session.userId);
+    if (!user || user.role !== 'user') {
+      return res.status(403).json({ success: false, message: 'Доступ запрещен' });
+    }
+
+    const searchQuery = `%${q.trim().toLowerCase()}%`;
+    const result = await pool.query(`
+      SELECT id, username, email, created_at
+      FROM users
+      WHERE role = 'master'
+        AND is_active = true
+        AND (LOWER(username) LIKE $1 OR LOWER(email) LIKE $1)
+      ORDER BY username
+      LIMIT 20
+    `, [searchQuery]);
+
+    res.json({ success: true, masters: result.rows });
+  } catch (error) {
+    console.error('Ошибка поиска мастеров:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// API: Добавить мастера к салону
+app.post('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => {
+  try {
+    const idValidation = validateId(req.params.masterUserId, 'ID мастера');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, message: idValidation.message });
+    }
+    const masterUserId = idValidation.id;
+
+    const user = await dbUsers.getById(req.session.userId);
+    if (!user || user.role !== 'user') {
+      return res.status(403).json({ success: false, message: 'Доступ запрещен. Только владелец салона может добавлять мастеров.' });
+    }
+
+    const masterUser = await dbUsers.getById(masterUserId);
+    if (!masterUser || masterUser.role !== 'master') {
+      return res.status(404).json({ success: false, message: 'Мастер не найден' });
+    }
+
+    // Проверяем, не добавлен ли уже этот мастер
+    const alreadyAdded = await salonMasters.isMasterInSalon(user.id, masterUserId);
+    if (alreadyAdded) {
+      return res.status(409).json({ success: false, message: 'Мастер уже добавлен к вашему салону' });
+    }
+
+    // Ищем запись мастера с таким именем, если есть
+    const userMasters = await masters.getByUserId(user.id);
+    let masterRecord = userMasters.find(m => 
+      m.name.toLowerCase() === masterUser.username.toLowerCase()
+    );
+    
+    await salonMasters.add(user.id, masterUserId, masterRecord ? masterRecord.id : null);
+    
+    res.json({ success: true, message: 'Мастер успешно добавлен к салону' });
+  } catch (error) {
+    console.error('Ошибка добавления мастера:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// API: Удалить мастера из салона
+app.delete('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => {
+  try {
+    const idValidation = validateId(req.params.masterUserId, 'ID мастера');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, message: idValidation.message });
+    }
+    const masterUserId = idValidation.id;
+
+    const user = await dbUsers.getById(req.session.userId);
+    if (!user || user.role !== 'user') {
+      return res.status(403).json({ success: false, message: 'Доступ запрещен' });
+    }
+
+    await salonMasters.remove(user.id, masterUserId);
+    res.json({ success: true, message: 'Мастер удален из салона' });
+  } catch (error) {
+    console.error('Ошибка удаления мастера:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// API: Получить список мастеров салона (для владельца)
+app.get('/api/salon/masters', requireAuth, async (req, res) => {
+  try {
+    const user = await dbUsers.getById(req.session.userId);
+    if (!user || user.role !== 'user') {
+      return res.status(403).json({ success: false, message: 'Доступ запрещен' });
+    }
+
+    const salonMastersList = await salonMasters.getBySalonId(user.id);
+    res.json({ success: true, masters: salonMastersList });
+  } catch (error) {
+    console.error('Ошибка получения мастеров салона:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// ========== API для мастера ==========
+
+// API: Получить список салонов мастера
+app.get('/api/master/salons', requireMaster, async (req, res) => {
+  try {
+    const user = await dbUsers.getById(req.session.userId);
+    const salons = await salonMasters.getByMasterId(user.id);
+    res.json({ success: true, salons });
+  } catch (error) {
+    console.error('Ошибка получения салонов мастера:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// API: Получить записи мастера
+app.get('/api/master/bookings', requireMaster, async (req, res) => {
+  try {
+    const user = await dbUsers.getById(req.session.userId);
+    const { date } = req.query;
+    
+    let masterBookings;
+    if (date) {
+      masterBookings = await bookings.getByMasterUserIdAndDate(user.id, date);
+    } else {
+      masterBookings = await bookings.getByMasterUserId(user.id);
+    }
+
+    res.json({ success: true, bookings: masterBookings });
+  } catch (error) {
+    console.error('Ошибка получения записей мастера:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// API: Обновить профиль мастера
+app.put('/api/master/profile', requireMaster, async (req, res) => {
+  try {
+    const { email, salonPhone } = req.body;
+    const user = await dbUsers.getById(req.session.userId);
+    
+    const updateData = {};
+    if (email !== undefined) {
+      if (email && !validateEmail(email).valid) {
+        return res.status(400).json({ success: false, message: 'Некорректный email' });
+      }
+      updateData.email = email ? email.trim() : '';
+    }
+    if (salonPhone !== undefined) {
+      if (salonPhone) {
+        const phoneValidation = validatePhone(salonPhone);
+        if (!phoneValidation.valid) {
+          return res.status(400).json({ success: false, message: phoneValidation.message });
+        }
+      }
+      updateData.salonPhone = salonPhone ? salonPhone.trim() : null;
+    }
+
+    await dbUsers.update(user.id, updateData);
+    res.json({ success: true, message: 'Профиль обновлен' });
+  } catch (error) {
+    console.error('Ошибка обновления профиля мастера:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
 

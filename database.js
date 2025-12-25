@@ -124,6 +124,42 @@ async function initDatabase() {
       END $$;
     `);
 
+    // Добавляем колонку master_user_id для связи с пользователем-мастером
+    await client.query(`
+      DO $$ 
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'masters' AND column_name = 'master_user_id'
+        ) THEN
+          ALTER TABLE masters ADD COLUMN master_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+        END IF;
+      END $$;
+    `);
+
+    // Таблица связей салон-мастер
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS salon_masters (
+        id SERIAL PRIMARY KEY,
+        salon_user_id INTEGER NOT NULL,
+        master_user_id INTEGER NOT NULL,
+        master_record_id INTEGER,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (salon_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (master_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (master_record_id) REFERENCES masters(id) ON DELETE SET NULL,
+        UNIQUE(salon_user_id, master_user_id)
+      )
+    `);
+
+    // Индексы для таблицы salon_masters
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_salon_masters_salon_user_id ON salon_masters(salon_user_id);
+      CREATE INDEX IF NOT EXISTS idx_salon_masters_master_user_id ON salon_masters(master_user_id);
+      CREATE INDEX IF NOT EXISTS idx_salon_masters_is_active ON salon_masters(is_active);
+    `);
+
     // Таблица записей
     await client.query(`
       CREATE TABLE IF NOT EXISTS bookings (
@@ -146,6 +182,7 @@ async function initDatabase() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_services_user_id ON services(user_id);
       CREATE INDEX IF NOT EXISTS idx_masters_user_id ON masters(user_id);
+      CREATE INDEX IF NOT EXISTS idx_masters_master_user_id ON masters(master_user_id) WHERE master_user_id IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON bookings(user_id);
       CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(date);
     `);
@@ -560,6 +597,88 @@ const masters = {
     } finally {
       client.release();
     }
+  },
+
+  getByMasterUserId: async (masterUserId) => {
+    requirePool();
+    const result = await pool.query(
+      'SELECT * FROM masters WHERE master_user_id = $1 ORDER BY id',
+      [masterUserId]
+    );
+    return result.rows.map(row => ({
+      ...row,
+      photos: row.photos && typeof row.photos === 'object' ? row.photos : (Array.isArray(row.photos) ? row.photos : [])
+    }));
+  }
+};
+
+// Функции для работы с связями салон-мастер
+const salonMasters = {
+  // Добавить мастера к салону
+  add: async (salonUserId, masterUserId, masterRecordId = null) => {
+    requirePool();
+    const result = await pool.query(`
+      INSERT INTO salon_masters (salon_user_id, master_user_id, master_record_id, is_active)
+      VALUES ($1, $2, $3, true)
+      ON CONFLICT (salon_user_id, master_user_id) 
+      DO UPDATE SET is_active = true, master_record_id = COALESCE(EXCLUDED.master_record_id, salon_masters.master_record_id)
+      RETURNING id
+    `, [salonUserId, masterUserId, masterRecordId]);
+    return result.rows[0].id;
+  },
+
+  // Удалить мастера из салона
+  remove: async (salonUserId, masterUserId) => {
+    requirePool();
+    await pool.query(
+      'DELETE FROM salon_masters WHERE salon_user_id = $1 AND master_user_id = $2',
+      [salonUserId, masterUserId]
+    );
+  },
+
+  // Получить всех мастеров салона
+  getBySalonId: async (salonUserId) => {
+    requirePool();
+    const result = await pool.query(`
+      SELECT sm.*, u.username, u.email, u.created_at as user_created_at
+      FROM salon_masters sm
+      JOIN users u ON sm.master_user_id = u.id
+      WHERE sm.salon_user_id = $1 AND sm.is_active = true
+      ORDER BY sm.created_at DESC
+    `, [salonUserId]);
+    return result.rows;
+  },
+
+  // Получить все салоны мастера
+  getByMasterId: async (masterUserId) => {
+    requirePool();
+    const result = await pool.query(`
+      SELECT sm.*, u.id as salon_id, u.username as salon_username, u.salon_name, u.salon_address, u.created_at as salon_created_at
+      FROM salon_masters sm
+      JOIN users u ON sm.salon_user_id = u.id
+      WHERE sm.master_user_id = $1 AND sm.is_active = true
+      ORDER BY sm.created_at DESC
+    `, [masterUserId]);
+    return result.rows;
+  },
+
+  // Проверить, является ли мастер привязанным к салону
+  isMasterInSalon: async (salonUserId, masterUserId) => {
+    requirePool();
+    const result = await pool.query(
+      'SELECT id FROM salon_masters WHERE salon_user_id = $1 AND master_user_id = $2 AND is_active = true LIMIT 1',
+      [salonUserId, masterUserId]
+    );
+    return result.rows.length > 0;
+  },
+
+  // Деактивировать связь (не удалять)
+  deactivate: async (salonUserId, masterUserId) => {
+    requirePool();
+    await pool.query(
+      'UPDATE salon_masters SET is_active = false WHERE salon_user_id = $1 AND master_user_id = $2',
+      [salonUserId, masterUserId]
+    );
   }
 };
 
@@ -574,6 +693,65 @@ const bookings = {
   getByUserId: async (userId) => {
     requirePool();
     const result = await pool.query('SELECT * FROM bookings WHERE user_id = $1 ORDER BY date, time', [userId]);
+    return result.rows;
+  },
+
+  // Получить записи мастера во всех салонах, где он работает
+  getByMasterUserId: async (masterUserId) => {
+    requirePool();
+    const result = await pool.query(`
+      SELECT b.*, u.salon_name, u.salon_address
+      FROM bookings b
+      JOIN salon_masters sm ON b.user_id = sm.salon_user_id
+      JOIN users u ON b.user_id = u.id
+      WHERE sm.master_user_id = $1 
+        AND sm.is_active = true
+        AND (b.master IS NOT NULL AND b.master != '')
+        AND (
+          -- Поиск по имени мастера в записи
+          LOWER(TRIM(b.master)) IN (
+            SELECT LOWER(TRIM(m.name)) 
+            FROM masters m
+            WHERE m.master_user_id = $1
+          )
+          -- Или по имени пользователя мастера
+          OR LOWER(TRIM(b.master)) = (
+            SELECT LOWER(TRIM(u2.username))
+            FROM users u2
+            WHERE u2.id = $1
+          )
+        )
+      ORDER BY b.date, b.time
+    `, [masterUserId]);
+    return result.rows;
+  },
+
+  // Получить записи мастера по дате
+  getByMasterUserIdAndDate: async (masterUserId, date) => {
+    requirePool();
+    const result = await pool.query(`
+      SELECT b.*, u.salon_name, u.salon_address
+      FROM bookings b
+      JOIN salon_masters sm ON b.user_id = sm.salon_user_id
+      JOIN users u ON b.user_id = u.id
+      WHERE sm.master_user_id = $1 
+        AND sm.is_active = true
+        AND b.date = $2
+        AND (b.master IS NOT NULL AND b.master != '')
+        AND (
+          LOWER(TRIM(b.master)) IN (
+            SELECT LOWER(TRIM(m.name)) 
+            FROM masters m
+            WHERE m.master_user_id = $1
+          )
+          OR LOWER(TRIM(b.master)) = (
+            SELECT LOWER(TRIM(u2.username))
+            FROM users u2
+            WHERE u2.id = $1
+          )
+        )
+      ORDER BY b.time
+    `, [masterUserId, date]);
     return result.rows;
   },
 
@@ -841,6 +1019,7 @@ module.exports = {
   users,
   services,
   masters,
+  salonMasters,
   bookings,
   notifications,
   migrateFromJSON,

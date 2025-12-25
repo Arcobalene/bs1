@@ -9,7 +9,7 @@
 <body>
 <header>
   <h1>Beauty Studio</h1>
-  <p>Вход для владельцев салона</p>
+  <p>Вход в систему</p>
   <div class="nav-links">
     <a href="/">На главную</a>
     <a href="/register">Регистрация</a>
@@ -19,7 +19,11 @@
 <div class="container">
   <div class="card" style="max-width: 400px; margin: 0 auto;">
     <h2>Вход в систему</h2>
-    <p class="description">Войдите в свой аккаунт для управления услугами и записями.</p>
+    <p class="description">Войдите в свой аккаунт.</p>
+    <p class="note" style="margin-bottom: 16px;">
+      <a href="/register/master" style="color: #a855f7;">Регистрация мастера</a> | 
+      <a href="/register" style="color: #a855f7;">Регистрация салона</a>
+    </p>
 
     <form id="login-form">
       <div>
@@ -70,7 +74,12 @@
 
       const result = await response.json();
       if (result.success) {
-        window.location.href = '/admin';
+        // Редиректим в зависимости от роли
+        if (result.role === 'master') {
+          window.location.href = '/master';
+        } else {
+          window.location.href = '/admin';
+        }
       } else {
         errorAlert.textContent = result.message || 'Ошибка входа';
         errorAlert.style.display = 'block';
