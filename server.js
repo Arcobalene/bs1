@@ -542,9 +542,8 @@ async function requireMaster(req, res, next) {
 
 // Главная страница (лендинг)
 app.get('/', (req, res) => {
-  if (req.session.userId) {
-    return res.redirect('/admin');
-  }
+  // Не редиректим автоматически - пусть пользователь сам выберет, куда идти
+  // Если авторизован как владелец/мастер, он может использовать модальные окна для входа
   res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 

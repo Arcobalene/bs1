@@ -233,17 +233,29 @@
     <span class="current">Личный кабинет клиента</span>
   </div>
   
-  <!-- Ввод телефона (показывается только если не авторизован) -->
-  <div class="phone-input-section" id="phone-input-section">
-    <h3>Введите ваш номер телефона</h3>
-    <div class="phone-input-group">
-      <input type="tel" id="client-phone-input" placeholder="+998XX XXX XX XX" />
-      <button type="button" class="btn-primary" id="load-bookings-btn">Загрузить записи</button>
+  <!-- Кнопки регистрации/входа (показываются только если не авторизован) -->
+  <div class="phone-input-section" id="phone-input-section" style="text-align: center;">
+    <h3>Войдите или зарегистрируйтесь</h3>
+    <p class="description" style="margin-bottom: 24px;">Для просмотра ваших записей необходимо войти в систему или зарегистрироваться</p>
+    <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+      <button type="button" class="btn-primary" id="open-cabinet-register-modal" style="padding: 16px 32px; font-size: 1rem;">
+        📝 Регистрация
+      </button>
+      <button type="button" class="btn-secondary" id="open-cabinet-login-modal" style="padding: 16px 32px; font-size: 1rem;">
+        🔐 Вход
+      </button>
     </div>
-    <div id="phone-error" class="alert alert-error" style="display: none; margin-top: 12px;"></div>
-    <p class="note" style="margin-top: 12px; text-align: center;">
-      Или <a href="/login-client" style="color: #a855f7;">войдите</a> / <a href="/register-client" style="color: #a855f7;">зарегистрируйтесь</a> для автоматической загрузки записей
+    <p class="note" style="margin-top: 16px;">
+      Или <button type="button" id="load-bookings-by-phone-btn" style="background: none; border: none; color: #a855f7; text-decoration: underline; cursor: pointer; padding: 0;">введите номер телефона</button> для просмотра записей без регистрации
     </p>
+    <!-- Скрытая форма ввода телефона -->
+    <div id="phone-input-form" style="display: none; margin-top: 24px;">
+      <div class="phone-input-group">
+        <input type="tel" id="client-phone-input" placeholder="+998XX XXX XX XX" />
+        <button type="button" class="btn-primary" id="load-bookings-btn">Загрузить записи</button>
+      </div>
+      <div id="phone-error" class="alert alert-error" style="display: none; margin-top: 12px;"></div>
+    </div>
   </div>
 
   <!-- Вкладки -->
@@ -284,6 +296,137 @@
 <footer>
   © 2025 Beauty Studio. Все права защищены.
 </footer>
+
+<!-- Модальное окно регистрации -->
+<div id="register-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width: 500px;">
+    <div class="modal-header">
+      <div class="modal-title">Регистрация</div>
+      <button type="button" class="modal-close" id="close-register-modal">×</button>
+    </div>
+    <div class="modal-body">
+      <!-- Выбор типа пользователя -->
+      <div id="register-type-selection">
+        <p class="description" style="margin-bottom: 16px;">Выберите тип аккаунта:</p>
+        <div style="display: grid; gap: 12px;">
+          <button type="button" class="btn-secondary register-type-btn" data-type="client" style="text-align: left; padding: 16px;">
+            <div style="font-weight: 600; margin-bottom: 4px;">👤 Клиент</div>
+            <div style="font-size: 0.85rem; color: #6b7280;">Просмотр записей и запись в салоны</div>
+          </button>
+          <button type="button" class="btn-secondary register-type-btn" data-type="master" style="text-align: left; padding: 16px;">
+            <div style="font-weight: 600; margin-bottom: 4px;">✂️ Мастер</div>
+            <div style="font-size: 0.85rem; color: #6b7280;">Управление своим расписанием</div>
+          </button>
+          <button type="button" class="btn-secondary register-type-btn" data-type="salon" style="text-align: left; padding: 16px;">
+            <div style="font-weight: 600; margin-bottom: 4px;">🏢 Салон</div>
+            <div style="font-size: 0.85rem; color: #6b7280;">Управление услугами, мастерами и записями</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Форма регистрации клиента -->
+      <div id="register-client-form" style="display: none;">
+        <button type="button" class="btn-secondary" id="back-register-type" style="margin-bottom: 12px; padding: 8px 16px; font-size: 0.9rem;">← Назад</button>
+        <h3 style="margin-bottom: 16px;">Регистрация клиента</h3>
+        <form id="register-client-form-submit">
+          <div>
+            <label for="reg-client-name">Имя *</label>
+            <input type="text" id="reg-client-name" required placeholder="Ваше имя" />
+          </div>
+          <div>
+            <label for="reg-client-phone">Телефон *</label>
+            <input type="tel" id="reg-client-phone" required placeholder="+998XX XXX XX XX" />
+          </div>
+          <div>
+            <label for="reg-client-email">Email (необязательно)</label>
+            <input type="email" id="reg-client-email" placeholder="your@email.com" />
+          </div>
+          <div>
+            <label for="reg-client-password">Пароль (необязательно)</label>
+            <input type="password" id="reg-client-password" placeholder="Минимум 6 символов" />
+          </div>
+          <button type="submit" class="btn-primary" style="width: 100%; margin-top: 8px;">Зарегистрироваться</button>
+          <div id="register-client-error" class="alert alert-error" style="display: none; margin-top: 12px;"></div>
+        </form>
+      </div>
+
+      <!-- Форма регистрации мастера -->
+      <div id="register-master-form" style="display: none;">
+        <button type="button" class="btn-secondary" id="back-register-type-master" style="margin-bottom: 12px; padding: 8px 16px; font-size: 0.9rem;">← Назад</button>
+        <h3 style="margin-bottom: 16px;">Регистрация мастера</h3>
+        <p class="note" style="margin-bottom: 16px;">Вы будете перенаправлены на страницу регистрации мастера</p>
+        <a href="/register/master" class="btn-primary" style="width: 100%; text-align: center; text-decoration: none; display: block;">Перейти к регистрации</a>
+      </div>
+
+      <!-- Форма регистрации салона -->
+      <div id="register-salon-form" style="display: none;">
+        <button type="button" class="btn-secondary" id="back-register-type-salon" style="margin-bottom: 12px; padding: 8px 16px; font-size: 0.9rem;">← Назад</button>
+        <h3 style="margin-bottom: 16px;">Регистрация салона</h3>
+        <p class="note" style="margin-bottom: 16px;">Вы будете перенаправлены на страницу регистрации салона</p>
+        <a href="/register" class="btn-primary" style="width: 100%; text-align: center; text-decoration: none; display: block;">Перейти к регистрации</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Модальное окно входа -->
+<div id="login-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width: 500px;">
+    <div class="modal-header">
+      <div class="modal-title">Вход</div>
+      <button type="button" class="modal-close" id="close-login-modal">×</button>
+    </div>
+    <div class="modal-body">
+      <!-- Выбор типа пользователя -->
+      <div id="login-type-selection">
+        <p class="description" style="margin-bottom: 16px;">Выберите тип аккаунта:</p>
+        <div style="display: grid; gap: 12px;">
+          <button type="button" class="btn-secondary login-type-btn" data-type="client" style="text-align: left; padding: 16px;">
+            <div style="font-weight: 600; margin-bottom: 4px;">👤 Клиент</div>
+            <div style="font-size: 0.85rem; color: #6b7280;">Вход в личный кабинет</div>
+          </button>
+          <button type="button" class="btn-secondary login-type-btn" data-type="master" style="text-align: left; padding: 16px;">
+            <div style="font-weight: 600; margin-bottom: 4px;">✂️ Мастер</div>
+            <div style="font-size: 0.85rem; color: #6b7280;">Вход для мастеров</div>
+          </button>
+          <button type="button" class="btn-secondary login-type-btn" data-type="salon" style="text-align: left; padding: 16px;">
+            <div style="font-weight: 600; margin-bottom: 4px;">🏢 Салон</div>
+            <div style="font-size: 0.85rem; color: #6b7280;">Вход для владельцев салонов</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Форма входа клиента -->
+      <div id="login-client-form" style="display: none;">
+        <button type="button" class="btn-secondary" id="back-login-type" style="margin-bottom: 12px; padding: 8px 16px; font-size: 0.9rem;">← Назад</button>
+        <h3 style="margin-bottom: 16px;">Вход для клиента</h3>
+        <form id="login-client-form-submit">
+          <div>
+            <label for="login-client-phone">Телефон *</label>
+            <input type="tel" id="login-client-phone" required placeholder="+998XX XXX XX XX" />
+          </div>
+          <div>
+            <label for="login-client-password">Пароль (если установлен)</label>
+            <input type="password" id="login-client-password" placeholder="Оставьте пустым, если не устанавливали" />
+          </div>
+          <button type="submit" class="btn-primary" style="width: 100%; margin-top: 8px;">Войти</button>
+          <div id="login-client-error" class="alert alert-error" style="display: none; margin-top: 12px;"></div>
+        </form>
+        <p class="note" style="margin-top: 12px; text-align: center;">
+          Нет аккаунта? <a href="#" id="switch-to-register-client" style="color: #a855f7;">Зарегистрируйтесь</a>
+        </p>
+      </div>
+
+      <!-- Форма входа мастера/салона -->
+      <div id="login-owner-form" style="display: none;">
+        <button type="button" class="btn-secondary" id="back-login-type-owner" style="margin-bottom: 12px; padding: 8px 16px; font-size: 0.9rem;">← Назад</button>
+        <h3 style="margin-bottom: 16px;" id="login-owner-title">Вход</h3>
+        <p class="note" style="margin-bottom: 16px;">Вы будете перенаправлены на страницу входа</p>
+        <a href="/login" id="login-owner-link" class="btn-primary" style="width: 100%; text-align: center; text-decoration: none; display: block;">Перейти к входу</a>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
   let currentPhone = '';
@@ -589,6 +732,268 @@
   
   // Подсвечиваем активную страницу
   highlightActivePage();
+
+  // Модальные окна для регистрации и входа (копируем логику с главной страницы)
+  // Модальные окна уже есть в HTML (скопированы из index.html), нужно только добавить обработчики
+  
+  // Открытие модального окна регистрации
+  function openRegisterModal() {
+    const modal = document.getElementById('register-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      resetRegisterModal();
+    }
+  }
+
+  // Открытие модального окна входа
+  function openLoginModal() {
+    const modal = document.getElementById('login-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      resetLoginModal();
+    }
+  }
+
+  // Сброс модального окна регистрации
+  function resetRegisterModal() {
+    const typeSelection = document.getElementById('register-type-selection');
+    const clientForm = document.getElementById('register-client-form');
+    const masterForm = document.getElementById('register-master-form');
+    const salonForm = document.getElementById('register-salon-form');
+    const errorDiv = document.getElementById('register-client-error');
+    const formSubmit = document.getElementById('register-client-form-submit');
+    
+    if (typeSelection) typeSelection.style.display = 'block';
+    if (clientForm) clientForm.style.display = 'none';
+    if (masterForm) masterForm.style.display = 'none';
+    if (salonForm) salonForm.style.display = 'none';
+    if (errorDiv) errorDiv.style.display = 'none';
+    if (formSubmit) formSubmit.reset();
+  }
+
+  // Сброс модального окна входа
+  function resetLoginModal() {
+    const typeSelection = document.getElementById('login-type-selection');
+    const clientForm = document.getElementById('login-client-form');
+    const ownerForm = document.getElementById('login-owner-form');
+    const errorDiv = document.getElementById('login-client-error');
+    const formSubmit = document.getElementById('login-client-form-submit');
+    
+    if (typeSelection) typeSelection.style.display = 'block';
+    if (clientForm) clientForm.style.display = 'none';
+    if (ownerForm) ownerForm.style.display = 'none';
+    if (errorDiv) errorDiv.style.display = 'none';
+    if (formSubmit) formSubmit.reset();
+  }
+
+  // Обработчики кнопок открытия модальных окон
+  document.getElementById('open-cabinet-register-modal')?.addEventListener('click', openRegisterModal);
+  document.getElementById('open-cabinet-login-modal')?.addEventListener('click', openLoginModal);
+
+  // Кнопка показа формы ввода телефона
+  document.getElementById('load-bookings-by-phone-btn')?.addEventListener('click', () => {
+    const phoneForm = document.getElementById('phone-input-form');
+    if (phoneForm) {
+      phoneForm.style.display = 'block';
+    }
+  });
+
+  // Закрытие модальных окон
+  document.getElementById('close-register-modal')?.addEventListener('click', () => {
+    document.getElementById('register-modal')?.classList.add('hidden');
+  });
+  document.getElementById('close-login-modal')?.addEventListener('click', () => {
+    document.getElementById('login-modal')?.classList.add('hidden');
+  });
+
+  // Клик по фону модальных окон
+  document.getElementById('register-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'register-modal') {
+      document.getElementById('register-modal').classList.add('hidden');
+    }
+  });
+  document.getElementById('login-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'login-modal') {
+      document.getElementById('login-modal').classList.add('hidden');
+    }
+  });
+
+  // Выбор типа пользователя для регистрации
+  document.querySelectorAll('.register-type-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.type;
+      const typeSelection = document.getElementById('register-type-selection');
+      if (typeSelection) typeSelection.style.display = 'none';
+      
+      if (type === 'client') {
+        const form = document.getElementById('register-client-form');
+        if (form) form.style.display = 'block';
+      } else if (type === 'master') {
+        const form = document.getElementById('register-master-form');
+        if (form) form.style.display = 'block';
+      } else if (type === 'salon') {
+        const form = document.getElementById('register-salon-form');
+        if (form) form.style.display = 'block';
+      }
+    });
+  });
+
+  // Выбор типа пользователя для входа
+  document.querySelectorAll('.login-type-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.type;
+      const typeSelection = document.getElementById('login-type-selection');
+      if (typeSelection) typeSelection.style.display = 'none';
+      
+      if (type === 'client') {
+        const form = document.getElementById('login-client-form');
+        if (form) form.style.display = 'block';
+      } else {
+        const form = document.getElementById('login-owner-form');
+        const title = document.getElementById('login-owner-title');
+        const link = document.getElementById('login-owner-link');
+        if (form) form.style.display = 'block';
+        if (type === 'master' && title) {
+          title.textContent = 'Вход для мастера';
+        } else if (type === 'salon' && title) {
+          title.textContent = 'Вход для владельца салона';
+        }
+        if (link) link.href = '/login';
+      }
+    });
+  });
+
+  // Кнопки "Назад" для регистрации
+  document.getElementById('back-register-type')?.addEventListener('click', resetRegisterModal);
+  document.getElementById('back-register-type-master')?.addEventListener('click', resetRegisterModal);
+  document.getElementById('back-register-type-salon')?.addEventListener('click', resetRegisterModal);
+
+  // Кнопки "Назад" для входа
+  document.getElementById('back-login-type')?.addEventListener('click', resetLoginModal);
+  document.getElementById('back-login-type-owner')?.addEventListener('click', resetLoginModal);
+
+  // Форма регистрации клиента (если модальное окно есть на странице)
+  const registerClientForm = document.getElementById('register-client-form-submit');
+  if (registerClientForm) {
+    registerClientForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorDiv = document.getElementById('register-client-error');
+      if (errorDiv) errorDiv.style.display = 'none';
+
+      const data = {
+        name: document.getElementById('reg-client-name').value.trim(),
+        phone: document.getElementById('reg-client-phone').value.trim(),
+        email: document.getElementById('reg-client-email').value.trim(),
+        password: document.getElementById('reg-client-password').value
+      };
+
+      if (!data.name || data.name.length < 2) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Имя должно содержать минимум 2 символа';
+          errorDiv.style.display = 'block';
+        }
+        return;
+      }
+
+      const phoneDigits = data.phone.replace(/\D/g, '');
+      if (phoneDigits.length < 9) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Некорректный номер телефона';
+          errorDiv.style.display = 'block';
+        }
+        return;
+      }
+
+      if (data.password && data.password.length < 6) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Пароль должен содержать минимум 6 символов';
+          errorDiv.style.display = 'block';
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/register-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          window.location.reload();
+        } else {
+          if (errorDiv) {
+            errorDiv.textContent = result.message || 'Ошибка регистрации';
+            errorDiv.style.display = 'block';
+          }
+        }
+      } catch (error) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Ошибка соединения. Попробуйте позже.';
+          errorDiv.style.display = 'block';
+        }
+      }
+    });
+  }
+
+  // Форма входа клиента (если модальное окно есть на странице)
+  const loginClientForm = document.getElementById('login-client-form-submit');
+  if (loginClientForm) {
+    loginClientForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorDiv = document.getElementById('login-client-error');
+      if (errorDiv) errorDiv.style.display = 'none';
+
+      const data = {
+        phone: document.getElementById('login-client-phone').value.trim(),
+        password: document.getElementById('login-client-password').value
+      };
+
+      const phoneDigits = data.phone.replace(/\D/g, '');
+      if (phoneDigits.length < 9) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Некорректный номер телефона';
+          errorDiv.style.display = 'block';
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/login-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          window.location.reload();
+        } else {
+          if (errorDiv) {
+            errorDiv.textContent = result.message || 'Ошибка входа';
+            errorDiv.style.display = 'block';
+          }
+        }
+      } catch (error) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Ошибка соединения. Попробуйте позже.';
+          errorDiv.style.display = 'block';
+        }
+      }
+    });
+  }
+
+  // Переключение между регистрацией и входом
+  document.getElementById('switch-to-register-client')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('login-modal')?.classList.add('hidden');
+    openRegisterModal();
+    setTimeout(() => {
+      const clientBtn = document.querySelector('.register-type-btn[data-type="client"]');
+      if (clientBtn) clientBtn.click();
+    }, 100);
+  });
 </script>
 </body>
 </html>
