@@ -1735,16 +1735,39 @@ app.get('/api/masters/search', requireAuth, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Доступ запрещен' });
     }
 
-    const searchQuery = `%${q.trim().toLowerCase()}%`;
-    const result = await pool.query(`
-      SELECT id, username, email, created_at
+    const searchTerm = q.trim();
+    const searchQuery = `%${searchTerm.toLowerCase()}%`;
+    
+    // Нормализуем номер телефона для поиска (удаляем все нецифровые символы, кроме +)
+    const phoneDigits = searchTerm.replace(/\D/g, '');
+    const phonePattern = phoneDigits.length >= 2 ? `%${phoneDigits}%` : null;
+    
+    // Формируем условия поиска
+    let query = `
+      SELECT id, username, email, salon_phone, created_at
       FROM users
       WHERE role = 'master'
         AND is_active = true
-        AND (LOWER(username) LIKE $1 OR LOWER(email) LIKE $1)
+        AND (
+          LOWER(username) LIKE $1 
+          OR LOWER(email) LIKE $1
+    `;
+    
+    const queryParams = [searchQuery];
+    
+    // Добавляем поиск по телефону, если есть хотя бы 2 цифры
+    if (phonePattern) {
+      query += ` OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(salon_phone, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') LIKE $${queryParams.length + 1}`;
+      queryParams.push(phonePattern);
+    }
+    
+    query += `
+        )
       ORDER BY username
       LIMIT 20
-    `, [searchQuery]);
+    `;
+    
+    const result = await pool.query(query, queryParams);
 
     res.json({ success: true, masters: result.rows });
   } catch (error) {

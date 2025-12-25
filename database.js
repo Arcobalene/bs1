@@ -640,7 +640,7 @@ const salonMasters = {
   getBySalonId: async (salonUserId) => {
     requirePool();
     const result = await pool.query(`
-      SELECT sm.*, u.username, u.email, u.created_at as user_created_at
+      SELECT sm.*, u.username, u.email, u.salon_phone, u.created_at as user_created_at
       FROM salon_masters sm
       JOIN users u ON sm.master_user_id = u.id
       WHERE sm.salon_user_id = $1 AND sm.is_active = true

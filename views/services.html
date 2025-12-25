@@ -88,7 +88,7 @@
         <p class="note" style="margin-bottom: 16px;">Поиск и добавление мастеров, которые зарегистрированы в системе</p>
         
         <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-          <input type="text" id="master-search-input" placeholder="Введите логин или email мастера (минимум 2 символа)" style="flex: 1;" />
+          <input type="text" id="master-search-input" placeholder="Введите логин, email или номер телефона мастера (минимум 2 символа)" style="flex: 1;" />
           <button type="button" class="btn-secondary" id="master-search-btn">Поиск</button>
         </div>
         
@@ -295,7 +295,13 @@
       const metaSpan = document.createElement('span');
       metaSpan.style.fontSize = '0.85rem';
       metaSpan.style.color = '#6b7280';
-      metaSpan.textContent = master.email || 'Email не указан';
+      let metaText = master.email || '';
+      if (master.salon_phone) {
+        if (metaText) metaText += ' • ';
+        metaText += `📞 ${master.salon_phone}`;
+      }
+      if (!metaText) metaText = 'Контактная информация не указана';
+      metaSpan.textContent = metaText;
       
       main.appendChild(nameSpan);
       main.appendChild(document.createElement('br'));
@@ -361,10 +367,18 @@
         item.style.cssText = 'padding: 12px; margin-bottom: 8px; border: 1px solid #e5e7eb; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;';
         
         const info = document.createElement('div');
-        info.innerHTML = `
-          <strong>${master.username}</strong><br/>
-          <span style="color: #6b7280; font-size: 0.9rem;">${master.email || 'Email не указан'}</span>
-        `;
+        let infoHtml = `<strong>${master.username}</strong><br/>`;
+        if (master.email) {
+          infoHtml += `<span style="color: #6b7280; font-size: 0.9rem;">${master.email}</span>`;
+        }
+        if (master.salon_phone) {
+          if (master.email) infoHtml += '<br/>';
+          infoHtml += `<span style="color: #6b7280; font-size: 0.9rem;">📞 ${master.salon_phone}</span>`;
+        }
+        if (!master.email && !master.salon_phone) {
+          infoHtml += `<span style="color: #6b7280; font-size: 0.9rem;">Контактная информация не указана</span>`;
+        }
+        info.innerHTML = infoHtml;
         
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
