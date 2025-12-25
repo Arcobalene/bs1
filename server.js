@@ -1883,6 +1883,12 @@ app.delete('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => 
 app.get('/api/salon/masters', requireAuth, async (req, res) => {
   try {
     console.log('Запрос списка мастеров салона, userId:', req.session.userId);
+    
+    if (!req.session.userId) {
+      console.log('userId не установлен в сессии');
+      return res.status(401).json({ success: false, message: 'Требуется авторизация' });
+    }
+    
     const user = await dbUsers.getById(req.session.userId);
     
     if (!user) {
@@ -1890,14 +1896,24 @@ app.get('/api/salon/masters', requireAuth, async (req, res) => {
       return res.status(401).json({ success: false, message: 'Пользователь не найден' });
     }
     
+    console.log('Пользователь найден:', { id: user.id, username: user.username, role: user.role });
+    
     // Владельцы салонов имеют роль 'user' или 'admin'
     if (user.role !== 'user' && user.role !== 'admin') {
       console.log('Неправильная роль пользователя:', user.role);
       return res.status(403).json({ success: false, message: 'Доступ запрещен. Только владельцы салонов могут просматривать список мастеров.' });
     }
 
-    console.log('Получение мастеров для салона, salonUserId:', user.id);
-    const salonMastersList = await salonMasters.getBySalonId(user.id);
+    // Преобразуем ID в число, если это строка
+    const salonUserId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
+    
+    if (!salonUserId || isNaN(salonUserId) || salonUserId <= 0) {
+      console.error('Неверный ID пользователя:', user.id, 'тип:', typeof user.id);
+      return res.status(500).json({ success: false, message: 'Ошибка сервера: неверный ID пользователя' });
+    }
+
+    console.log('Получение мастеров для салона, salonUserId:', salonUserId, 'тип:', typeof salonUserId);
+    const salonMastersList = await salonMasters.getBySalonId(salonUserId);
     console.log('Найдено мастеров в салоне:', salonMastersList.length);
     
     res.json({ success: true, masters: salonMastersList });
