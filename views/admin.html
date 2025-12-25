@@ -512,6 +512,41 @@
   © 2025 Beauty Studio. Все права защищены.
 </footer>
 
+<style>
+  /* Стили для карты на мобильных устройствах */
+  @media (max-width: 768px) {
+    #map {
+      width: 100% !important;
+      max-width: 100% !important;
+      height: 300px !important;
+      margin-top: 8px !important;
+      border-radius: 10px !important;
+      overflow: hidden !important;
+      position: relative !important;
+    }
+    
+    /* Убеждаемся, что контейнер карты не дублируется */
+    #map > * {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+    }
+    
+    /* Скрываем дублирующиеся элементы карты */
+    #map > div:not(:first-child) {
+      display: none !important;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    #map {
+      height: 250px !important;
+    }
+  }
+</style>
+
 <script src="https://api-maps.yandex.ru/2.1/?apikey=YOUR_API_KEY&lang=ru_RU" type="text/javascript"></script>
 <script>
   let currentUser = null;
@@ -1227,8 +1262,13 @@
   // Управление информацией о салоне
   let map = null;
   let placemark = null;
+  let mapInitializing = false; // Флаг для предотвращения повторной инициализации
 
   function initMap() {
+    // Предотвращаем повторную инициализацию
+    if (mapInitializing) {
+      return;
+    }
     if (typeof ymaps === 'undefined') {
       console.error('Яндекс карты не загружены. Убедитесь, что API ключ указан правильно.');
       const mapEl = document.getElementById('map');
@@ -1238,6 +1278,35 @@
         msg.style.cssText = 'padding: 20px; text-align: center; color: #6b7280;';
         msg.textContent = 'Для отображения карты необходим API ключ Яндекс.Карт. Укажите его в настройках.';
         mapEl.appendChild(msg);
+      }
+      return;
+    }
+
+    const mapEl = document.getElementById('map');
+    if (!mapEl) return;
+
+    // Проверяем, видна ли карта (вкладка активна)
+    const salonInfoTab = document.getElementById('salon-info-tab');
+    if (salonInfoTab && !salonInfoTab.classList.contains('active')) {
+      return; // Не инициализируем карту, если вкладка не активна
+    }
+
+    // Проверяем, не инициализирована ли карта уже
+    if (map && map.container && map.container.getElement()) {
+      // Карта уже существует и работает, просто обновляем метку если нужно
+      if (currentUser.salonLat && currentUser.salonLng && placemark) {
+        const currentCoords = placemark.geometry.getCoordinates();
+        const newCoords = [currentUser.salonLat, currentUser.salonLng];
+        if (currentCoords[0] !== newCoords[0] || currentCoords[1] !== newCoords[1]) {
+          map.geoObjects.remove(placemark);
+          placemark = new ymaps.Placemark(newCoords, {
+            balloonContent: currentUser.salonAddress || currentUser.salonName || 'Салон'
+          }, {
+            preset: 'islands#redDotIcon'
+          });
+          map.geoObjects.add(placemark);
+          map.setCenter(newCoords);
+        }
       }
       return;
     }
@@ -1253,51 +1322,75 @@
       }
     }
 
-    const mapEl = document.getElementById('map');
-    if (!mapEl) return;
+    // Очищаем контейнер карты полностью
+    mapEl.innerHTML = '';
+    
+    // Убеждаемся, что контейнер видим и имеет правильные размеры
+    mapEl.style.display = 'block';
+    mapEl.style.width = '100%';
+    mapEl.style.height = '400px';
 
-    // Очищаем контейнер карты
-    mapEl.textContent = '';
+    mapInitializing = true; // Устанавливаем флаг
 
     ymaps.ready(() => {
+      // Проверяем еще раз, что контейнер существует и видим
+      if (!mapEl || mapEl.offsetParent === null) {
+        mapInitializing = false;
+        return;
+      }
+
       const lat = currentUser.salonLat || 41.3111; // Ташкент по умолчанию
       const lng = currentUser.salonLng || 69.2797;
 
-      map = new ymaps.Map('map', {
-        center: [lat, lng],
-        zoom: 15,
-        controls: ['zoomControl', 'fullscreenControl']
-      });
-
-      // Добавляем метку, если координаты есть
-      if (currentUser.salonLat && currentUser.salonLng) {
-        placemark = new ymaps.Placemark([currentUser.salonLat, currentUser.salonLng], {
-          balloonContent: currentUser.salonAddress || currentUser.salonName || 'Салон'
-        }, {
-          preset: 'islands#redDotIcon'
+      try {
+        map = new ymaps.Map('map', {
+          center: [lat, lng],
+          zoom: 15,
+          controls: ['zoomControl', 'fullscreenControl']
         });
-        map.geoObjects.add(placemark);
-      }
 
-      // Обработчик клика по карте
-      map.events.add('click', (e) => {
-        const coords = e.get('coords');
-        document.getElementById('salon-lat').value = coords[0];
-        document.getElementById('salon-lng').value = coords[1];
-
-        // Удаляем старую метку
-        if (placemark) {
-          map.geoObjects.remove(placemark);
+        // Добавляем метку, если координаты есть
+        if (currentUser.salonLat && currentUser.salonLng) {
+          placemark = new ymaps.Placemark([currentUser.salonLat, currentUser.salonLng], {
+            balloonContent: currentUser.salonAddress || currentUser.salonName || 'Салон'
+          }, {
+            preset: 'islands#redDotIcon'
+          });
+          map.geoObjects.add(placemark);
         }
 
-        // Добавляем новую метку
-        placemark = new ymaps.Placemark(coords, {
-          balloonContent: currentUser.salonAddress || currentUser.salonName || 'Салон'
-        }, {
-          preset: 'islands#redDotIcon'
+        // Обработчик клика по карте
+        map.events.add('click', (e) => {
+          const coords = e.get('coords');
+          document.getElementById('salon-lat').value = coords[0];
+          document.getElementById('salon-lng').value = coords[1];
+
+          // Удаляем старую метку
+          if (placemark) {
+            map.geoObjects.remove(placemark);
+          }
+
+          // Добавляем новую метку
+          placemark = new ymaps.Placemark(coords, {
+            balloonContent: currentUser.salonAddress || currentUser.salonName || 'Салон'
+          }, {
+            preset: 'islands#redDotIcon'
+          });
+          map.geoObjects.add(placemark);
         });
-        map.geoObjects.add(placemark);
-      });
+
+        // Обновляем размер карты после инициализации (важно для мобильных устройств)
+        setTimeout(() => {
+          if (map) {
+            map.container.fitToViewport();
+          }
+          mapInitializing = false; // Сбрасываем флаг после успешной инициализации
+        }, 100);
+      } catch (error) {
+        console.error('Ошибка инициализации карты:', error);
+        mapEl.innerHTML = '<p style="padding: 20px; text-align: center; color: #ef4444;">Ошибка загрузки карты. Попробуйте обновить страницу.</p>';
+        mapInitializing = false; // Сбрасываем флаг при ошибке
+      }
     });
   }
 
