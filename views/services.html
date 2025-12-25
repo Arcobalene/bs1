@@ -364,13 +364,34 @@
     resultsDiv.innerHTML = '<p style="color: #6b7280; font-size: 0.9rem;">Поиск...</p>';
 
     try {
-      const response = await fetch(`/api/masters/search?q=${encodeURIComponent(query)}`);
+      const url = `/api/masters/search?q=${encodeURIComponent(query)}`;
+      console.log('Запрос поиска мастеров:', url);
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Пытаемся получить JSON с ошибкой
+        let errorMessage = `Ошибка ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          console.error('Ошибка от сервера:', errorData);
+        } catch (e) {
+          console.error('Не удалось распарсить ответ с ошибкой:', e);
+          // Если не удалось распарсить JSON, используем стандартное сообщение
+          if (response.status === 400) {
+            errorMessage = 'Неверный запрос. Проверьте параметры поиска.';
+          } else if (response.status === 403) {
+            errorMessage = 'Доступ запрещен. Только владельцы салонов могут искать мастеров.';
+          } else if (response.status === 401) {
+            errorMessage = 'Требуется авторизация. Пожалуйста, войдите в систему.';
+          }
+        }
+        throw new Error(errorMessage);
       }
       
       const result = await response.json();
+      console.log('Результат поиска:', result);
       
       if (!result.success) {
         resultsDiv.innerHTML = `<p style="color: #dc2626;">${result.message || 'Ошибка поиска'}</p>`;

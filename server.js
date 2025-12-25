@@ -1725,17 +1725,31 @@ app.delete('/api/masters/:masterId/photos/:filename', requireAuth, async (req, r
 // API: Поиск мастеров для добавления к салону
 app.get('/api/masters/search', requireAuth, async (req, res) => {
   try {
+    console.log('Поиск мастеров - запрос:', req.query);
     const { q } = req.query;
-    if (!q || q.trim().length < 2) {
+    
+    // Проверяем наличие параметра q
+    if (q === undefined || q === null) {
+      console.log('Параметр q отсутствует');
+      return res.status(400).json({ success: false, message: 'Параметр поиска не указан' });
+    }
+    
+    const searchTerm = String(q).trim();
+    console.log('Поисковый запрос после trim:', searchTerm, 'длина:', searchTerm.length);
+    
+    if (searchTerm.length < 2) {
       return res.status(400).json({ success: false, message: 'Введите минимум 2 символа для поиска' });
     }
 
     const user = await dbUsers.getById(req.session.userId);
-    if (!user || user.role !== 'user') {
-      return res.status(403).json({ success: false, message: 'Доступ запрещен' });
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Пользователь не найден' });
+    }
+    
+    if (user.role !== 'user') {
+      return res.status(403).json({ success: false, message: 'Доступ запрещен. Только владельцы салонов могут искать мастеров.' });
     }
 
-    const searchTerm = q.trim();
     const searchQuery = `%${searchTerm.toLowerCase()}%`;
     
     // Нормализуем номер телефона для поиска (удаляем все нецифровые символы)
@@ -1769,7 +1783,11 @@ app.get('/api/masters/search', requireAuth, async (req, res) => {
       LIMIT 20
     `;
     
+    console.log('SQL запрос:', query);
+    console.log('Параметры запроса:', queryParams);
+    
     const result = await pool.query(query, queryParams);
+    console.log('Найдено мастеров:', result.rows.length);
 
     res.json({ success: true, masters: result.rows });
   } catch (error) {
