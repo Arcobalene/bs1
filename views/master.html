@@ -18,7 +18,7 @@
   <h1>Beauty Studio</h1>
   <p>Личный кабинет мастера</p>
   <div class="nav-links">
-    <a href="/" title="На главную">
+    <a href="/" title="На главную" id="home-link-nav" style="display: none;">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle;">
         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
         <polyline points="9 22 9 12 15 12 15 22"></polyline>
@@ -53,8 +53,8 @@
 
 <div class="container">
   <div class="breadcrumbs">
-    <a href="/">Главная</a>
-    <span class="separator">/</span>
+    <a href="/" id="home-link-breadcrumb" style="display: none;">Главная</a>
+    <span class="separator" id="breadcrumb-separator" style="display: none;">/</span>
     <span class="current">Личный кабинет мастера</span>
   </div>
   
@@ -142,6 +142,16 @@
         window.location.href = '/admin';
         return;
       }
+
+      // Скрываем ссылку "Главная" в навигации
+      const homeLinkNav = document.getElementById('home-link-nav');
+      if (homeLinkNav) homeLinkNav.style.display = 'none';
+      
+      // Скрываем ссылку "Главная" в breadcrumbs
+      const homeLinkBreadcrumb = document.getElementById('home-link-breadcrumb');
+      const breadcrumbSeparator = document.getElementById('breadcrumb-separator');
+      if (homeLinkBreadcrumb) homeLinkBreadcrumb.style.display = 'none';
+      if (breadcrumbSeparator) breadcrumbSeparator.style.display = 'none';
 
       document.getElementById('user-name').textContent = `Добро пожаловать, ${currentUser.username}!`;
       document.getElementById('user-email').textContent = currentUser.email || 'Email не указан';
