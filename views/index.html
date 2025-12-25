@@ -354,7 +354,7 @@
                     <ul>
                         <li><a href="#features">Возможности</a></li>
                         <li><a href="#demo">Как это работает</a></li>
-                        <li><a href="/client-cabinet">Личный кабинет</a></li>
+                        <li><a href="#" id="open-cabinet-modal">Личный кабинет</a></li>
                     </ul>
                 </nav>
                 <button type="button" class="cta-button" id="open-register-modal-header">Начать бесплатно</button>
@@ -464,7 +464,7 @@
                 <div class="footer-links">
                     <h4>Сервис</h4>
                     <ul>
-                        <li><a href="/client-cabinet">Личный кабинет клиента</a></li>
+                        <li><a href="#" id="open-cabinet-modal-footer">Личный кабинет</a></li>
                         <li><a href="#features">Возможности</a></li>
                         <li><a href="#demo">Демо</a></li>
                         <li><a href="#" id="open-login-modal-footer">Войти в систему</a></li>
@@ -612,6 +612,29 @@
         <h3 style="margin-bottom: 16px;" id="login-owner-title">Вход</h3>
         <p class="note" style="margin-bottom: 16px;">Вы будете перенаправлены на страницу входа</p>
         <a href="/login" id="login-owner-link" class="btn-primary" style="width: 100%; text-align: center; text-decoration: none; display: block;">Перейти к входу</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Модальное окно выбора входа/регистрации для личного кабинета -->
+<div id="cabinet-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width: 500px;">
+    <div class="modal-header">
+      <div class="modal-title">Личный кабинет</div>
+      <button type="button" class="modal-close" id="close-cabinet-modal">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="description" style="margin-bottom: 24px; text-align: center;">Выберите действие:</p>
+      <div style="display: grid; gap: 12px;">
+        <button type="button" class="btn-primary" id="cabinet-register-btn" style="padding: 16px; font-size: 1rem;">
+          <div style="font-weight: 600; margin-bottom: 4px;">📝 Регистрация</div>
+          <div style="font-size: 0.85rem; opacity: 0.9;">Создать новый аккаунт</div>
+        </button>
+        <button type="button" class="btn-secondary" id="cabinet-login-btn" style="padding: 16px; font-size: 1rem;">
+          <div style="font-weight: 600; margin-bottom: 4px;">🔐 Вход</div>
+          <div style="font-size: 0.85rem; opacity: 0.9;">Войти в существующий аккаунт</div>
+        </button>
       </div>
     </div>
   </div>
@@ -864,6 +887,48 @@
     setTimeout(() => {
       document.querySelector('.register-type-btn[data-type="client"]').click();
     }, 100);
+  });
+
+  // Модальное окно личного кабинета
+  function openCabinetModal() {
+    document.getElementById('cabinet-modal').classList.remove('hidden');
+  }
+
+  function closeCabinetModal() {
+    document.getElementById('cabinet-modal').classList.add('hidden');
+  }
+
+  // Открытие модального окна личного кабинета
+  document.getElementById('open-cabinet-modal')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openCabinetModal();
+  });
+
+  document.getElementById('open-cabinet-modal-footer')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openCabinetModal();
+  });
+
+  // Закрытие модального окна личного кабинета
+  document.getElementById('close-cabinet-modal')?.addEventListener('click', closeCabinetModal);
+
+  // Клик по фону модального окна личного кабинета
+  document.getElementById('cabinet-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'cabinet-modal') {
+      closeCabinetModal();
+    }
+  });
+
+  // Переход к регистрации из модального окна личного кабинета
+  document.getElementById('cabinet-register-btn')?.addEventListener('click', () => {
+    closeCabinetModal();
+    openRegisterModal();
+  });
+
+  // Переход ко входу из модального окна личного кабинета
+  document.getElementById('cabinet-login-btn')?.addEventListener('click', () => {
+    closeCabinetModal();
+    openLoginModal();
   });
 </script>
 </body>
