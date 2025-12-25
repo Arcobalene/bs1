@@ -448,6 +448,14 @@
         const phoneSection = document.getElementById('phone-input-section');
         if (phoneSection) phoneSection.style.display = 'none';
         
+        // Скрываем ссылку "На главную" в навигации
+        const homeLink = document.getElementById('home-link');
+        if (homeLink) homeLink.style.display = 'none';
+        
+        // Скрываем ссылку "Главная" в header
+        const homeLinkHeader = document.getElementById('home-link-header');
+        if (homeLinkHeader) homeLinkHeader.style.display = 'none';
+        
         // Показываем кнопку выхода
         const logoutLink = document.getElementById('logout-link');
         if (logoutLink) {
@@ -471,6 +479,14 @@
         // Показываем форму ввода телефона
         const phoneSection = document.getElementById('phone-input-section');
         if (phoneSection) phoneSection.style.display = 'block';
+        
+        // Показываем ссылку "На главную" в навигации
+        const homeLink = document.getElementById('home-link');
+        if (homeLink) homeLink.style.display = 'block';
+        
+        // Показываем ссылку "Главная" в header
+        const homeLinkHeader = document.getElementById('home-link-header');
+        if (homeLinkHeader) homeLinkHeader.style.display = 'block';
         
         // Скрываем кнопку выхода
         const logoutLink = document.getElementById('logout-link');
