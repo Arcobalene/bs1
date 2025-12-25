@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Регистрация клиента — Beauty Studio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header>
+  <h1>Beauty Studio</h1>
+  <p>Регистрация клиента</p>
+  <div class="nav-links">
+    <a href="/">На главную</a>
+    <a href="/login-client">Вход</a>
+  </div>
+</header>
+
+<div class="container">
+  <div class="card" style="max-width: 400px; margin: 0 auto;">
+    <h2>Регистрация клиента</h2>
+    <p class="description">Создайте аккаунт для просмотра ваших записей и быстрой записи в салоны.</p>
+
+    <form id="register-client-form">
+      <div>
+        <label for="name">Имя *</label>
+        <input type="text" id="name" name="name" required autocomplete="name" placeholder="Ваше имя" />
+      </div>
+
+      <div>
+        <label for="phone">Телефон *</label>
+        <input type="tel" id="phone" name="phone" required autocomplete="tel" placeholder="+998XX XXX XX XX" />
+        <p class="note">Номер телефона будет использоваться для входа</p>
+      </div>
+
+      <div>
+        <label for="email">Email (необязательно)</label>
+        <input type="email" id="email" name="email" autocomplete="email" placeholder="your@email.com" />
+      </div>
+
+      <div>
+        <label for="password">Пароль (необязательно)</label>
+        <input type="password" id="password" name="password" autocomplete="new-password" placeholder="Минимум 6 символов" />
+        <p class="note">Если не укажете пароль, вход будет только по номеру телефона</p>
+      </div>
+
+      <button type="submit" class="btn-primary">Зарегистрироваться</button>
+
+      <div id="alert-success" class="alert alert-success"></div>
+      <div id="alert-error" class="alert alert-error"></div>
+    </form>
+
+    <p class="note" style="margin-top: 16px; text-align: center;">
+      Уже есть аккаунт? <a href="/login-client" style="color: #a855f7;">Войдите</a>
+    </p>
+  </div>
+</div>
+
+<footer>
+  © 2025 Beauty Studio. Все права защищены.
+</footer>
+
+<script>
+  const form = document.getElementById('register-client-form');
+  const successAlert = document.getElementById('alert-success');
+  const errorAlert = document.getElementById('alert-error');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    successAlert.style.display = 'none';
+    errorAlert.style.display = 'none';
+
+    const formData = new FormData(form);
+    const data = {
+      name: formData.get('name'),
+      phone: formData.get('phone'),
+      email: formData.get('email'),
+      password: formData.get('password')
+    };
+
+    if (!data.name || !data.name.trim()) {
+      errorAlert.textContent = 'Имя обязательно';
+      errorAlert.style.display = 'block';
+      return;
+    }
+
+    if (data.name.length < 2) {
+      errorAlert.textContent = 'Имя должно содержать минимум 2 символа';
+      errorAlert.style.display = 'block';
+      return;
+    }
+
+    if (!data.phone || !data.phone.trim()) {
+      errorAlert.textContent = 'Телефон обязателен';
+      errorAlert.style.display = 'block';
+      return;
+    }
+
+    // Валидация телефона (минимум 9 цифр)
+    const phoneDigits = data.phone.replace(/\D/g, '');
+    if (phoneDigits.length < 9) {
+      errorAlert.textContent = 'Некорректный номер телефона (минимум 9 цифр)';
+      errorAlert.style.display = 'block';
+      return;
+    }
+
+    if (data.password && data.password.length < 6) {
+      errorAlert.textContent = 'Пароль должен содержать минимум 6 символов';
+      errorAlert.style.display = 'block';
+      return;
+    }
+
+    if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+      errorAlert.textContent = 'Некорректный формат email';
+      errorAlert.style.display = 'block';
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/register-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        successAlert.textContent = 'Регистрация успешна! Перенаправление...';
+        successAlert.style.display = 'block';
+        setTimeout(() => {
+          window.location.href = '/client-cabinet';
+        }, 1000);
+      } else {
+        errorAlert.textContent = result.message || 'Ошибка регистрации';
+        errorAlert.style.display = 'block';
+      }
+    } catch (error) {
+      errorAlert.textContent = 'Ошибка соединения. Попробуйте позже.';
+      errorAlert.style.display = 'block';
+    }
+  });
+</script>
+</body>
+</html>
+

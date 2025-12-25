@@ -298,6 +298,24 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(user_id, read);
     `);
 
+    // Таблица клиентов
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS clients (
+        id SERIAL PRIMARY KEY,
+        phone VARCHAR(50) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
+        password VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Индексы для таблицы clients
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_clients_phone ON clients(phone);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_phone_unique ON clients(phone);
+    `);
+
     console.log('База данных PostgreSQL инициализирована');
   } catch (error) {
     console.error('Ошибка инициализации БД:', error);
@@ -1058,6 +1076,102 @@ const notifications = {
   }
 };
 
+// Функции для работы с клиентами
+const clients = {
+  getByPhone: async (phone) => {
+    requirePool();
+    if (!phone) return null;
+    
+    // Нормализуем номер: удаляем все нецифровые символы
+    const phoneDigits = phone.replace(/\D/g, '');
+    
+    if (phoneDigits.length < 9) {
+      return null;
+    }
+    
+    // Ищем клиента по телефону (с учетом различных форматов)
+    const last10Digits = phoneDigits.length >= 10 ? phoneDigits.substring(phoneDigits.length - 10) : phoneDigits;
+    const last9Digits = phoneDigits.length >= 9 ? phoneDigits.substring(phoneDigits.length - 9) : phoneDigits;
+    
+    const result = await pool.query(`
+      SELECT * FROM clients
+      WHERE 
+        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') = $1
+        OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') = $2
+        OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') = $3
+      LIMIT 1
+    `, [phoneDigits, last10Digits, last9Digits]);
+    
+    return result.rows[0] || null;
+  },
+
+  getById: async (id) => {
+    requirePool();
+    const result = await pool.query('SELECT * FROM clients WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  },
+
+  create: async (clientData) => {
+    requirePool();
+    const { phone, name, email, password } = clientData;
+    
+    // Валидация
+    if (!phone || !name) {
+      throw new Error('Телефон и имя обязательны');
+    }
+    
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 9) {
+      throw new Error('Некорректный номер телефона');
+    }
+    
+    // Проверяем, не существует ли уже клиент с таким телефоном
+    const existing = await clients.getByPhone(phone);
+    if (existing) {
+      throw new Error('Клиент с таким номером телефона уже зарегистрирован');
+    }
+    
+    const result = await pool.query(`
+      INSERT INTO clients (phone, name, email, password)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id
+    `, [
+      phone.trim(),
+      name.trim(),
+      email ? email.trim() : null,
+      password || null
+    ]);
+    
+    return result.rows[0].id;
+  },
+
+  update: async (id, clientData) => {
+    requirePool();
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (clientData.name !== undefined) {
+      updates.push(`name = $${paramIndex++}`);
+      values.push(clientData.name.trim());
+    }
+    if (clientData.email !== undefined) {
+      updates.push(`email = $${paramIndex++}`);
+      values.push(clientData.email ? clientData.email.trim() : null);
+    }
+    if (clientData.password !== undefined) {
+      updates.push(`password = $${paramIndex++}`);
+      values.push(clientData.password);
+    }
+
+    if (updates.length === 0) return;
+
+    values.push(id);
+    const sql = `UPDATE clients SET ${updates.join(', ')} WHERE id = $${paramIndex}`;
+    await pool.query(sql, values);
+  }
+};
+
 // Экспортируем функцию инициализации
 module.exports = {
   pool,
@@ -1067,6 +1181,7 @@ module.exports = {
   salonMasters,
   bookings,
   notifications,
+  clients,
   migrateFromJSON,
   initDatabase
 };

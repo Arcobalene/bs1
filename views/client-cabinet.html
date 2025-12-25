@@ -210,21 +210,25 @@
 <body>
 <header>
   <h1>Личный кабинет</h1>
-  <p>Управление вашими записями</p>
+  <p id="client-greeting">Управление вашими записями</p>
   <div class="nav-links">
-    <a href="/">На главную</a>
+    <a href="/" id="home-link">На главную</a>
+    <a href="#" id="logout-link" style="display: none;">Выход</a>
   </div>
 </header>
 
 <div class="container">
-  <!-- Ввод телефона -->
-  <div class="phone-input-section">
+  <!-- Ввод телефона (показывается только если не авторизован) -->
+  <div class="phone-input-section" id="phone-input-section">
     <h3>Введите ваш номер телефона</h3>
     <div class="phone-input-group">
       <input type="tel" id="client-phone-input" placeholder="+998XX XXX XX XX" />
       <button type="button" class="btn-primary" id="load-bookings-btn">Загрузить записи</button>
     </div>
     <div id="phone-error" class="alert alert-error" style="display: none; margin-top: 12px;"></div>
+    <p class="note" style="margin-top: 12px; text-align: center;">
+      Или <a href="/login-client" style="color: #a855f7;">войдите</a> / <a href="/register-client" style="color: #a855f7;">зарегистрируйтесь</a> для автоматической загрузки записей
+    </p>
   </div>
 
   <!-- Вкладки -->
@@ -270,6 +274,57 @@
   let currentPhone = '';
   let allBookings = [];
   let allSalons = [];
+  let currentClient = null;
+
+  // Проверка авторизации клиента
+  async function checkClientAuth() {
+    try {
+      const response = await fetch('/api/client');
+      const result = await response.json();
+      
+      if (result.success && result.client) {
+        currentClient = result.client;
+        currentPhone = result.client.phone;
+        
+        // Скрываем форму ввода телефона
+        const phoneSection = document.getElementById('phone-input-section');
+        if (phoneSection) phoneSection.style.display = 'none';
+        
+        // Показываем кнопку выхода
+        const logoutLink = document.getElementById('logout-link');
+        if (logoutLink) {
+          logoutLink.style.display = 'block';
+          logoutLink.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await fetch('/api/logout-client', { method: 'POST' });
+            window.location.reload();
+          });
+        }
+        
+        // Обновляем приветствие
+        const greeting = document.getElementById('client-greeting');
+        if (greeting) {
+          greeting.textContent = `Добро пожаловать, ${result.client.name}!`;
+        }
+        
+        // Автоматически загружаем записи
+        await loadBookings(result.client.phone);
+      } else {
+        // Показываем форму ввода телефона
+        const phoneSection = document.getElementById('phone-input-section');
+        if (phoneSection) phoneSection.style.display = 'block';
+        
+        // Скрываем кнопку выхода
+        const logoutLink = document.getElementById('logout-link');
+        if (logoutLink) logoutLink.style.display = 'none';
+      }
+    } catch (error) {
+      console.error('Ошибка проверки авторизации:', error);
+    }
+  }
+
+  // Проверяем авторизацию при загрузке страницы
+  checkClientAuth();
 
   // Переключение вкладок
   document.querySelectorAll('.tab').forEach(tab => {

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Вход для клиента — Beauty Studio</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header>
+  <h1>Beauty Studio</h1>
+  <p>Вход для клиента</p>
+  <div class="nav-links">
+    <a href="/">На главную</a>
+    <a href="/register-client">Регистрация</a>
+  </div>
+</header>
+
+<div class="container">
+  <div class="card" style="max-width: 400px; margin: 0 auto;">
+    <h2>Вход для клиента</h2>
+    <p class="description">Войдите в личный кабинет, чтобы просмотреть ваши записи.</p>
+
+    <form id="login-client-form">
+      <div>
+        <label for="phone">Телефон *</label>
+        <input type="tel" id="phone" name="phone" required autocomplete="tel" placeholder="+998XX XXX XX XX" />
+      </div>
+
+      <div>
+        <label for="password">Пароль (если установлен)</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" placeholder="Оставьте пустым, если не устанавливали" />
+        <p class="note">Если при регистрации вы не устанавливали пароль, оставьте это поле пустым</p>
+      </div>
+
+      <button type="submit" class="btn-primary">Войти</button>
+
+      <div id="alert-error" class="alert alert-error"></div>
+    </form>
+
+    <p class="note" style="margin-top: 16px; text-align: center;">
+      Нет аккаунта? <a href="/register-client" style="color: #a855f7;">Зарегистрируйтесь</a>
+    </p>
+  </div>
+</div>
+
+<footer>
+  © 2025 Beauty Studio. Все права защищены.
+</footer>
+
+<script>
+  const form = document.getElementById('login-client-form');
+  const errorAlert = document.getElementById('alert-error');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorAlert.style.display = 'none';
+
+    const formData = new FormData(form);
+    const data = {
+      phone: formData.get('phone'),
+      password: formData.get('password')
+    };
+
+    if (!data.phone || !data.phone.trim()) {
+      errorAlert.textContent = 'Введите номер телефона';
+      errorAlert.style.display = 'block';
+      return;
+    }
+
+    const phoneDigits = data.phone.replace(/\D/g, '');
+    if (phoneDigits.length < 9) {
+      errorAlert.textContent = 'Некорректный номер телефона';
+      errorAlert.style.display = 'block';
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/login-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        window.location.href = '/client-cabinet';
+      } else {
+        errorAlert.textContent = result.message || 'Ошибка входа';
+        errorAlert.style.display = 'block';
+      }
+    } catch (error) {
+      errorAlert.textContent = 'Ошибка соединения. Попробуйте позже.';
+      errorAlert.style.display = 'block';
+    }
+  });
+</script>
+</body>
+</html>
+

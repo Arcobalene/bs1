@@ -7,7 +7,7 @@ const multer = require('multer');
 const Minio = require('minio');
 const https = require('https');
 const http = require('http');
-const { pool, users: dbUsers, services, masters, salonMasters, bookings, notifications, migrateFromJSON } = require('./database');
+const { pool, users: dbUsers, services, masters, salonMasters, bookings, notifications, clients, migrateFromJSON } = require('./database');
 const { 
   timeToMinutes, 
   formatTime, 
@@ -639,6 +639,22 @@ app.get('/clients', requireAuth, (req, res) => {
 // Страница личного кабинета клиента
 app.get('/client-cabinet', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'client-cabinet.html'));
+});
+
+// Страница регистрации клиента
+app.get('/register-client', (req, res) => {
+  if (req.session.clientId) {
+    return res.redirect('/client-cabinet');
+  }
+  res.sendFile(path.join(__dirname, 'views', 'register-client.html'));
+});
+
+// Страница входа для клиента
+app.get('/login-client', (req, res) => {
+  if (req.session.clientId) {
+    return res.redirect('/client-cabinet');
+  }
+  res.sendFile(path.join(__dirname, 'views', 'login-client.html'));
 });
 
 // API: Регистрация
@@ -2712,6 +2728,129 @@ app.get('/api/salons', async (req, res) => {
   } catch (error) {
     console.error('Ошибка получения списка салонов:', error);
     res.status(500).json({ success: false, message: 'Ошибка сервера', salons: [] });
+  }
+});
+
+// API: Регистрация клиента
+app.post('/api/register-client', async (req, res) => {
+  try {
+    const { name, phone, email, password } = req.body;
+    
+    if (!name || !phone) {
+      return res.status(400).json({ success: false, message: 'Имя и телефон обязательны' });
+    }
+    
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 9) {
+      return res.status(400).json({ success: false, message: 'Некорректный номер телефона' });
+    }
+    
+    // Хешируем пароль, если он указан
+    let hashedPassword = null;
+    if (password && password.trim()) {
+      if (password.length < 6) {
+        return res.status(400).json({ success: false, message: 'Пароль должен содержать минимум 6 символов' });
+      }
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+    
+    const clientId = await clients.create({
+      name: name.trim(),
+      phone: phone.trim(),
+      email: email ? email.trim() : null,
+      password: hashedPassword
+    });
+    
+    // Автоматически входим после регистрации
+    req.session.clientId = clientId;
+    req.session.clientPhone = phone.trim();
+    
+    res.json({ success: true, message: 'Регистрация успешна' });
+  } catch (error) {
+    console.error('Ошибка регистрации клиента:', error);
+    if (error.message.includes('уже зарегистрирован')) {
+      return res.status(409).json({ success: false, message: error.message });
+    }
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// API: Вход клиента
+app.post('/api/login-client', async (req, res) => {
+  try {
+    const { phone, password } = req.body;
+    
+    if (!phone) {
+      return res.status(400).json({ success: false, message: 'Введите номер телефона' });
+    }
+    
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length < 9) {
+      return res.status(400).json({ success: false, message: 'Некорректный номер телефона' });
+    }
+    
+    const client = await clients.getByPhone(phone);
+    
+    if (!client) {
+      return res.status(401).json({ success: false, message: 'Клиент с таким номером телефона не найден' });
+    }
+    
+    // Если у клиента установлен пароль, проверяем его
+    if (client.password) {
+      if (!password) {
+        return res.status(401).json({ success: false, message: 'Введите пароль' });
+      }
+      
+      const match = await bcrypt.compare(password, client.password);
+      if (!match) {
+        return res.status(401).json({ success: false, message: 'Неверный пароль' });
+      }
+    }
+    
+    // Сохраняем сессию
+    req.session.clientId = client.id;
+    req.session.clientPhone = client.phone;
+    
+    res.json({ success: true, message: 'Вход выполнен успешно' });
+  } catch (error) {
+    console.error('Ошибка входа клиента:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// API: Выход клиента
+app.post('/api/logout-client', (req, res) => {
+  req.session.clientId = null;
+  req.session.clientPhone = null;
+  res.json({ success: true });
+});
+
+// API: Получить данные текущего клиента
+app.get('/api/client', async (req, res) => {
+  try {
+    if (!req.session.clientId) {
+      return res.json({ success: false, client: null });
+    }
+    
+    const client = await clients.getById(req.session.clientId);
+    if (!client) {
+      req.session.clientId = null;
+      req.session.clientPhone = null;
+      return res.json({ success: false, client: null });
+    }
+    
+    res.json({
+      success: true,
+      client: {
+        id: client.id,
+        name: client.name,
+        phone: client.phone,
+        email: client.email || null
+      }
+    });
+  } catch (error) {
+    console.error('Ошибка получения данных клиента:', error);
+    res.status(500).json({ success: false, client: null });
   }
 });
 
