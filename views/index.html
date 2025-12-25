@@ -1,35 +1,490 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <title>Система онлайн-записи для салонов красоты</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
-  <link rel="stylesheet" href="/style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>Beauty Studio - Система онлайн-записи для салонов красоты</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        :root {
+            --primary: #a855f7;
+            --primary-dark: #9333ea;
+            --secondary: #f973b6;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-800: #1f2937;
+            --white: #ffffff;
+        }
+        
+        body {
+            color: var(--gray-800);
+            line-height: 1.6;
+            background-color: var(--gray-50);
+            margin: 0;
+            padding: 0;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* Header */
+        header {
+            padding: 24px 0;
+            border-bottom: 1px solid var(--gray-100);
+            background-color: var(--white);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .logo i {
+            font-size: 28px;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        nav ul {
+            display: flex;
+            list-style: none;
+            gap: 32px;
+            margin: 0;
+            padding: 0;
+        }
+        
+        nav a {
+            text-decoration: none;
+            color: var(--gray-800);
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+        
+        nav a:hover {
+            color: var(--primary);
+        }
+        
+        .cta-button {
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            color: white;
+            border: none;
+            padding: 12px 28px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4);
+        }
+        
+        /* Hero section */
+        .hero {
+            padding: 100px 0;
+            text-align: center;
+            background: linear-gradient(135deg, rgba(249, 115, 182, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+        }
+        
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 20px;
+            line-height: 1.2;
+            color: var(--gray-800);
+        }
+        
+        .hero p {
+            font-size: 1.25rem;
+            max-width: 700px;
+            margin: 0 auto 40px;
+            color: #4b5563;
+        }
+        
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .secondary-button {
+            background-color: transparent;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+            padding: 12px 28px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .secondary-button:hover {
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            color: white;
+            border-color: transparent;
+        }
+        
+        /* Features */
+        .features {
+            padding: 80px 0;
+            background-color: var(--white);
+        }
+        
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 60px;
+            color: var(--gray-800);
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+        }
+        
+        .feature-card {
+            background: var(--gray-50);
+            border-radius: 12px;
+            padding: 32px;
+            text-align: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .feature-icon {
+            background: linear-gradient(135deg, rgba(249, 115, 182, 0.2), rgba(168, 85, 247, 0.2));
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            color: var(--primary);
+            font-size: 28px;
+        }
+        
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 12px;
+            color: var(--gray-800);
+        }
+        
+        .feature-card p {
+            color: #6b7280;
+        }
+        
+        /* Demo */
+        .demo {
+            padding: 80px 0;
+            background-color: var(--gray-50);
+        }
+        
+        .demo-content {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        
+        .demo-image {
+            width: 100%;
+            max-width: 700px;
+            margin: 40px auto;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+        }
+        
+        .demo-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        /* CTA Section */
+        .cta-section {
+            padding: 80px 0;
+            background: linear-gradient(135deg, rgba(249, 115, 182, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+            text-align: center;
+        }
+        
+        .cta-section h2 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            color: var(--gray-800);
+        }
+        
+        .cta-section p {
+            font-size: 1.125rem;
+            max-width: 600px;
+            margin: 0 auto 40px;
+            color: #4b5563;
+        }
+        
+        /* Footer */
+        footer {
+            background-color: var(--gray-800);
+            color: white;
+            padding: 60px 0 30px;
+        }
+        
+        .footer-content {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+        
+        .footer-logo {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-decoration: none;
+            margin-bottom: 20px;
+            display: inline-block;
+        }
+        
+        .footer-links h4 {
+            font-size: 1.125rem;
+            margin-bottom: 20px;
+        }
+        
+        .footer-links ul {
+            list-style: none;
+        }
+        
+        .footer-links li {
+            margin-bottom: 10px;
+        }
+        
+        .footer-links a {
+            color: #d1d5db;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        
+        .footer-links a:hover {
+            color: white;
+        }
+        
+        .copyright {
+            text-align: center;
+            padding-top: 30px;
+            border-top: 1px solid #374151;
+            color: #9ca3af;
+            font-size: 0.875rem;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 20px;
+            }
+            
+            nav ul {
+                gap: 20px;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+            
+            .hero-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .footer-content {
+                flex-direction: column;
+            }
+        }
+    </style>
 </head>
 <body>
-<header>
-  <div class="nav-links" id="nav-links">
-    <a href="/client-cabinet">Личный кабинет клиента</a>
-    <a href="/login-client">Вход для клиентов</a>
-    <a href="/register-client">Регистрация клиента</a>
-    <a href="/login" id="login-link">Вход для владельцев</a>
-  </div>
-</header>
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <a href="/" class="logo">
+                    <i class="fas fa-spa"></i>
+                    Beauty Studio
+                </a>
+                <nav>
+                    <ul>
+                        <li><a href="#features">Возможности</a></li>
+                        <li><a href="#demo">Как это работает</a></li>
+                        <li><a href="/client-cabinet">Личный кабинет</a></li>
+                    </ul>
+                </nav>
+                <button type="button" class="cta-button" id="open-register-modal-header">Начать бесплатно</button>
+            </div>
+        </div>
+    </header>
 
-<div class="container">
-  <div class="landing-hero" style="text-align: center; padding: 80px 20px;">
-    <h1 class="landing-title" style="margin-bottom: 24px;">Система онлайн-записи для салонов красоты</h1>
-    <p class="landing-subtitle" style="margin-bottom: 40px; max-width: 600px; margin-left: auto; margin-right: auto;">Управляйте записями клиентов, расписанием мастеров и услугами в одном месте.</p>
-    <div class="landing-cta" style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
-      <button type="button" class="btn-primary landing-cta-primary" id="open-register-modal">Регистрация</button>
-      <button type="button" class="btn-secondary landing-cta-secondary" id="open-login-modal">Вход</button>
-    </div>
-  </div>
-</div>
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>Система онлайн-записи для салонов красоты</h1>
+            <p>Управляйте записями клиентов, расписанием мастеров и услугами в одном месте. Упростите процесс записи и увеличьте количество клиентов.</p>
+            <div class="hero-buttons">
+                <button type="button" class="cta-button" id="open-register-modal-hero">Попробовать бесплатно</button>
+                <button type="button" class="secondary-button" id="open-login-modal-hero">Войти в систему</button>
+            </div>
+        </div>
+    </section>
 
-<footer>
-  © 2025 Beauty Studio. Все права защищены.
-</footer>
+    <!-- Features -->
+    <section class="features" id="features">
+        <div class="container">
+            <h2 class="section-title">Ключевые возможности</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                    <h3>Онлайн-расписание</h3>
+                    <p>Клиенты могут записываться онлайн 24/7, видя доступное время в вашем расписании. Удобный календарь для управления записями.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h3>Управление мастерами</h3>
+                    <p>Добавляйте мастеров, управляйте их расписанием и услугами. Каждый мастер может иметь свой личный кабинет.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-list"></i>
+                    </div>
+                    <h3>Услуги и цены</h3>
+                    <p>Настройте список услуг с ценами и длительностью. Клиенты видят всю информацию перед записью.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-mobile-alt"></i>
+                    </div>
+                    <h3>Мобильная версия</h3>
+                    <p>Полностью адаптивный дизайн для работы на любых устройствах. Удобно для клиентов и владельцев салонов.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-user-friends"></i>
+                    </div>
+                    <h3>База клиентов</h3>
+                    <p>Ведите базу клиентов, отслеживайте историю записей и анализируйте статистику посещений.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-palette"></i>
+                    </div>
+                    <h3>Кастомизация</h3>
+                    <p>Настройте дизайн страницы записи под ваш бренд: цвета, логотип, названия секций.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Demo -->
+    <section class="demo" id="demo">
+        <div class="container">
+            <h2 class="section-title">Простой и интуитивный интерфейс</h2>
+            <div class="demo-content">
+                <p>Beauty Studio создан для удобства как ваших клиентов, так и для вас. Минималистичный дизайн и продуманная логика использования.</p>
+                <div class="demo-image">
+                    <div style="background: linear-gradient(135deg, #f973b6 0%, #a855f7 100%); height: 400px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                        <div style="text-align: center;">
+                            <i class="fas fa-calendar-check" style="font-size: 4rem; margin-bottom: 20px;"></i>
+                            <p>Интерфейс панели управления Beauty Studio</p>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="cta-button" id="open-register-modal-demo">Начать использовать</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section" id="cta">
+        <div class="container">
+            <h2>Начните использовать Beauty Studio уже сегодня</h2>
+            <p>Присоединяйтесь к салонам красоты, которые уже упростили процесс записи клиентов с помощью нашего сервиса.</p>
+            <button type="button" class="cta-button" id="open-register-modal-cta" style="font-size: 1.125rem; padding: 16px 40px;">Начать бесплатно</button>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-about">
+                    <a href="/" class="footer-logo">Beauty Studio</a>
+                    <p style="max-width: 300px; color: #d1d5db;">Система онлайн-записи для салонов красоты. Просто, удобно, эффективно.</p>
+                </div>
+                <div class="footer-links">
+                    <h4>Сервис</h4>
+                    <ul>
+                        <li><a href="/client-cabinet">Личный кабинет клиента</a></li>
+                        <li><a href="#features">Возможности</a></li>
+                        <li><a href="#demo">Демо</a></li>
+                        <li><a href="#" id="open-login-modal-footer">Войти в систему</a></li>
+                    </ul>
+                </div>
+                <div class="footer-links">
+                    <h4>Регистрация</h4>
+                    <ul>
+                        <li><a href="#" id="open-register-modal-footer">Регистрация</a></li>
+                        <li><a href="/register-client">Для клиентов</a></li>
+                        <li><a href="/register/master">Для мастеров</a></li>
+                        <li><a href="/register">Для салонов</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="copyright">
+                <p>&copy; 2025 Beauty Studio. Все права защищены.</p>
+            </div>
+        </div>
+    </footer>
 
 <!-- Модальное окно регистрации -->
 <div id="register-modal" class="modal-overlay hidden">
@@ -163,10 +618,37 @@
 </div>
 
 <script>
+  // Smooth scrolling for anchor links
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+      e.preventDefault();
+      
+      const targetId = this.getAttribute('href');
+      if(targetId === '#') return;
+      
+      const targetElement = document.querySelector(targetId);
+      if(targetElement) {
+        window.scrollTo({
+          top: targetElement.offsetTop - 80,
+          behavior: 'smooth'
+        });
+      }
+    });
+  });
+
   // Открытие модального окна регистрации
-  document.getElementById('open-register-modal')?.addEventListener('click', () => {
+  function openRegisterModal() {
     document.getElementById('register-modal').classList.remove('hidden');
     resetRegisterModal();
+  }
+
+  document.getElementById('open-register-modal-header')?.addEventListener('click', openRegisterModal);
+  document.getElementById('open-register-modal-hero')?.addEventListener('click', openRegisterModal);
+  document.getElementById('open-register-modal-demo')?.addEventListener('click', openRegisterModal);
+  document.getElementById('open-register-modal-cta')?.addEventListener('click', openRegisterModal);
+  document.getElementById('open-register-modal-footer')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openRegisterModal();
   });
 
   // Закрытие модального окна регистрации
@@ -271,9 +753,15 @@
   });
 
   // Открытие модального окна входа
-  document.getElementById('open-login-modal')?.addEventListener('click', () => {
+  function openLoginModal() {
     document.getElementById('login-modal').classList.remove('hidden');
     resetLoginModal();
+  }
+
+  document.getElementById('open-login-modal-hero')?.addEventListener('click', openLoginModal);
+  document.getElementById('open-login-modal-footer')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openLoginModal();
   });
 
   // Закрытие модального окна входа
@@ -378,7 +866,5 @@
     }, 100);
   });
 </script>
-
-<script src="/app.js"></script>
 </body>
 </html>
