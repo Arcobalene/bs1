@@ -1549,67 +1549,62 @@
       viewerContent.appendChild(imgContainer);
       viewerContent.appendChild(counter);
       viewerModal.appendChild(viewerContent);
-    }
-    
-    // Всегда обновляем обработчики событий (даже если модальное окно уже существовало)
-    const finalViewerModal = document.getElementById('master-photo-viewer-modal');
-    const closeBtn = document.getElementById('master-photo-viewer-close');
-    const prevBtn = document.getElementById('master-photo-viewer-prev');
-    const nextBtn = document.getElementById('master-photo-viewer-next');
-    
-    if (finalViewerModal && closeBtn) {
-      // Удаляем старые обработчики, заменяя кнопки
-      const newCloseBtn = closeBtn.cloneNode(true);
-      closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
       
-      // Добавляем обработчики для кнопки закрытия
-      newCloseBtn.addEventListener('mouseenter', () => {
-        newCloseBtn.style.background = 'rgba(255, 255, 255, 0.3)';
-      });
-      newCloseBtn.addEventListener('mouseleave', () => {
-        newCloseBtn.style.background = 'rgba(255, 255, 255, 0.2)';
-      });
-      newCloseBtn.addEventListener('click', (e) => {
+      // Добавляем обработчики сразу после создания
+      closeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         e.stopPropagation();
         closePhotoViewerModal();
       });
       
-      // Обновляем обработчики для кнопок навигации
-      if (prevBtn) {
-        const newPrevBtn = prevBtn.cloneNode(true);
-        prevBtn.parentNode.replaceChild(newPrevBtn, prevBtn);
-        newPrevBtn.addEventListener('mouseenter', () => {
-          newPrevBtn.style.background = 'rgba(255, 255, 255, 0.3)';
-        });
-        newPrevBtn.addEventListener('mouseleave', () => {
-          newPrevBtn.style.background = 'rgba(255, 255, 255, 0.2)';
-        });
-        newPrevBtn.addEventListener('click', (e) => {
+      prevBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showPreviousPhoto();
+      });
+      
+      nextBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showNextPhoto();
+      });
+      
+      viewerModal.addEventListener('click', (e) => {
+        if (e.target === viewerModal) {
+          closePhotoViewerModal();
+        }
+      });
+    }
+    
+    // Получаем модальное окно и всегда используем делегирование событий для кликов
+    const finalViewerModal = document.getElementById('master-photo-viewer-modal');
+    
+    if (finalViewerModal) {
+      // Используем делегирование событий на модальном окне - это работает даже при повторных открытиях
+      finalViewerModal.onclick = null; // Очищаем старый обработчик
+      finalViewerModal.addEventListener('click', (e) => {
+        // Закрытие по клику на кнопку закрытия
+        if (e.target.id === 'master-photo-viewer-close' || e.target.closest('#master-photo-viewer-close')) {
+          e.preventDefault();
+          e.stopPropagation();
+          closePhotoViewerModal();
+          return;
+        }
+        // Навигация
+        if (e.target.id === 'master-photo-viewer-prev' || e.target.closest('#master-photo-viewer-prev')) {
+          e.preventDefault();
           e.stopPropagation();
           showPreviousPhoto();
-        });
-      }
-      
-      if (nextBtn) {
-        const newNextBtn = nextBtn.cloneNode(true);
-        nextBtn.parentNode.replaceChild(newNextBtn, nextBtn);
-        newNextBtn.addEventListener('mouseenter', () => {
-          newNextBtn.style.background = 'rgba(255, 255, 255, 0.3)';
-        });
-        newNextBtn.addEventListener('mouseleave', () => {
-          newNextBtn.style.background = 'rgba(255, 255, 255, 0.2)';
-        });
-        newNextBtn.addEventListener('click', (e) => {
+          return;
+        }
+        if (e.target.id === 'master-photo-viewer-next' || e.target.closest('#master-photo-viewer-next')) {
+          e.preventDefault();
           e.stopPropagation();
           showNextPhoto();
-        });
-      }
-      
-      // Обновляем обработчик клика на фон
-      const oldClickHandler = finalViewerModal.onclick;
-      finalViewerModal.onclick = null;
-      finalViewerModal.addEventListener('click', (e) => {
-        if (e.target.id === 'master-photo-viewer-modal') {
+          return;
+        }
+        // Закрытие по клику на фон
+        if (e.target === finalViewerModal) {
           closePhotoViewerModal();
         }
       });
@@ -1619,10 +1614,11 @@
     document.removeEventListener('keydown', handlePhotoViewerKeyboard);
     document.addEventListener('keydown', handlePhotoViewerKeyboard);
     
-    // Обновляем и показываем модальное окно
-    if (finalViewerModal) {
+    // Получаем финальное модальное окно (после возможного клонирования)
+    const finalModal = document.getElementById('master-photo-viewer-modal');
+    if (finalModal) {
       updatePhotoViewer();
-      finalViewerModal.classList.remove('hidden');
+      finalModal.classList.remove('hidden');
     }
   }
   
