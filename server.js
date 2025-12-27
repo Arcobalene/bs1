@@ -289,7 +289,7 @@ const helmetConfig = {
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://api-maps.yandex.ru", "https://suggest-maps.yandex.ru"], // Разрешаем inline скрипты и Яндекс карты
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://api-maps.yandex.ru", "https://suggest-maps.yandex.ru", "https://yastatic.net"], // Разрешаем inline скрипты и Яндекс карты
       scriptSrcAttr: ["'unsafe-inline'"], // Разрешаем inline event handlers (временно, пока не все заменены на addEventListener)
       imgSrc: ["'self'", "data:", "https:", "https://*.maps.yandex.net", "https://*.maps.yandex.ru"], // Разрешаем тайлы карт
       fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "data:"],
