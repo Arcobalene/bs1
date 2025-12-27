@@ -123,7 +123,7 @@
       <div style="margin-bottom: 16px;">
         <label for="photos-upload" style="display: inline-block; cursor: pointer;">
           <input type="file" id="photos-upload" multiple accept="image/jpeg,image/jpg,image/png,image/webp" style="display: none;" />
-          <button type="button" class="btn-primary" onclick="document.getElementById('photos-upload').click();">
+          <button type="button" class="btn-primary" id="photos-upload-button">
             Загрузить фото
           </button>
         </label>
@@ -395,6 +395,15 @@
   // Обработка загрузки фото
   document.addEventListener('DOMContentLoaded', () => {
     const uploadInput = document.getElementById('photos-upload');
+    const uploadButton = document.getElementById('photos-upload-button');
+    
+    // Обработчик для кнопки загрузки фото
+    if (uploadButton && uploadInput) {
+      uploadButton.addEventListener('click', () => {
+        uploadInput.click();
+      });
+    }
+    
     if (uploadInput) {
       uploadInput.addEventListener('change', async (e) => {
         const files = Array.from(e.target.files);

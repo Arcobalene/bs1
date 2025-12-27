@@ -290,6 +290,7 @@ const helmetConfig = {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
       scriptSrc: ["'self'", "'unsafe-inline'"], // Разрешаем inline скрипты (используются в HTML)
+      scriptSrcAttr: ["'unsafe-inline'"], // Разрешаем inline event handlers (временно, пока не все заменены на addEventListener)
       imgSrc: ["'self'", "data:", "https:"],
       fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "data:"],
       connectSrc: ["'self'"],
