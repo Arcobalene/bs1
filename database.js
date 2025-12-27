@@ -185,6 +185,12 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_masters_master_user_id ON masters(master_user_id) WHERE master_user_id IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON bookings(user_id);
       CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(date);
+      CREATE INDEX IF NOT EXISTS idx_bookings_master ON bookings(master) WHERE master IS NOT NULL AND master != '';
+      CREATE INDEX IF NOT EXISTS idx_bookings_user_date ON bookings(user_id, date);
+      CREATE INDEX IF NOT EXISTS idx_bookings_date_time ON bookings(date, time);
+      CREATE INDEX IF NOT EXISTS idx_bookings_created_at ON bookings(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
+      CREATE INDEX IF NOT EXISTS idx_notifications_booking_id ON notifications(booking_id) WHERE booking_id IS NOT NULL;
     `);
 
     // Миграция: добавление поля salon_phone, если его нет (номер владельца для Telegram)

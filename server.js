@@ -7,7 +7,12 @@ const multer = require('multer');
 const Minio = require('minio');
 const https = require('https');
 const http = require('http');
+const helmet = require('helmet');
+const compression = require('compression');
+const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 const { pool, users: dbUsers, services, masters, salonMasters, bookings, notifications, clients, migrateFromJSON } = require('./database');
+const { getUserFromCache, invalidateUserCache } = require('./cache');
 const { 
   timeToMinutes, 
   formatTime, 
@@ -278,27 +283,67 @@ if (USE_HTTPS && httpsOptions && FORCE_HTTPS) {
   });
 }
 
-// Security headers
-app.use((req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  
-  // HSTS заголовок только для HTTPS (прямого или через прокси)
-  // Проверяем через req.secure (работает с trust proxy) или заголовок X-Forwarded-Proto
-  const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
-  if ((process.env.NODE_ENV === 'production' || isHttps) && isSecure) {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+// Security headers через helmet
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
+      connectSrc: ["'self'"]
+    }
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
   }
-  
-  next();
+}));
+
+// Compression middleware
+app.use(compression({
+  level: 6,
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  }
+}));
+
+// Cookie parser (нужен для CSRF защиты)
+app.use(cookieParser());
+
+// Rate limiting для API
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 минут
+  max: 100, // максимум 100 запросов с одного IP
+  message: { success: false, message: 'Слишком много запросов, попробуйте позже' },
+  standardHeaders: true,
+  legacyHeaders: false
 });
+
+// Строгий rate limiting для логина
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 минут
+  max: 5, // максимум 5 попыток входа
+  message: { success: false, message: 'Слишком много попыток входа, попробуйте позже' },
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Применяем rate limiting к API
+app.use('/api/', apiLimiter);
 
 // Body parsing with limits
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static('public', { maxAge: process.env.NODE_ENV === 'production' ? '1d' : 0 }));
+app.use(express.static('public', { 
+  maxAge: process.env.NODE_ENV === 'production' ? '365d' : 0,
+  etag: true,
+  lastModified: true
+}));
 
 // Настройка сессий
 // ВАЖНО: secure: true только для HTTPS, иначе cookie не установится в браузере
@@ -306,7 +351,7 @@ const cookieSecure = isHttps; // secure: true только для HTTPS (опр�
 
 app.use(session({
   secret: SESSION_SECRET,
-  resave: true, // Сохранять сессию при каждом запросе
+  resave: false, // Оптимизация: не сохранять сессию при каждом запросе (только если изменена)
   saveUninitialized: false, // Не сохранять пустые сессии
   name: 'beauty.studio.sid', // Явное имя cookie
   cookie: { 
@@ -405,7 +450,7 @@ async function initDemoAccount() {
   }
 }
 
-// Middleware для проверки авторизации
+// Middleware для проверки авторизации (с кэшированием)
 async function requireAuth(req, res, next) {
   // Логирование для диагностики (только в режиме разработки)
   if (isDevelopment && req.path && req.path.startsWith('/api/')) {
@@ -419,7 +464,8 @@ async function requireAuth(req, res, next) {
   
   if (req.session.userId) {
     try {
-      const user = await dbUsers.getById(req.session.userId);
+      // Используем кэш для получения пользователя
+      const user = await getUserFromCache(req.session.userId, dbUsers.getById);
       if (!user) {
         if (isDevelopment) {
           console.log(`[requireAuth] Пользователь не найден: userId=${req.session.userId}`);
@@ -442,6 +488,8 @@ async function requireAuth(req, res, next) {
         }
         return res.redirect('/login');
       }
+      // Добавляем пользователя в req для удобства
+      req.user = user;
       next();
     } catch (error) {
       console.error('Ошибка проверки авторизации:', error);
@@ -477,7 +525,11 @@ async function requireAdmin(req, res, next) {
     return res.status(401).json({ success: false, message: 'Требуется авторизация' });
   }
   try {
-    const user = await dbUsers.getById(req.session.userId);
+    // Используем пользователя из req.user если он уже установлен (requireAuth)
+    let user = req.user;
+    if (!user) {
+      user = await getUserFromCache(req.session.userId, dbUsers.getById);
+    }
     // Проверяем роль: admin или username === 'admin' (для обратной совместимости)
     const isAdmin = user && (user.role === 'admin' || user.username === 'admin');
     if (!isAdmin) {
@@ -516,7 +568,11 @@ async function requireMaster(req, res, next) {
     return res.status(401).json({ success: false, message: 'Требуется авторизация' });
   }
   try {
-    const user = await dbUsers.getById(req.session.userId);
+    // Используем пользователя из req.user если он уже установлен (requireAuth)
+    let user = req.user;
+    if (!user) {
+      user = await getUserFromCache(req.session.userId, dbUsers.getById);
+    }
     const isMaster = user && user.role === 'master';
     if (!isMaster) {
       if (req.path && req.path.startsWith('/api/')) {
@@ -776,8 +832,8 @@ app.post('/api/register/master', async (req, res) => {
   }
 });
 
-// API: Вход
-app.post('/api/login', async (req, res) => {
+// API: Вход (с rate limiting)
+app.post('/api/login', loginLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     
@@ -804,6 +860,9 @@ app.post('/api/login', async (req, res) => {
 
     req.session.userId = user.id;
     req.session.originalUserId = req.session.originalUserId || user.id;
+    
+    // Инвалидируем кэш пользователя при входе (на случай обновлений)
+    invalidateUserCache(user.id);
     
     // Явно сохраняем сессию перед отправкой ответа
     await new Promise((resolve, reject) => {
@@ -1108,6 +1167,9 @@ app.post('/api/salon', requireAuth, async (req, res) => {
       workHours: workHoursData
     });
 
+    // Инвалидируем кэш пользователя после обновления
+    invalidateUserCache(req.session.userId);
+
     res.json({ success: true });
   } catch (error) {
     console.error('Ошибка обновления информации о салоне:', error);
@@ -1131,6 +1193,9 @@ app.post('/api/salon/design', requireAuth, async (req, res) => {
     await dbUsers.update(req.session.userId, {
       salonDesign: designData
     });
+
+    // Инвалидируем кэш пользователя после обновления
+    invalidateUserCache(req.session.userId);
 
     res.json({ success: true });
   } catch (error) {
@@ -2019,8 +2084,10 @@ app.put('/api/master/profile', requireMaster, async (req, res) => {
       updateData.salonPhone = salonPhone ? salonPhone.trim() : null;
     }
 
-    await dbUsers.update(user.id, updateData);
-    res.json({ success: true, message: 'Профиль обновлен' });
+        await dbUsers.update(user.id, updateData);
+        // Инвалидируем кэш пользователя после обновления
+        invalidateUserCache(user.id);
+        res.json({ success: true, message: 'Профиль обновлен' });
   } catch (error) {
     console.error('Ошибка обновления профиля мастера:', error);
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
@@ -2522,6 +2589,8 @@ app.post('/api/users/:userId/toggle', requireAuth, requireAdmin, async (req, res
     const currentIsActive = user.is_active === true || user.is_active === 1;
     const newIsActive = !currentIsActive;
     await dbUsers.update(userId, { isActive: newIsActive });
+    // Инвалидируем кэш пользователя после обновления
+    invalidateUserCache(userId);
     res.json({ success: true, isActive: newIsActive });
   } catch (error) {
     console.error('Ошибка изменения статуса пользователя:', error);
@@ -3293,6 +3362,9 @@ app.post('/api/telegram/settings', requireAuth, requireAdmin, async (req, res) =
         
         await dbUsers.update(req.session.userId, updateData);
         
+        // Инвалидируем кэш пользователя после обновления
+        invalidateUserCache(req.session.userId);
+        
         // Сбрасываем кэш токена при сохранении нового токена
         if (botToken !== undefined) {
           clearBotTokenCache();
@@ -3671,6 +3743,8 @@ app.post('/api/telegram/link', async (req, res) => {
 app.post('/api/telegram/unlink', requireAuth, async (req, res) => {
   try {
     await dbUsers.update(req.session.userId, { telegramId: null });
+    // Инвалидируем кэш пользователя после обновления
+    invalidateUserCache(req.session.userId);
     console.log(`✅ Telegram аккаунт отвязан: userId=${req.session.userId}`);
     res.json({ success: true, message: 'Telegram аккаунт отвязан' });
   } catch (error) {
@@ -3679,14 +3753,56 @@ app.post('/api/telegram/unlink', requireAuth, async (req, res) => {
   }
 });
 
-// Обработка ошибок
+// Health check endpoint
+app.get('/health', async (req, res) => {
+  try {
+    // Проверка БД
+    await pool.query('SELECT 1');
+    
+    res.json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      database: 'connected'
+    });
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'error', 
+      message: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Централизованная обработка ошибок
 app.use((err, req, res, next) => {
-  console.error('Ошибка:', err);
-  // Проверяем, является ли это API запросом
+  console.error('Ошибка:', {
+    message: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method,
+    userId: req.session?.userId
+  });
+  
+  // Для API запросов возвращаем JSON
   if (req.path && req.path.startsWith('/api/')) {
-    res.status(500).json({ success: false, message: 'Внутренняя ошибка сервера' });
+    const status = err.status || err.statusCode || 500;
+    res.status(status).json({ 
+      success: false, 
+      message: process.env.NODE_ENV === 'production' 
+        ? 'Внутренняя ошибка сервера' 
+        : err.message
+    });
   } else {
-    res.status(500).json({ success: false, message: 'Внутренняя ошибка сервера' });
+    // Для HTML запросов отправляем HTML ошибку
+    res.status(err.status || 500).send(`
+      <html>
+        <head><title>Ошибка</title></head>
+        <body>
+          <h1>Ошибка сервера</h1>
+          <p>${process.env.NODE_ENV === 'production' ? 'Внутренняя ошибка сервера' : err.message}</p>
+        </body>
+      </html>
+    `);
   }
 });
 

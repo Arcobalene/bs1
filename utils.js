@@ -76,7 +76,14 @@ function validatePassword(password) {
 // Санитизация строки для предотвращения XSS
 function sanitizeString(str, maxLength = 1000) {
   if (typeof str !== 'string') return '';
-  return str.trim().substring(0, maxLength).replace(/[<>]/g, '');
+  const trimmed = str.trim().substring(0, maxLength);
+  // Удаляем потенциально опасные HTML теги и символы
+  return trimmed
+    .replace(/[<>]/g, '') // Удаляем < и >
+    .replace(/javascript:/gi, '') // Удаляем javascript: протокол
+    .replace(/on\w+=/gi, '') // Удаляем обработчики событий (onclick, onerror, etc.)
+    .replace(/&#/g, '') // Удаляем HTML entities начало
+    .replace(/&[#\w]+;/g, ''); // Удаляем HTML entities
 }
 
 // Валидация и санитизация email
