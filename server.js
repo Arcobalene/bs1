@@ -284,23 +284,32 @@ if (USE_HTTPS && httpsOptions && FORCE_HTTPS) {
 }
 
 // Security headers через helmet
-app.use(helmet({
+const helmetConfig = {
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"], // Разрешаем inline скрипты (используются в HTML)
       imgSrc: ["'self'", "data:", "https:"],
-      fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
-      connectSrc: ["'self'"]
+      fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "data:"],
+      connectSrc: ["'self'"],
+      objectSrc: ["'none'"]
     }
   },
-  hsts: {
+  hsts: process.env.NODE_ENV === 'production' ? {
     maxAge: 31536000,
     includeSubDomains: true,
     preload: true
-  }
-}));
+  } : false, // Отключаем HSTS в development
+  crossOriginEmbedderPolicy: false // Отключаем для совместимости с Font Awesome CDN
+};
+
+// Добавляем upgradeInsecureRequests только в production
+if (process.env.NODE_ENV === 'production') {
+  helmetConfig.contentSecurityPolicy.directives.upgradeInsecureRequests = [];
+}
+
+app.use(helmet(helmetConfig));
 
 // Compression middleware
 app.use(compression({
