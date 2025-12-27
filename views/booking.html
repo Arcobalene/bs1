@@ -900,7 +900,7 @@
           if (photos.length > 0) {
             card.style.cursor = 'pointer';
             card.title = 'Нажмите, чтобы посмотреть фото работ';
-            card.onclick = () => openMasterPhotosModal(m);
+            card.addEventListener('click', () => openMasterPhotosModal(m));
           }
           
           mastersListEl.appendChild(card);
@@ -1468,112 +1468,211 @@
     }
   }
 
-  // Функция открытия увеличенного фото мастера
-  function openMasterPhotoViewer(master, photo) {
-    if (!photo || !photo.filename) {
-      // Если фото нет, открываем модальное окно со всеми фото
-      openMasterPhotosModal(master);
-      return;
-    }
-    
-    const photoUrl = `/api/masters/photos/${master.id}/${photo.filename}`;
-    
-    // Создаем модальное окно для просмотра одного фото
-    let viewerModal = document.getElementById('master-photo-viewer-modal');
-    if (!viewerModal) {
-      viewerModal = document.createElement('div');
-      viewerModal.id = 'master-photo-viewer-modal';
-      viewerModal.className = 'modal-overlay hidden';
-      viewerModal.style.cssText = 'z-index: 999999 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; padding-top: 180px !important; align-items: center !important; justify-content: center !important; overflow-y: auto !important; background: rgba(0, 0, 0, 0.9) !important;';
-      viewerModal.textContent = '';
-      const viewerContent = document.createElement('div');
-      viewerContent.className = 'photo-viewer-content';
-      viewerContent.innerHTML = `
-        <div style="max-width: 90vw; max-height: calc(100vh - 200px); margin: 0 auto; position: relative; display: flex; align-items: center; justify-content: center;">
-          <button type="button" class="modal-close" id="master-photo-viewer-close" style="position: absolute; top: -50px; right: 0; background: rgba(255, 255, 255, 0.2); color: white; border: none; font-size: 2rem; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; z-index: 1; transition: background 0.2s;">×</button>
-          <img id="master-photo-viewer-img" src="" alt="Фото мастера" style="max-width: 100%; max-height: calc(100vh - 200px); object-fit: contain; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
-        </div>
-      `;
-      viewerModal.appendChild(viewerContent);
-      document.body.appendChild(viewerModal);
-      
-      const closeBtn = document.getElementById('master-photo-viewer-close');
-      if (closeBtn) {
-        closeBtn.onmouseenter = () => {
-          closeBtn.style.background = 'rgba(255, 255, 255, 0.3)';
-        };
-        closeBtn.onmouseleave = () => {
-          closeBtn.style.background = 'rgba(255, 255, 255, 0.2)';
-        };
-        closeBtn.onclick = () => {
-          viewerModal.classList.add('hidden');
-        };
-      }
-      
-      viewerModal.onclick = (e) => {
-        if (e.target.id === 'master-photo-viewer-modal' || e.target.id === 'master-photo-viewer-img') {
-          viewerModal.classList.add('hidden');
-        }
-      };
-    }
-    
-    const img = document.getElementById('master-photo-viewer-img');
-    if (img) {
-      img.src = photoUrl;
-      img.alt = photo.originalName || master.name;
-    }
-    
-    viewerModal.classList.remove('hidden');
-  }
+  // Глобальная переменная для хранения данных о текущей галерее фото
+  let currentPhotoGallery = {
+    photos: [],
+    currentIndex: 0,
+    masterId: null
+  };
 
-  // Функция открытия увеличенного фото
-  function openMasterPhotoViewer(photoUrl, photoName) {
-    // Создаем модальное окно для просмотра одного фото
+  // Функция открытия увеличенного фото с навигацией
+  function openMasterPhotoViewer(photosArray, initialIndex, masterId) {
+    if (!photosArray || photosArray.length === 0) return;
+    
+    currentPhotoGallery.photos = photosArray;
+    currentPhotoGallery.currentIndex = initialIndex >= 0 && initialIndex < photosArray.length ? initialIndex : 0;
+    currentPhotoGallery.masterId = masterId;
+    
     let viewerModal = document.getElementById('master-photo-viewer-modal');
     if (!viewerModal) {
       viewerModal = document.createElement('div');
       viewerModal.id = 'master-photo-viewer-modal';
       viewerModal.className = 'modal-overlay hidden';
-      viewerModal.style.cssText = 'z-index: 999999 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; padding-top: 180px !important; align-items: center !important; justify-content: center !important; overflow-y: auto !important; background: rgba(0, 0, 0, 0.9) !important;';
-      viewerModal.textContent = '';
-      const viewerContent = document.createElement('div');
-      viewerContent.className = 'photo-viewer-content';
-      viewerContent.innerHTML = `
-        <div style="max-width: 90vw; max-height: calc(100vh - 200px); margin: 0 auto; position: relative; display: flex; align-items: center; justify-content: center;">
-          <button type="button" class="modal-close" id="master-photo-viewer-close" style="position: absolute; top: -50px; right: 0; background: rgba(255, 255, 255, 0.2); color: white; border: none; font-size: 2rem; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; z-index: 1; transition: background 0.2s;">×</button>
-          <img id="master-photo-viewer-img" src="" alt="Фото мастера" style="width: 250px; height: 250px; object-fit: contain; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); cursor: pointer;">
-        </div>
-      `;
-      viewerModal.appendChild(viewerContent);
+      viewerModal.style.cssText = 'z-index: 999999 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; display: flex !important; align-items: center !important; justify-content: center !important; background: rgba(0, 0, 0, 0.95) !important;';
       document.body.appendChild(viewerModal);
       
-      const closeBtn = document.getElementById('master-photo-viewer-close');
-      if (closeBtn) {
-        closeBtn.onmouseenter = () => {
-          closeBtn.style.background = 'rgba(255, 255, 255, 0.3)';
-        };
-        closeBtn.onmouseleave = () => {
-          closeBtn.style.background = 'rgba(255, 255, 255, 0.2)';
-        };
-        closeBtn.onclick = () => {
-          viewerModal.classList.add('hidden');
-        };
-      }
+      const viewerContent = document.createElement('div');
+      viewerContent.style.cssText = 'position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 60px 80px; box-sizing: border-box;';
       
-      viewerModal.onclick = (e) => {
-        if (e.target.id === 'master-photo-viewer-modal' || e.target.id === 'master-photo-viewer-img') {
-          viewerModal.classList.add('hidden');
+      // Кнопка закрытия
+      const closeBtn = document.createElement('button');
+      closeBtn.id = 'master-photo-viewer-close';
+      closeBtn.type = 'button';
+      closeBtn.innerHTML = '×';
+      closeBtn.style.cssText = 'position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.2); color: white; border: none; font-size: 36px; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; z-index: 1000; transition: background 0.2s; line-height: 1; display: flex; align-items: center; justify-content: center;';
+      closeBtn.setAttribute('aria-label', 'Закрыть');
+      
+      // Кнопка "Назад"
+      const prevBtn = document.createElement('button');
+      prevBtn.id = 'master-photo-viewer-prev';
+      prevBtn.type = 'button';
+      prevBtn.innerHTML = '‹';
+      prevBtn.style.cssText = 'position: absolute; left: 20px; top: 50%; transform: translateY(-50%); background: rgba(255, 255, 255, 0.2); color: white; border: none; font-size: 48px; width: 60px; height: 60px; border-radius: 50%; cursor: pointer; z-index: 1000; transition: background 0.2s; line-height: 1; display: flex; align-items: center; justify-content: center;';
+      prevBtn.setAttribute('aria-label', 'Предыдущее фото');
+      
+      // Кнопка "Вперед"
+      const nextBtn = document.createElement('button');
+      nextBtn.id = 'master-photo-viewer-next';
+      nextBtn.type = 'button';
+      nextBtn.innerHTML = '›';
+      nextBtn.style.cssText = 'position: absolute; right: 20px; top: 50%; transform: translateY(-50%); background: rgba(255, 255, 255, 0.2); color: white; border: none; font-size: 48px; width: 60px; height: 60px; border-radius: 50%; cursor: pointer; z-index: 1000; transition: background 0.2s; line-height: 1; display: flex; align-items: center; justify-content: center;';
+      nextBtn.setAttribute('aria-label', 'Следующее фото');
+      
+      // Контейнер для фото
+      const imgContainer = document.createElement('div');
+      imgContainer.id = 'master-photo-viewer-container';
+      imgContainer.style.cssText = 'max-width: 90vw; max-height: 90vh; display: flex; align-items: center; justify-content: center; position: relative;';
+      
+      const img = document.createElement('img');
+      img.id = 'master-photo-viewer-img';
+      img.style.cssText = 'max-width: 100%; max-height: 90vh; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); cursor: zoom-in; transition: opacity 0.3s;';
+      img.setAttribute('draggable', 'false');
+      
+      // Счетчик фото
+      const counter = document.createElement('div');
+      counter.id = 'master-photo-viewer-counter';
+      counter.style.cssText = 'position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.6); color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; z-index: 1000;';
+      
+      imgContainer.appendChild(img);
+      viewerContent.appendChild(closeBtn);
+      viewerContent.appendChild(prevBtn);
+      viewerContent.appendChild(nextBtn);
+      viewerContent.appendChild(imgContainer);
+      viewerContent.appendChild(counter);
+      viewerModal.appendChild(viewerContent);
+      
+      // Функция закрытия с удалением обработчика клавиатуры
+      const closeModal = () => {
+        const modal = document.getElementById('master-photo-viewer-modal');
+        if (modal) {
+          modal.classList.add('hidden');
         }
+        document.removeEventListener('keydown', handlePhotoViewerKeyboard);
       };
+      
+      // Обработчики событий для кнопок
+      closeBtn.addEventListener('mouseenter', () => {
+        closeBtn.style.background = 'rgba(255, 255, 255, 0.3)';
+      });
+      closeBtn.addEventListener('mouseleave', () => {
+        closeBtn.style.background = 'rgba(255, 255, 255, 0.2)';
+      });
+      closeBtn.addEventListener('click', closeModal);
+      
+      prevBtn.addEventListener('mouseenter', () => {
+        prevBtn.style.background = 'rgba(255, 255, 255, 0.3)';
+      });
+      prevBtn.addEventListener('mouseleave', () => {
+        prevBtn.style.background = 'rgba(255, 255, 255, 0.2)';
+      });
+      prevBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showPreviousPhoto();
+      });
+      
+      nextBtn.addEventListener('mouseenter', () => {
+        nextBtn.style.background = 'rgba(255, 255, 255, 0.3)';
+      });
+      nextBtn.addEventListener('mouseleave', () => {
+        nextBtn.style.background = 'rgba(255, 255, 255, 0.2)';
+      });
+      nextBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showNextPhoto();
+      });
+      
+      // Закрытие по клику на фон
+      viewerModal.addEventListener('click', (e) => {
+        if (e.target.id === 'master-photo-viewer-modal') {
+          closeModal();
+        }
+      });
+      
     }
     
+    // Добавляем обработчик клавиатуры (если модальное окно уже существовало, старый обработчик будет удален при закрытии)
+    // Сначала удаляем старый обработчик, если он был (для предотвращения дублирования)
+    document.removeEventListener('keydown', handlePhotoViewerKeyboard);
+    document.addEventListener('keydown', handlePhotoViewerKeyboard);
+    
+    // Получаем модальное окно (на случай, если оно было создано выше)
+    const finalViewerModal = document.getElementById('master-photo-viewer-modal');
+    if (finalViewerModal) {
+      updatePhotoViewer();
+      finalViewerModal.classList.remove('hidden');
+    }
+  }
+  
+  // Функция обновления фото в просмотре
+  function updatePhotoViewer() {
+    const viewerModal = document.getElementById('master-photo-viewer-modal');
     const img = document.getElementById('master-photo-viewer-img');
-    if (img) {
-      img.src = photoUrl;
-      img.alt = photoName || 'Фото работы';
+    const counter = document.getElementById('master-photo-viewer-counter');
+    const prevBtn = document.getElementById('master-photo-viewer-prev');
+    const nextBtn = document.getElementById('master-photo-viewer-next');
+    
+    if (!viewerModal || !img || !currentPhotoGallery.photos.length) return;
+    
+    const currentPhoto = currentPhotoGallery.photos[currentPhotoGallery.currentIndex];
+    if (!currentPhoto) return;
+    
+    const photoUrl = currentPhoto.filename && currentPhotoGallery.masterId
+      ? `/api/masters/photos/${currentPhotoGallery.masterId}/${currentPhoto.filename}`
+      : (currentPhoto.url || '');
+    
+    img.style.opacity = '0';
+    const loadHandler = () => {
+      img.style.opacity = '1';
+      img.removeEventListener('load', loadHandler);
+    };
+    img.addEventListener('load', loadHandler);
+    img.src = photoUrl;
+    img.alt = currentPhoto.originalName || 'Фото работы';
+    
+    // Обновляем счетчик
+    if (counter) {
+      counter.textContent = `${currentPhotoGallery.currentIndex + 1} / ${currentPhotoGallery.photos.length}`;
     }
     
-    viewerModal.classList.remove('hidden');
+    // Управление видимостью кнопок навигации
+    if (prevBtn) {
+      prevBtn.style.display = currentPhotoGallery.photos.length > 1 ? 'flex' : 'none';
+    }
+    if (nextBtn) {
+      nextBtn.style.display = currentPhotoGallery.photos.length > 1 ? 'flex' : 'none';
+    }
+  }
+  
+  // Функция показа следующего фото
+  function showNextPhoto() {
+    if (currentPhotoGallery.photos.length === 0) return;
+    currentPhotoGallery.currentIndex = (currentPhotoGallery.currentIndex + 1) % currentPhotoGallery.photos.length;
+    updatePhotoViewer();
+  }
+  
+  // Функция показа предыдущего фото
+  function showPreviousPhoto() {
+    if (currentPhotoGallery.photos.length === 0) return;
+    currentPhotoGallery.currentIndex = currentPhotoGallery.currentIndex === 0
+      ? currentPhotoGallery.photos.length - 1
+      : currentPhotoGallery.currentIndex - 1;
+    updatePhotoViewer();
+  }
+  
+  // Обработчик клавиатуры для просмотра фото
+  function handlePhotoViewerKeyboard(e) {
+    const viewerModal = document.getElementById('master-photo-viewer-modal');
+    if (!viewerModal || viewerModal.classList.contains('hidden')) return;
+    
+    if (e.key === 'Escape') {
+      viewerModal.classList.add('hidden');
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      showPreviousPhoto();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      showNextPhoto();
+    }
   }
 
   // Функция открытия модального окна с фото мастера
@@ -1587,6 +1686,7 @@
     
     modalTitle.textContent = `Фото работ: ${master.name}`;
     modalContent.innerHTML = '';
+    modalContent.style.cssText = '';
     
     const photos = master.photos || [];
     if (photos.length === 0) {
@@ -1596,27 +1696,15 @@
       emptyMsg.textContent = 'Фото работ пока не добавлены';
       modalContent.appendChild(emptyMsg);
     } else {
-      // Устанавливаем сетку для фото
+      // Устанавливаем сетку для фото (увеличенные миниатюры)
       modalContent.style.display = 'grid';
-      modalContent.style.gridTemplateColumns = 'repeat(auto-fill, minmax(50px, 1fr))';
-      modalContent.style.gap = '12px';
+      modalContent.style.gridTemplateColumns = 'repeat(auto-fill, minmax(180px, 1fr))';
+      modalContent.style.gap = '16px';
+      modalContent.style.padding = '16px';
       
-      photos.forEach((photo) => {
+      photos.forEach((photo, index) => {
         const photoDiv = document.createElement('div');
-        photoDiv.style.width = '50px';
-        photoDiv.style.height = '50px';
-        photoDiv.style.borderRadius = '8px';
-        photoDiv.style.overflow = 'hidden';
-        photoDiv.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
-        photoDiv.style.cursor = 'pointer';
-        photoDiv.style.transition = 'transform 0.2s';
-        
-        photoDiv.onmouseenter = () => {
-          photoDiv.style.transform = 'scale(1.1)';
-        };
-        photoDiv.onmouseleave = () => {
-          photoDiv.style.transform = 'scale(1)';
-        };
+        photoDiv.style.cssText = 'position: relative; width: 100%; aspect-ratio: 1; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15); cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; background: #f3f4f6;';
         
         const img = document.createElement('img');
         // Всегда формируем правильный URL, даже если photo.url уже есть
@@ -1624,21 +1712,31 @@
           ? `/api/masters/photos/${master.id}/${photo.filename}`
           : (photo.url || '');
         img.src = photoUrl;
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.objectFit = 'cover';
-        img.style.display = 'block';
+        img.style.cssText = 'width: 100%; height: 100%; object-fit: cover; display: block;';
         img.alt = photo.originalName || 'Фото работы';
         img.loading = 'lazy';
-        img.onerror = function() {
+        img.setAttribute('draggable', 'false');
+        
+        img.addEventListener('error', function() {
           console.error('Ошибка загрузки фото:', photoUrl);
           this.style.display = 'none';
-        };
+        });
         
-        // При клике на фото - открываем увеличенное изображение
-        photoDiv.onclick = () => {
-          openMasterPhotoViewer(photoUrl, photo.originalName || 'Фото работы');
-        };
+        // Добавляем обработчики hover
+        photoDiv.addEventListener('mouseenter', () => {
+          photoDiv.style.transform = 'scale(1.05)';
+          photoDiv.style.boxShadow = '0 6px 20px rgba(0,0,0,0.25)';
+        });
+        
+        photoDiv.addEventListener('mouseleave', () => {
+          photoDiv.style.transform = 'scale(1)';
+          photoDiv.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+        });
+        
+        // При клике на фото - открываем увеличенное изображение с навигацией
+        photoDiv.addEventListener('click', () => {
+          openMasterPhotoViewer(photos, index, master.id);
+        });
         
         photoDiv.appendChild(img);
         modalContent.appendChild(photoDiv);
@@ -1648,16 +1746,16 @@
     modal.classList.remove('hidden');
     
     if (closeBtn) {
-      closeBtn.onclick = () => {
+      closeBtn.addEventListener('click', () => {
         modal.classList.add('hidden');
-      };
+      });
     }
     
-    modal.onclick = (e) => {
+    modal.addEventListener('click', (e) => {
       if (e.target.id === 'master-photos-modal') {
         modal.classList.add('hidden');
       }
-    };
+    });
   }
 
   // Проверяем авторизацию и показываем меню
