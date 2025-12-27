@@ -647,6 +647,33 @@ const masters = {
       ...row,
       photos: row.photos && typeof row.photos === 'object' ? row.photos : (Array.isArray(row.photos) ? row.photos : [])
     }));
+  },
+
+  // Получить или создать запись мастера для пользователя-мастера
+  getOrCreateMasterRecord: async (masterUserId, masterUsername) => {
+    requirePool();
+    // Ищем первую запись мастера для этого пользователя
+    const existingMasters = await masters.getByMasterUserId(masterUserId);
+    if (existingMasters.length > 0) {
+      return existingMasters[0]; // Возвращаем первую запись
+    }
+    
+    // Если записи нет, создаем временную запись (без привязки к салону)
+    // Используем user_id = masterUserId для удобства (можно изменить логику)
+    const client = await pool.connect();
+    try {
+      const result = await pool.query(
+        'INSERT INTO masters (user_id, master_user_id, name, role, photos) VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING *',
+        [masterUserId, masterUserId, masterUsername || 'Мастер', '', '[]']
+      );
+      const newMaster = result.rows[0];
+      return {
+        ...newMaster,
+        photos: newMaster.photos && typeof newMaster.photos === 'object' ? newMaster.photos : (Array.isArray(newMaster.photos) ? newMaster.photos : [])
+      };
+    } finally {
+      client.release();
+    }
   }
 };
 

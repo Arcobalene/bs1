@@ -1378,12 +1378,92 @@ app.get('/api/masters/:userId', async (req, res) => {
     if (!user) {
       return res.json({ success: false, masters: [] });
     }
+    
+    // Получаем мастеров, которые принадлежат салону напрямую
     const userMasters = await masters.getByUserId(user.id);
     
-    console.log(`📋 Получение мастеров для пользователя ${user.id}, найдено мастеров: ${userMasters.length}`);
+    // Также получаем мастеров, которые добавлены в салон через salon_masters
+    const salonMastersList = await salonMasters.getBySalonId(user.id);
+    const additionalMasters = [];
+    
+    for (const salonMaster of salonMastersList) {
+      // Получаем записи мастера для этого пользователя-мастера
+      const masterRecords = await masters.getByMasterUserId(salonMaster.master_user_id);
+      if (masterRecords.length > 0) {
+        // Используем первую запись мастера (или запись, указанную в master_record_id)
+        let masterRecord = masterRecords[0];
+        if (salonMaster.master_record_id) {
+          const found = masterRecords.find(m => m.id === salonMaster.master_record_id);
+          if (found) masterRecord = found;
+        }
+        
+        // Создаем объект мастера с информацией из salon_masters
+        // Используем имя пользователя-мастера, если имя не указано в записи
+        const masterUser = await dbUsers.getById(salonMaster.master_user_id);
+        additionalMasters.push({
+          ...masterRecord,
+          name: masterRecord.name || masterUser?.username || 'Мастер',
+          role: masterRecord.role || ''
+        });
+      } else {
+        // Если записи мастера нет, создаем временный объект на основе пользователя
+        const masterUser = await dbUsers.getById(salonMaster.master_user_id);
+        if (masterUser) {
+          additionalMasters.push({
+            id: null,
+            user_id: user.id,
+            master_user_id: salonMaster.master_user_id,
+            name: masterUser.username,
+            role: '',
+            photos: []
+          });
+        }
+      }
+    }
+    
+    // Объединяем мастеров, убирая дубликаты (по master_user_id)
+    const allMastersMap = new Map();
+    userMasters.forEach(m => {
+      const key = m.master_user_id || m.id;
+      if (!allMastersMap.has(key)) {
+        allMastersMap.set(key, m);
+      }
+    });
+    additionalMasters.forEach(m => {
+      const key = m.master_user_id || m.id;
+      if (!allMastersMap.has(key)) {
+        allMastersMap.set(key, m);
+      } else {
+        // Если мастер уже есть, объединяем фото
+        const existing = allMastersMap.get(key);
+        const existingPhotos = existing.photos || [];
+        const newPhotos = m.photos || [];
+        // Объединяем фото, убирая дубликаты по filename
+        const photosMap = new Map();
+        existingPhotos.forEach(p => {
+          if (p.filename) photosMap.set(p.filename, p);
+        });
+        newPhotos.forEach(p => {
+          if (p.filename) photosMap.set(p.filename, p);
+        });
+        existing.photos = Array.from(photosMap.values());
+      }
+    });
+    
+    const allMasters = Array.from(allMastersMap.values());
+    
+    console.log(`📋 Получение мастеров для пользователя ${user.id}, найдено мастеров: ${allMasters.length} (${userMasters.length} прямых + ${additionalMasters.length} через salon_masters)`);
     
     // Проверяем наличие фото в MinIO для каждого мастера
-    const mastersWithPhotoUrls = await Promise.all(userMasters.map(async (master) => {
+    const mastersWithPhotoUrls = await Promise.all(allMasters.map(async (master) => {
+      // Для мастеров без id (временные объекты) пропускаем проверку фото
+      if (!master.id) {
+        return {
+          ...master,
+          photos: []
+        };
+      }
+      
       const rawPhotos = master.photos || [];
       console.log(`📸 Мастер ${master.id} (${master.name}): фото в БД: ${rawPhotos.length}`);
       
@@ -1449,6 +1529,14 @@ app.get('/api/masters/:userId', async (req, res) => {
         return {
           ...master,
           photos: existingPhotos
+        };
+      }
+      
+      // Для мастеров без id (временные объекты) пропускаем проверку MinIO
+      if (!master.id) {
+        return {
+          ...master,
+          photos: []
         };
       }
       
@@ -2099,6 +2187,195 @@ app.put('/api/master/profile', requireMaster, async (req, res) => {
         res.json({ success: true, message: 'Профиль обновлен' });
   } catch (error) {
     console.error('Ошибка обновления профиля мастера:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// API: Загрузить фото работ мастера
+app.post('/api/master/photos', requireMaster, upload.array('photos', 10), async (req, res) => {
+  try {
+    const user = await dbUsers.getById(req.session.userId);
+    
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Не авторизован' });
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, message: 'Файлы не загружены' });
+    }
+
+    // Получаем или создаем запись мастера для этого пользователя
+    const masterRecord = await masters.getOrCreateMasterRecord(user.id, user.username);
+    const masterId = masterRecord.id;
+
+    // Проверяем подключение к MinIO
+    let minioAvailable = false;
+    try {
+      minioAvailable = await minioClient.bucketExists(BUCKET_NAME);
+      if (!minioAvailable) {
+        try {
+          await minioClient.makeBucket(BUCKET_NAME, 'us-east-1');
+          minioAvailable = true;
+        } catch (makeBucketError) {
+          console.error(`❌ Не удалось создать bucket ${BUCKET_NAME}:`, makeBucketError.message);
+        }
+      }
+    } catch (minioError) {
+      console.error(`❌ MinIO недоступен:`, minioError.message);
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Хранилище фото недоступно. Проверьте подключение к MinIO.'
+      });
+    }
+
+    if (!minioAvailable) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Bucket не существует и не может быть создан.'
+      });
+    }
+
+    console.log(`📤 Начало загрузки ${req.files.length} файлов для мастера (user ${user.id}, master record ${masterId})`);
+
+    const uploadedPhotos = [];
+    const failedUploads = [];
+    
+    for (const file of req.files) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
+      const timestamp = Date.now();
+      const randomStr = Math.random().toString(36).substring(7);
+      const extension = file.mimetype.split('/')[1] || 'jpeg';
+      const filename = `${masterId}_${timestamp}_${randomStr}.${extension}`;
+      const objectName = `master-${masterId}/${filename}`;
+      
+      try {
+        await minioClient.putObject(BUCKET_NAME, objectName, file.buffer, file.size, {
+          'Content-Type': file.mimetype
+        });
+        
+        uploadedPhotos.push({
+          filename: filename,
+          originalName: file.originalname,
+          size: file.size,
+          mimetype: file.mimetype,
+          uploadedAt: new Date().toISOString()
+        });
+      } catch (error) {
+        console.error(`❌ Ошибка загрузки файла ${file.originalname}:`, error.message);
+        failedUploads.push({
+          originalName: file.originalname,
+          error: error.message || 'Неизвестная ошибка'
+        });
+      }
+    }
+
+    if (uploadedPhotos.length === 0) {
+      const errorMessage = failedUploads.length > 0 
+        ? `Не удалось загрузить файлы: ${failedUploads.map(f => f.originalName).join(', ')}`
+        : 'Не удалось загрузить файлы';
+      return res.status(500).json({ 
+        success: false, 
+        message: errorMessage,
+        failedFiles: failedUploads
+      });
+    }
+
+    // Обновляем список фото в БД
+    const currentPhotos = masterRecord.photos || [];
+    const updatedPhotos = [...currentPhotos, ...uploadedPhotos];
+    
+    await masters.updatePhotos(masterId, updatedPhotos);
+    console.log(`✅ Фото сохранены в БД для мастера ${masterId}`);
+
+    const response = { 
+      success: true, 
+      photos: uploadedPhotos.map(photo => ({
+        ...photo,
+        url: `/api/masters/photos/${masterId}/${photo.filename}`
+      }))
+    };
+    
+    if (failedUploads.length > 0) {
+      response.warning = `Загружено ${uploadedPhotos.length} из ${req.files.length} файлов.`;
+      response.failedFiles = failedUploads;
+    }
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Ошибка загрузки фото мастера:', error);
+    res.status(500).json({ success: false, message: 'Ошибка загрузки фото' });
+  }
+});
+
+// API: Получить фото мастера
+app.get('/api/master/photos', requireMaster, async (req, res) => {
+  try {
+    const user = await dbUsers.getById(req.session.userId);
+    
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Не авторизован' });
+    }
+
+    // Получаем или создаем запись мастера
+    const masterRecord = await masters.getOrCreateMasterRecord(user.id, user.username);
+    const photos = masterRecord.photos || [];
+    
+    res.json({ 
+      success: true, 
+      photos: photos.map(photo => ({
+        ...photo,
+        url: `/api/masters/photos/${masterRecord.id}/${photo.filename}`
+      }))
+    });
+  } catch (error) {
+    console.error('Ошибка получения фото мастера:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// API: Удалить фото мастера
+app.delete('/api/master/photos/:filename', requireMaster, async (req, res) => {
+  try {
+    const user = await dbUsers.getById(req.session.userId);
+    const filename = req.params.filename;
+    
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Не авторизован' });
+    }
+
+    if (!filename) {
+      return res.status(400).json({ success: false, message: 'Имя файла не указано' });
+    }
+
+    // Получаем запись мастера
+    const masterRecord = await masters.getOrCreateMasterRecord(user.id, user.username);
+    const masterId = masterRecord.id;
+
+    const currentPhotos = masterRecord.photos || [];
+    const photoIndex = currentPhotos.findIndex(p => p.filename === filename);
+    
+    if (photoIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Фото не найдено' });
+    }
+
+    // Удаляем из MinIO
+    const sanitizedFilename = filename.replace(/\.\./g, '').replace(/[\/\\]/g, '');
+    const objectName = `master-${masterId}/${sanitizedFilename}`;
+    
+    try {
+      await minioClient.removeObject(BUCKET_NAME, objectName);
+    } catch (minioError) {
+      console.warn('Ошибка удаления файла из MinIO (продолжаем):', minioError.message);
+    }
+
+    // Удаляем из БД
+    const updatedPhotos = currentPhotos.filter(p => p.filename !== filename);
+    await masters.updatePhotos(masterId, updatedPhotos);
+
+    res.json({ success: true, message: 'Фото удалено' });
+  } catch (error) {
+    console.error('Ошибка удаления фото мастера:', error);
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });

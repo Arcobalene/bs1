@@ -115,6 +115,31 @@
         <div id="profile-alert" class="alert" style="display: none;"></div>
       </form>
     </div>
+
+    <div class="card" style="margin-top: 24px;">
+      <h2>Фото моих работ</h2>
+      <p class="description">Загрузите фото ваших работ. Они будут отображаться на страницах салонов, где вы работаете.</p>
+
+      <div style="margin-bottom: 16px;">
+        <label for="photos-upload" style="display: inline-block; cursor: pointer;">
+          <input type="file" id="photos-upload" multiple accept="image/jpeg,image/jpg,image/png,image/webp" style="display: none;" />
+          <button type="button" class="btn-primary" onclick="document.getElementById('photos-upload').click();">
+            Загрузить фото
+          </button>
+        </label>
+        <span style="margin-left: 12px; color: #6b7280; font-size: 0.9rem;">Максимум 10 файлов, до 10 МБ каждый</span>
+      </div>
+
+      <div id="photos-loading" style="text-align: center; padding: 20px; display: none;">
+        <p style="color: #6b7280;">Загрузка...</p>
+      </div>
+
+      <div id="photos-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-top: 20px;">
+        <p style="text-align: center; color: #6b7280; grid-column: 1 / -1;">Загрузка фото...</p>
+      </div>
+
+      <div id="photos-alert" class="alert" style="display: none; margin-top: 16px;"></div>
+    </div>
   </div>
 </div>
 
@@ -267,7 +292,169 @@
     
     document.getElementById('profile-email').value = currentUser.email || '';
     document.getElementById('profile-phone').value = currentUser.salonPhone || '';
+    loadMasterPhotos();
   }
+
+  async function loadMasterPhotos() {
+    const grid = document.getElementById('photos-grid');
+    const loading = document.getElementById('photos-loading');
+    if (!grid) return;
+
+    loading.style.display = 'block';
+    grid.innerHTML = '';
+
+    try {
+      const response = await fetch('/api/master/photos');
+      const result = await response.json();
+
+      loading.style.display = 'none';
+
+      if (result.success && result.photos && result.photos.length > 0) {
+        grid.innerHTML = '';
+        result.photos.forEach(photo => {
+          const photoDiv = document.createElement('div');
+          photoDiv.style.position = 'relative';
+          photoDiv.style.borderRadius = '8px';
+          photoDiv.style.overflow = 'hidden';
+          photoDiv.style.backgroundColor = '#f3f4f6';
+          photoDiv.style.aspectRatio = '1';
+
+          const img = document.createElement('img');
+          img.src = photo.url;
+          img.style.width = '100%';
+          img.style.height = '100%';
+          img.style.objectFit = 'cover';
+          img.loading = 'lazy';
+
+          const deleteBtn = document.createElement('button');
+          deleteBtn.innerHTML = '×';
+          deleteBtn.style.position = 'absolute';
+          deleteBtn.style.top = '8px';
+          deleteBtn.style.right = '8px';
+          deleteBtn.style.width = '32px';
+          deleteBtn.style.height = '32px';
+          deleteBtn.style.borderRadius = '50%';
+          deleteBtn.style.border = 'none';
+          deleteBtn.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+          deleteBtn.style.color = 'white';
+          deleteBtn.style.cursor = 'pointer';
+          deleteBtn.style.fontSize = '24px';
+          deleteBtn.style.lineHeight = '1';
+          deleteBtn.style.display = 'flex';
+          deleteBtn.style.alignItems = 'center';
+          deleteBtn.style.justifyContent = 'center';
+          deleteBtn.title = 'Удалить фото';
+          deleteBtn.onclick = () => deleteMasterPhoto(photo.filename);
+
+          photoDiv.appendChild(img);
+          photoDiv.appendChild(deleteBtn);
+          grid.appendChild(photoDiv);
+        });
+      } else {
+        grid.innerHTML = '<p style="text-align: center; color: #6b7280; grid-column: 1 / -1;">Фото работ еще не загружены</p>';
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки фото:', error);
+      loading.style.display = 'none';
+      grid.innerHTML = '<p style="text-align: center; color: #dc2626; grid-column: 1 / -1;">Ошибка загрузки фото</p>';
+    }
+  }
+
+  async function deleteMasterPhoto(filename) {
+    if (!confirm('Удалить это фото?')) return;
+
+    try {
+      const response = await fetch(`/api/master/photos/${encodeURIComponent(filename)}`, {
+        method: 'DELETE'
+      });
+      const result = await response.json();
+
+      const alert = document.getElementById('photos-alert');
+      if (result.success) {
+        alert.className = 'alert alert-success';
+        alert.textContent = 'Фото удалено';
+        alert.style.display = 'block';
+        setTimeout(() => {
+          alert.style.display = 'none';
+        }, 3000);
+        loadMasterPhotos();
+      } else {
+        alert.className = 'alert alert-error';
+        alert.textContent = result.message || 'Ошибка удаления фото';
+        alert.style.display = 'block';
+      }
+    } catch (error) {
+      console.error('Ошибка удаления фото:', error);
+      const alert = document.getElementById('photos-alert');
+      alert.className = 'alert alert-error';
+      alert.textContent = 'Ошибка соединения';
+      alert.style.display = 'block';
+    }
+  }
+
+  // Обработка загрузки фото
+  document.addEventListener('DOMContentLoaded', () => {
+    const uploadInput = document.getElementById('photos-upload');
+    if (uploadInput) {
+      uploadInput.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        if (files.length > 10) {
+          alert('Максимум 10 файлов за раз');
+          return;
+        }
+
+        const formData = new FormData();
+        files.forEach(file => {
+          if (file.size > 10 * 1024 * 1024) {
+            alert(`Файл ${file.name} слишком большой (максимум 10 МБ)`);
+            return;
+          }
+          formData.append('photos', file);
+        });
+
+        const alert = document.getElementById('photos-alert');
+        const loading = document.getElementById('photos-loading');
+        alert.style.display = 'none';
+        loading.style.display = 'block';
+
+        try {
+          const response = await fetch('/api/master/photos', {
+            method: 'POST',
+            body: formData
+          });
+
+          const result = await response.json();
+          loading.style.display = 'none';
+
+          if (result.success) {
+            alert.className = 'alert alert-success';
+            alert.textContent = `Загружено ${result.photos.length} фото`;
+            if (result.warning) {
+              alert.textContent += '. ' + result.warning;
+            }
+            alert.style.display = 'block';
+            setTimeout(() => {
+              alert.style.display = 'none';
+            }, 5000);
+            loadMasterPhotos();
+            uploadInput.value = '';
+          } else {
+            alert.className = 'alert alert-error';
+            alert.textContent = result.message || 'Ошибка загрузки фото';
+            alert.style.display = 'block';
+          }
+        } catch (error) {
+          console.error('Ошибка загрузки фото:', error);
+          loading.style.display = 'none';
+          alert.className = 'alert alert-error';
+          alert.textContent = 'Ошибка соединения';
+          alert.style.display = 'block';
+        }
+      });
+    }
+  });
 
   // Обработка формы профиля
   document.getElementById('profile-form').addEventListener('submit', async (e) => {
