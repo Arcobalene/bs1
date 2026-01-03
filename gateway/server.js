@@ -51,8 +51,10 @@ const services = {
 const proxyOptions = {
   changeOrigin: true,
   cookieDomainRewrite: '',
-  timeout: 30000, // 30 секунд timeout
-  proxyTimeout: 30000,
+  timeout: 60000, // 60 секунд timeout (увеличено для стабильности)
+  proxyTimeout: 60000,
+  xfwd: true, // Передавать оригинальные заголовки
+  secure: false, // Отключить проверку SSL для внутренних соединений
   onProxyReq: (proxyReq, req, res) => {
     // Передаем сессию через заголовки (если нужно)
     if (req.session) {
@@ -62,6 +64,10 @@ const proxyOptions = {
   onError: (err, req, res) => {
     console.error(`[Gateway] Проксирование ошибка для ${req.method} ${req.path}:`, err.message);
     console.error(`[Gateway] Целевой сервис: ${req.url}`);
+    console.error(`[Gateway] Код ошибки: ${err.code || 'N/A'}`);
+    if (process.env.NODE_ENV === 'development') {
+      console.error(`[Gateway] Полный стек ошибки:`, err);
+    }
     if (!res.headersSent) {
       res.status(502).json({ 
         success: false, 
