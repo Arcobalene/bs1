@@ -1,0 +1,289 @@
+version: '3.8'
+
+services:
+  # База данных
+  db:
+    image: postgres:15-alpine
+    container_name: beauty-studio-db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-beauty_studio}
+      POSTGRES_USER: ${DB_USER:-beauty_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-beauty_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - beauty-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-beauty_user} -d ${DB_NAME:-beauty_studio}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # MinIO для файлов
+  minio:
+    image: minio/minio:latest
+    container_name: beauty-studio-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin}
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    networks:
+      - beauty-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Auth Service
+  auth-service:
+    build: ./services/auth-service
+    container_name: beauty-studio-auth
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3001
+      - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-beauty_studio}
+      - DB_USER=${DB_USER:-beauty_user}
+      - DB_PASSWORD=${DB_PASSWORD:-beauty_password}
+    networks:
+      - beauty-network
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # User Service
+  user-service:
+    build: ./services/user-service
+    container_name: beauty-studio-user
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3002
+      - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-beauty_studio}
+      - DB_USER=${DB_USER:-beauty_user}
+      - DB_PASSWORD=${DB_PASSWORD:-beauty_password}
+    networks:
+      - beauty-network
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Booking Service
+  booking-service:
+    build: ./services/booking-service
+    container_name: beauty-studio-booking
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3003
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-beauty_studio}
+      - DB_USER=${DB_USER:-beauty_user}
+      - DB_PASSWORD=${DB_PASSWORD:-beauty_password}
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3006
+      - TELEGRAM_SERVICE_URL=http://telegram-service:3007
+    networks:
+      - beauty-network
+    depends_on:
+      db:
+        condition: service_healthy
+      notification-service:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Catalog Service
+  catalog-service:
+    build: ./services/catalog-service
+    container_name: beauty-studio-catalog
+    ports:
+      - "3004:3004"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3004
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-beauty_studio}
+      - DB_USER=${DB_USER:-beauty_user}
+      - DB_PASSWORD=${DB_PASSWORD:-beauty_password}
+    networks:
+      - beauty-network
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # File Service
+  file-service:
+    build: ./services/file-service
+    container_name: beauty-studio-file
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3005
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-beauty_studio}
+      - DB_USER=${DB_USER:-beauty_user}
+      - DB_PASSWORD=${DB_PASSWORD:-beauty_password}
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_USE_SSL=false
+    networks:
+      - beauty-network
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Notification Service
+  notification-service:
+    build: ./services/notification-service
+    container_name: beauty-studio-notification
+    ports:
+      - "3006:3006"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3006
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-beauty_studio}
+      - DB_USER=${DB_USER:-beauty_user}
+      - DB_PASSWORD=${DB_PASSWORD:-beauty_password}
+    networks:
+      - beauty-network
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Telegram Service
+  telegram-service:
+    build: ./services/telegram-service
+    container_name: beauty-studio-telegram
+    ports:
+      - "3007:3007"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3007
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL:-}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-beauty_studio}
+      - DB_USER=${DB_USER:-beauty_user}
+      - DB_PASSWORD=${DB_PASSWORD:-beauty_password}
+    networks:
+      - beauty-network
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # API Gateway
+  gateway:
+    build: ./gateway
+    container_name: beauty-studio-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3000
+      - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - USER_SERVICE_URL=http://user-service:3002
+      - BOOKING_SERVICE_URL=http://booking-service:3003
+      - CATALOG_SERVICE_URL=http://catalog-service:3004
+      - FILE_SERVICE_URL=http://file-service:3005
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3006
+      - TELEGRAM_SERVICE_URL=http://telegram-service:3007
+    volumes:
+      - ./views:/app/views
+      - ./public:/app/public
+    networks:
+      - beauty-network
+    depends_on:
+      - auth-service
+      - user-service
+      - booking-service
+      - catalog-service
+      - file-service
+      - notification-service
+      - telegram-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres-data:
+    driver: local
+  minio-data:
+    driver: local
+
+networks:
+  beauty-network:
+    driver: bridge
+
