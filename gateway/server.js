@@ -51,8 +51,8 @@ const services = {
 const proxyOptions = {
   changeOrigin: true,
   cookieDomainRewrite: '',
-  timeout: 60000, // 60 секунд timeout (увеличено для стабильности)
-  proxyTimeout: 60000,
+  timeout: 120000, // 120 секунд timeout (увеличено для стабильности)
+  proxyTimeout: 120000,
   xfwd: true, // Передавать оригинальные заголовки
   secure: false, // Отключить проверку SSL для внутренних соединений
   onProxyReq: (proxyReq, req, res) => {

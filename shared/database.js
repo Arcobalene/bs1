@@ -30,7 +30,7 @@ if (DB_TYPE === 'postgres') {
     password: process.env.DB_PASSWORD || 'beauty_password',
     max: 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000, // Увеличено до 10 секунд
+    connectionTimeoutMillis: 30000, // 30 секунд для подключения к БД
   });
 
   pool.on('error', (err) => {

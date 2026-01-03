@@ -286,9 +286,9 @@ services:
       - beauty-network
     depends_on:
       auth-service:
-        condition: service_started
+        condition: service_healthy
       user-service:
-        condition: service_started
+        condition: service_healthy
       booking-service:
         condition: service_started
       catalog-service:
