@@ -292,10 +292,42 @@ services:
       timeout: 10s
       retries: 3
 
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: beauty-studio-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - nginx-cache:/var/cache/nginx
+      - nginx-logs:/var/log/nginx
+    networks:
+      - beauty-network
+    depends_on:
+      gateway:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "com.beauty-studio.description=Nginx Reverse Proxy"
+      - "com.beauty-studio.version=alpine"
+
 volumes:
   postgres-data:
     driver: local
   minio-data:
+    driver: local
+  nginx-cache:
+    driver: local
+  nginx-logs:
     driver: local
 
 networks:
