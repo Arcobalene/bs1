@@ -87,8 +87,31 @@
       const response = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Важно для передачи cookies (сессий)
         body: JSON.stringify(data)
       });
+
+      // Проверяем статус ответа перед парсингом JSON
+      if (!response.ok) {
+        // Если сервер вернул ошибку, пытаемся получить JSON с описанием
+        let errorMessage = 'Ошибка сервера';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          // Если не удалось распарсить JSON, используем текст статуса
+          if (response.status === 502) {
+            errorMessage = 'Сервис временно недоступен. Попробуйте позже.';
+          } else if (response.status === 504) {
+            errorMessage = 'Превышено время ожидания. Попробуйте позже.';
+          } else {
+            errorMessage = `Ошибка ${response.status}: ${response.statusText}`;
+          }
+        }
+        errorAlert.textContent = errorMessage;
+        errorAlert.style.display = 'block';
+        return;
+      }
 
       const result = await response.json();
       if (result.success) {
@@ -103,6 +126,7 @@
         errorAlert.style.display = 'block';
       }
     } catch (error) {
+      console.error('Ошибка при входе:', error);
       errorAlert.textContent = 'Ошибка соединения. Попробуйте позже.';
       errorAlert.style.display = 'block';
     }
