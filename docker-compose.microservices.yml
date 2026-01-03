@@ -278,13 +278,20 @@ services:
     networks:
       - beauty-network
     depends_on:
-      - auth-service
-      - user-service
-      - booking-service
-      - catalog-service
-      - file-service
-      - notification-service
-      - telegram-service
+      auth-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      booking-service:
+        condition: service_started
+      catalog-service:
+        condition: service_started
+      file-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+      telegram-service:
+        condition: service_started
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]

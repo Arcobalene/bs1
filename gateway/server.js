@@ -51,6 +51,8 @@ const services = {
 const proxyOptions = {
   changeOrigin: true,
   cookieDomainRewrite: '',
+  timeout: 30000, // 30 секунд timeout
+  proxyTimeout: 30000,
   onProxyReq: (proxyReq, req, res) => {
     // Передаем сессию через заголовки (если нужно)
     if (req.session) {
