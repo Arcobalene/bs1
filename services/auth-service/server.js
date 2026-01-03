@@ -184,6 +184,52 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'auth-service', timestamp: new Date().toISOString() });
 });
 
+// Обработчик ошибок (должен быть после всех маршрутов)
+app.use((err, req, res, next) => {
+  // Игнорируем ошибки "request aborted" - это нормально, когда клиент закрывает соединение
+  if (err.message && (err.message.includes('request aborted') || err.message.includes('aborted'))) {
+    return; // Клиент уже закрыл соединение, ответ не нужен
+  }
+  
+  // Обработка ошибок body parser
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    if (!res.headersSent) {
+      return res.status(400).json({ success: false, message: 'Неверный формат JSON' });
+    }
+    return;
+  }
+  
+  if (err.type === 'entity.parse.failed') {
+    if (!res.headersSent) {
+      return res.status(400).json({ success: false, message: 'Неверный формат данных' });
+    }
+    return;
+  }
+  
+  // Остальные ошибки
+  console.error('Ошибка:', err.message);
+  if (!res.headersSent) {
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+// Обработчик ошибок на уровне процесса для игнорирования "request aborted"
+process.on('uncaughtException', (err) => {
+  if (err.message && (err.message.includes('request aborted') || err.message.includes('aborted'))) {
+    // Игнорируем ошибки "request aborted" - это нормально
+    return;
+  }
+  console.error('Необработанное исключение:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  if (reason && reason.message && (reason.message.includes('request aborted') || reason.message.includes('aborted'))) {
+    // Игнорируем ошибки "request aborted" - это нормально
+    return;
+  }
+  console.error('Необработанный rejection:', reason);
+});
+
 // Запуск сервера
 (async () => {
   try {
