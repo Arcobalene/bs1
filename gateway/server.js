@@ -1,12 +1,37 @@
 const express = require('express');
+const session = require('express-session');
+const cookieParser = require('cookie-parser');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Trust proxy для работы за nginx (важно для правильной работы cookies и HTTPS)
+app.set('trust proxy', 1);
+
+// Middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
+
+// Настройка сессий (важно: имя cookie должно совпадать с оригинальным)
+const isHttps = process.env.NODE_ENV === 'production' || process.env.BEHIND_HTTPS_PROXY === 'true';
+const cookieSecure = isHttps;
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  name: 'beauty.studio.sid', // Имя cookie должно совпадать с оригинальным
+  cookie: {
+    secure: cookieSecure,
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000, // 24 часа
+    sameSite: 'lax',
+    path: '/'
+  }
+}));
 
 // Статические файлы
 app.use(express.static(path.join(__dirname, 'public')));
@@ -20,6 +45,18 @@ const services = {
   file: process.env.FILE_SERVICE_URL || 'http://file-service:3005',
   notification: process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:3006',
   telegram: process.env.TELEGRAM_SERVICE_URL || 'http://telegram-service:3007'
+};
+
+// Настройка прокси с передачей сессий
+const proxyOptions = {
+  changeOrigin: true,
+  cookieDomainRewrite: '',
+  onProxyReq: (proxyReq, req, res) => {
+    // Передаем сессию через заголовки (если нужно)
+    if (req.session) {
+      // Сессии передаются через cookies автоматически
+    }
+  }
 };
 
 // HTML страницы (должны быть ДО API проксирования)
@@ -97,28 +134,35 @@ app.get('/health', (req, res) => {
 });
 
 // Проксирование API запросов (после HTML страниц)
-app.use('/api/register', createProxyMiddleware({ target: services.auth, changeOrigin: true }));
-app.use('/api/login', createProxyMiddleware({ target: services.auth, changeOrigin: true }));
-app.use('/api/logout', createProxyMiddleware({ target: services.auth, changeOrigin: true }));
+// Auth endpoints
+app.use('/api/register', createProxyMiddleware({ target: services.auth, ...proxyOptions }));
+app.use('/api/register/master', createProxyMiddleware({ target: services.auth, ...proxyOptions }));
+app.use('/api/register-client', createProxyMiddleware({ target: services.user, ...proxyOptions }));
+app.use('/api/login', createProxyMiddleware({ target: services.auth, ...proxyOptions }));
+app.use('/api/login-client', createProxyMiddleware({ target: services.user, ...proxyOptions }));
+app.use('/api/logout', createProxyMiddleware({ target: services.auth, ...proxyOptions }));
+app.use('/api/logout-client', createProxyMiddleware({ target: services.user, ...proxyOptions }));
 
-app.use('/api/user', createProxyMiddleware({ target: services.user, changeOrigin: true }));
-app.use('/api/users', createProxyMiddleware({ target: services.user, changeOrigin: true }));
-app.use('/api/salon', createProxyMiddleware({ target: services.user, changeOrigin: true }));
-app.use('/api/clients', createProxyMiddleware({ target: services.user, changeOrigin: true }));
+// User endpoints
+app.use('/api/user', createProxyMiddleware({ target: services.user, ...proxyOptions }));
+app.use('/api/users', createProxyMiddleware({ target: services.user, ...proxyOptions }));
+app.use('/api/salon', createProxyMiddleware({ target: services.user, ...proxyOptions }));
+app.use('/api/salons', createProxyMiddleware({ target: services.user, ...proxyOptions }));
+app.use('/api/clients', createProxyMiddleware({ target: services.user, ...proxyOptions }));
+app.use('/api/client', createProxyMiddleware({ target: services.user, ...proxyOptions }));
 
-app.use('/api/bookings', createProxyMiddleware({ target: services.booking, changeOrigin: true }));
+app.use('/api/bookings', createProxyMiddleware({ target: services.booking, ...proxyOptions }));
 
-app.use('/api/services', createProxyMiddleware({ target: services.catalog, changeOrigin: true }));
-app.use('/api/masters', createProxyMiddleware({ target: services.catalog, changeOrigin: true }));
+app.use('/api/services', createProxyMiddleware({ target: services.catalog, ...proxyOptions }));
+app.use('/api/masters', createProxyMiddleware({ target: services.catalog, ...proxyOptions }));
 
-app.use('/api/minio', createProxyMiddleware({ target: services.file, changeOrigin: true }));
+app.use('/api/minio', createProxyMiddleware({ target: services.file, ...proxyOptions }));
 
-app.use('/api/notifications', createProxyMiddleware({ target: services.notification, changeOrigin: true }));
+app.use('/api/notifications', createProxyMiddleware({ target: services.notification, ...proxyOptions }));
 
-app.use('/api/telegram', createProxyMiddleware({ target: services.telegram, changeOrigin: true }));
-app.use('/api/bot', createProxyMiddleware({ target: services.telegram, changeOrigin: true }));
+app.use('/api/telegram', createProxyMiddleware({ target: services.telegram, ...proxyOptions }));
+app.use('/api/bot', createProxyMiddleware({ target: services.telegram, ...proxyOptions }));
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚪 API Gateway запущен на порту ${PORT}`);
 });
-
