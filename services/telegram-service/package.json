@@ -1,0 +1,14 @@
+{
+  "name": "telegram-service",
+  "version": "1.0.0",
+  "description": "Сервис интеграции с Telegram",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
+
