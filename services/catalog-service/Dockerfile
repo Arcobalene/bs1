@@ -7,6 +7,10 @@ WORKDIR /app
 COPY services/catalog-service/package*.json ./
 RUN npm install --production
 
+# Копируем shared модули
+COPY shared ./shared
+
+# Копируем код сервиса
 COPY services/catalog-service/server.js ./
 
 EXPOSE 3004

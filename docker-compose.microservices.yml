@@ -114,11 +114,14 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3003
+      - DB_TYPE=postgres
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-beauty_studio}
       - DB_USER=${DB_USER:-beauty_user}
       - DB_PASSWORD=${DB_PASSWORD:-beauty_password}
+      - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
+      - BEHIND_HTTPS_PROXY=true
       - NOTIFICATION_SERVICE_URL=http://notification-service:3006
       - TELEGRAM_SERVICE_URL=http://telegram-service:3007
     networks:
