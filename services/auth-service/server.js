@@ -26,7 +26,7 @@ const cookieSecure = isHttps;
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
-  resave: false,
+  resave: true, // Изменено на true для стабильности
   saveUninitialized: false,
   name: 'beauty.studio.sid', // Имя cookie должно совпадать с gateway
   cookie: {
@@ -87,14 +87,8 @@ app.post('/api/register', async (req, res) => {
     req.session.userId = userId;
     req.session.originalUserId = userId;
     
-    // Сохраняем сессию перед отправкой ответа
-    req.session.save((err) => {
-      if (err) {
-        console.error('Ошибка сохранения сессии:', err);
-        return res.status(500).json({ success: false, message: 'Ошибка сервера при регистрации' });
-      }
-      res.status(201).json({ success: true, message: 'Регистрация успешна' });
-    });
+    // Отправляем ответ (сессия сохранится автоматически благодаря resave: true)
+    res.status(201).json({ success: true, message: 'Регистрация успешна' });
   } catch (error) {
     console.error('Ошибка регистрации:', error);
     res.status(500).json({ success: false, message: 'Ошибка сервера при регистрации' });
@@ -134,14 +128,8 @@ app.post('/api/register/master', async (req, res) => {
     req.session.userId = userId;
     req.session.originalUserId = userId;
     
-    // Сохраняем сессию перед отправкой ответа
-    req.session.save((err) => {
-      if (err) {
-        console.error('Ошибка сохранения сессии:', err);
-        return res.status(500).json({ success: false, message: 'Ошибка сервера при регистрации' });
-      }
-      res.status(201).json({ success: true, message: 'Регистрация успешна' });
-    });
+    // Отправляем ответ (сессия сохранится автоматически благодаря resave: true)
+    res.status(201).json({ success: true, message: 'Регистрация успешна' });
   } catch (error) {
     console.error('Ошибка регистрации мастера:', error);
     res.status(500).json({ success: false, message: 'Ошибка сервера при регистрации' });
@@ -176,17 +164,11 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     req.session.userId = user.id;
     req.session.originalUserId = req.session.originalUserId || user.id;
     
-    // Сохраняем сессию перед отправкой ответа
-    req.session.save((err) => {
-      if (err) {
-        console.error('Ошибка сохранения сессии:', err);
-        return res.status(500).json({ success: false, message: 'Ошибка сервера при входе' });
-      }
-      res.json({ 
-        success: true, 
-        message: 'Вход выполнен',
-        role: user.role
-      });
+    // Отправляем ответ (сессия сохранится автоматически благодаря resave: true)
+    res.json({ 
+      success: true, 
+      message: 'Вход выполнен',
+      role: user.role
     });
   } catch (error) {
     console.error('Ошибка входа:', error);
