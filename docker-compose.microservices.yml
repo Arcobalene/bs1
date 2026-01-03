@@ -84,6 +84,8 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3002
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
+      - BEHIND_HTTPS_PROXY=true
+      - DB_TYPE=postgres
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-beauty_studio}
