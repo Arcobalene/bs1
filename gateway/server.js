@@ -56,6 +56,19 @@ const proxyOptions = {
     if (req.session) {
       // Сессии передаются через cookies автоматически
     }
+  },
+  onError: (err, req, res) => {
+    console.error('Проксирование ошибка:', err.message);
+    if (!res.headersSent) {
+      res.status(502).json({ 
+        success: false, 
+        message: 'Сервис временно недоступен',
+        error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      });
+    }
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    // Передаем статус код от микросервиса
   }
 };
 
