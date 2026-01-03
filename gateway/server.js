@@ -70,7 +70,11 @@ const proxyOptions = {
     }
   },
   onProxyRes: (proxyRes, req, res) => {
-    // Передаем статус код от микросервиса
+    // Копируем Set-Cookie заголовки от auth-service в ответ gateway
+    // Это важно для правильной работы сессий
+    if (proxyRes.headers['set-cookie']) {
+      res.setHeader('Set-Cookie', proxyRes.headers['set-cookie']);
+    }
   }
 };
 

@@ -17,15 +17,24 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-// Настройка сессий (Redis рекомендуется для production)
+// Trust proxy для работы за gateway/nginx
+app.set('trust proxy', 1);
+
+// Настройка сессий (важно: имя cookie должно совпадать с gateway)
+const isHttps = process.env.NODE_ENV === 'production' || process.env.BEHIND_HTTPS_PROXY === 'true';
+const cookieSecure = isHttps;
+
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'auth-service-secret-change-in-production',
+  secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
   resave: false,
   saveUninitialized: false,
+  name: 'beauty.studio.sid', // Имя cookie должно совпадать с gateway
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: cookieSecure,
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 часа
+    maxAge: 24 * 60 * 60 * 1000, // 24 часа
+    sameSite: 'lax',
+    path: '/'
   }
 }));
 
