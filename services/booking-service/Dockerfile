@@ -5,7 +5,7 @@ RUN apk add --no-cache wget
 WORKDIR /app
 
 COPY services/booking-service/package*.json ./
-RUN npm install --omit=dev
+RUN npm install --omit=dev && npm cache clean --force
 
 # Копируем shared модули
 COPY shared ./shared

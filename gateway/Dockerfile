@@ -5,7 +5,7 @@ RUN apk add --no-cache wget
 WORKDIR /app
 
 COPY gateway/package*.json ./
-RUN npm install --omit=dev
+RUN npm install --omit=dev && npm cache clean --force
 
 COPY gateway/server.js ./
 
