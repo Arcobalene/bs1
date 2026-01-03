@@ -53,6 +53,7 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3001
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
+      - BEHIND_HTTPS_PROXY=true
       - DB_TYPE=postgres
       - DB_HOST=db
       - DB_PORT=5432
@@ -265,6 +266,7 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3000
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
+      - BEHIND_HTTPS_PROXY=true
       - AUTH_SERVICE_URL=http://auth-service:3001
       - USER_SERVICE_URL=http://user-service:3002
       - BOOKING_SERVICE_URL=http://booking-service:3003

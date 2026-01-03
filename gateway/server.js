@@ -60,7 +60,8 @@ const proxyOptions = {
     }
   },
   onError: (err, req, res) => {
-    console.error('Проксирование ошибка:', err.message);
+    console.error(`[Gateway] Проксирование ошибка для ${req.method} ${req.path}:`, err.message);
+    console.error(`[Gateway] Целевой сервис: ${req.url}`);
     if (!res.headersSent) {
       res.status(502).json({ 
         success: false, 
