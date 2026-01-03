@@ -35,7 +35,9 @@ if (DB_TYPE === 'postgres') {
 
   pool.on('error', (err) => {
     console.error('Unexpected error on idle client', err);
-    process.exit(-1);
+    // Не используем process.exit в продакшене - это может привести к неожиданному завершению
+    // Вместо этого логируем ошибку и позволяем приложению продолжить работу
+    // При необходимости можно переподключиться через pool
   });
   
   // Проверка подключения будет выполнена в initDatabase()
@@ -367,15 +369,15 @@ const users = {
       phoneDigits.startsWith('8') ? phoneDigits.substring(1) : null
     ].filter(p => p && p.length >= 9);
     
-    const conditions = patterns.map((_, i) => 
-      `REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(salon_phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') = $${i + 1}`
-    ).join(' OR ');
+    if (patterns.length === 0) return null;
     
-    if (!conditions) return null;
-    
+    // Безопасная параметризация: используем ANY для массива значений
+    // PostgreSQL нормализует телефон через REPLACE функции
     const result = await pool.query(
-      `SELECT * FROM users WHERE ${conditions} LIMIT 1`,
-      patterns
+      `SELECT * FROM users 
+       WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(salon_phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', '') = ANY($1::text[])
+       LIMIT 1`,
+      [patterns]
     );
     return result.rows[0] || null;
   },

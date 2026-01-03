@@ -21,7 +21,7 @@ const cookieSecure = isHttps;
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
-  resave: false,
+  resave: true, // Синхронизировано с auth-service и user-service
   saveUninitialized: false,
   name: 'beauty.studio.sid', // Имя cookie должно совпадать с оригинальным
   cookie: {
