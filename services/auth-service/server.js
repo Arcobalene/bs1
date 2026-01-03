@@ -5,9 +5,9 @@ const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 
-// Импортируем общие модули (нужно настроить пути)
-const { users: dbUsers } = require('../../shared/database');
-const { validateUsername, validatePassword, validateEmail, validatePhone, normalizeToE164 } = require('../../shared/utils');
+// Импортируем общие модули
+const { users: dbUsers, initDatabase } = require('./shared/database');
+const { validateUsername, validatePassword, validateEmail, validatePhone, normalizeToE164 } = require('./shared/utils');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -175,7 +175,19 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'auth-service', timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🔐 Auth Service запущен на порту ${PORT}`);
-});
+// Запуск сервера
+(async () => {
+  try {
+    // Инициализируем БД
+    await initDatabase();
+    console.log('✅ База данных инициализирована');
+    
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🔐 Auth Service запущен на порту ${PORT}`);
+    });
+  } catch (error) {
+    console.error('❌ Ошибка инициализации:', error);
+    process.exit(1);
+  }
+})();
 

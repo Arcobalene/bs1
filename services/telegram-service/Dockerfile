@@ -4,10 +4,10 @@ RUN apk add --no-cache wget
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY services/telegram-service/package*.json ./
 RUN npm install --production
 
-COPY server.js ./
+COPY services/telegram-service/server.js ./
 
 EXPOSE 3007
 

@@ -4,10 +4,10 @@ RUN apk add --no-cache wget
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY gateway/package*.json ./
 RUN npm install --production
 
-COPY server.js ./
+COPY gateway/server.js ./
 
 EXPOSE 3000
 

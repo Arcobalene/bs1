@@ -43,7 +43,9 @@ services:
 
   # Auth Service
   auth-service:
-    build: ./services/auth-service
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
     container_name: beauty-studio-auth
     ports:
       - "3001:3001"
@@ -51,6 +53,7 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3001
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
+      - DB_TYPE=postgres
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-beauty_studio}
@@ -70,7 +73,9 @@ services:
 
   # User Service
   user-service:
-    build: ./services/user-service
+    build:
+      context: .
+      dockerfile: services/user-service/Dockerfile
     container_name: beauty-studio-user
     ports:
       - "3002:3002"
@@ -97,7 +102,9 @@ services:
 
   # Booking Service
   booking-service:
-    build: ./services/booking-service
+    build:
+      context: .
+      dockerfile: services/booking-service/Dockerfile
     container_name: beauty-studio-booking
     ports:
       - "3003:3003"
@@ -127,7 +134,9 @@ services:
 
   # Catalog Service
   catalog-service:
-    build: ./services/catalog-service
+    build:
+      context: .
+      dockerfile: services/catalog-service/Dockerfile
     container_name: beauty-studio-catalog
     ports:
       - "3004:3004"
@@ -153,7 +162,9 @@ services:
 
   # File Service
   file-service:
-    build: ./services/file-service
+    build:
+      context: .
+      dockerfile: services/file-service/Dockerfile
     container_name: beauty-studio-file
     ports:
       - "3005:3005"
@@ -186,7 +197,9 @@ services:
 
   # Notification Service
   notification-service:
-    build: ./services/notification-service
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
     container_name: beauty-studio-notification
     ports:
       - "3006:3006"
@@ -212,7 +225,9 @@ services:
 
   # Telegram Service
   telegram-service:
-    build: ./services/telegram-service
+    build:
+      context: .
+      dockerfile: services/telegram-service/Dockerfile
     container_name: beauty-studio-telegram
     ports:
       - "3007:3007"
@@ -240,7 +255,9 @@ services:
 
   # API Gateway
   gateway:
-    build: ./gateway
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
     container_name: beauty-studio-gateway
     ports:
       - "3000:3000"

@@ -4,10 +4,10 @@ RUN apk add --no-cache wget
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY services/catalog-service/package*.json ./
 RUN npm install --production
 
-COPY server.js ./
+COPY services/catalog-service/server.js ./
 
 EXPOSE 3004
 
