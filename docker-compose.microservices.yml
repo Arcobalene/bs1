@@ -30,7 +30,7 @@ services:
     networks:
       - beauty-network
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --loglevel debug
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -70,6 +70,8 @@ services:
       - "3001:3001"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - LOG_LEVEL=DEBUG
+      - DEBUG=*
       - PORT=3001
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
       - BEHIND_HTTPS_PROXY=true
@@ -101,6 +103,8 @@ services:
       - "3002:3002"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - LOG_LEVEL=DEBUG
+      - DEBUG=*
       - PORT=3002
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
       - BEHIND_HTTPS_PROXY=true
@@ -132,6 +136,8 @@ services:
       - "3003:3003"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - LOG_LEVEL=DEBUG
+      - DEBUG=*
       - PORT=3003
       - DB_TYPE=postgres
       - DB_HOST=db
@@ -167,6 +173,8 @@ services:
       - "3004:3004"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - LOG_LEVEL=DEBUG
+      - DEBUG=*
       - PORT=3004
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
       - BEHIND_HTTPS_PROXY=true
@@ -198,6 +206,8 @@ services:
       - "3005:3005"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - LOG_LEVEL=DEBUG
+      - DEBUG=*
       - PORT=3005
       - DB_HOST=db
       - DB_PORT=5432
@@ -233,6 +243,8 @@ services:
       - "3006:3006"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - LOG_LEVEL=DEBUG
+      - DEBUG=*
       - PORT=3006
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
       - BEHIND_HTTPS_PROXY=true
@@ -264,6 +276,8 @@ services:
       - "3007:3007"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - LOG_LEVEL=DEBUG
+      - DEBUG=*
       - PORT=3007
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
       - BEHIND_HTTPS_PROXY=true
@@ -297,6 +311,8 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      - LOG_LEVEL=DEBUG
+      - DEBUG=*
       - PORT=3000
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
       - BEHIND_HTTPS_PROXY=true
