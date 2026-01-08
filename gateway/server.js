@@ -30,8 +30,9 @@ app.use((req, res, next) => {
   express.urlencoded({ extended: true, limit: '10mb' })(req, res, next);
 });
 
-// Используем cookie-parser с секретом для подписи cookies (совпадает с SESSION_SECRET)
-app.use(cookieParser(process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production'));
+// Используем cookie-parser БЕЗ секрета, так как express-session не использует подписанные cookies
+// Express-session сам управляет cookies и не требует подписи от cookie-parser
+app.use(cookieParser());
 
 // Логирование всех входящих запросов для отладки
 app.use((req, res, next) => {
@@ -500,28 +501,20 @@ app.use('/api/login', createProxyMiddleware({
                   // Express-session использует подписанные cookies с префиксом 's:'
                   const cookieName = 'beauty.studio.sid';
                   
-                  // Проверяем, установлен ли cookie в заголовках ответа
-                  const setCookieHeader = res.getHeader('Set-Cookie');
-                  if (!setCookieHeader) {
-                    console.log(`[Gateway] Cookie не установлен автоматически, устанавливаем вручную для sessionID=${req.sessionID}`);
-                    
-                    // Express-session использует подписанные cookies, но мы не можем использовать res.cookie с signed: true
-                    // потому что это создаст двойную подпись. Вместо этого используем req.session.cookie для получения правильных параметров
-                    const cookieOptions = {
-                      httpOnly: req.session.cookie.httpOnly,
-                      secure: req.session.cookie.secure,
-                      maxAge: req.session.cookie.maxAge,
-                      sameSite: req.session.cookie.sameSite,
-                      path: req.session.cookie.path
-                    };
-                    
-                    // Устанавливаем cookie без подписи, так как express-session сам подпишет его при следующем запросе
-                    // Или используем правильный формат 's:sessionID.signature'
-                    res.cookie(cookieName, req.sessionID, cookieOptions);
-                    console.log(`[Gateway] Cookie установлен вручную: ${cookieName}=${req.sessionID.substring(0, 20)}...`);
-                  } else {
-                    console.log(`[Gateway] Cookie установлен автоматически: ${Array.isArray(setCookieHeader) ? setCookieHeader[0].substring(0, 50) : setCookieHeader.substring(0, 50)}...`);
-                  }
+                  // При selfHandleResponse: true express-session не устанавливает cookie автоматически
+                  // Нужно установить cookie вручную, используя правильные параметры из req.session.cookie
+                  // Express-session НЕ использует подписанные cookies - он использует обычные cookies
+                  const cookieOptions = {
+                    httpOnly: req.session.cookie.httpOnly !== false,
+                    secure: req.session.cookie.secure !== false,
+                    maxAge: req.session.cookie.maxAge || 24 * 60 * 60 * 1000,
+                    sameSite: req.session.cookie.sameSite || 'lax',
+                    path: req.session.cookie.path || '/'
+                  };
+                  
+                  // Устанавливаем cookie с sessionID (express-session использует обычные cookies, не подписанные)
+                  res.cookie(cookieName, req.sessionID, cookieOptions);
+                  console.log(`[Gateway] Cookie установлен вручную: ${cookieName}=${req.sessionID.substring(0, 20)}..., options=${JSON.stringify(cookieOptions)}`);
                   console.log(`[Gateway] Сессия синхронизирована после логина: userId=${result.userId}, sessionID=${req.sessionID}`);
                   resolve();
                 }
