@@ -7,6 +7,11 @@ WORKDIR /app
 COPY gateway/package*.json ./
 RUN npm install --omit=dev && npm cache clean --force
 
+# Копируем views и public
+COPY views ./views
+COPY public ./public
+
+# Копируем код gateway
 COPY gateway/server.js ./
 
 EXPOSE 3000
