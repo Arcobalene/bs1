@@ -646,8 +646,10 @@ app.use('/api/bot', createProxyMiddleware({ target: services.telegram, ...proxyO
 initApp().then(() => {
   console.log(`[Gateway] Session store: ${sessionStore ? 'Redis' : 'MemoryStore (fallback)'}`);
   
-  app.listen(PORT, '0.0.0.0', () => {
+  // Запускаем сервер и ждем, пока он будет готов принимать соединения
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚪 API Gateway запущен на порту ${PORT}`);
+    console.log(`[Gateway] Сервер готов принимать соединения`);
   }).on('error', (err) => {
     console.error(`[Gateway] Ошибка запуска сервера на порту ${PORT}:`, err.message);
     if (err.code === 'EADDRINUSE') {
@@ -655,10 +657,20 @@ initApp().then(() => {
     }
     process.exit(1);
   });
+  
+  // Обработка ошибок сервера
+  server.on('listening', () => {
+    console.log(`[Gateway] Сервер слушает на 0.0.0.0:${PORT}`);
+  });
 }).catch((error) => {
   console.error('[Gateway] Критическая ошибка инициализации:', error);
   // Все равно запускаем сервер с MemoryStore
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚪 API Gateway запущен на порту ${PORT} (с MemoryStore)`);
+    console.log(`[Gateway] Сервер готов принимать соединения`);
+  });
+  
+  server.on('listening', () => {
+    console.log(`[Gateway] Сервер слушает на 0.0.0.0:${PORT}`);
   });
 });
