@@ -81,11 +81,18 @@ app.post('/api/services', requireAuth, async (req, res) => {
 app.get('/api/services/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    console.log(`[Catalog Service] GET /api/services/${userId}`);
     const salonServices = await services.getByUserId(parseInt(userId));
+    console.log(`[Catalog Service] Услуги найдены: ${salonServices ? salonServices.length : 0}`);
     res.json({ success: true, services: salonServices });
   } catch (error) {
-    console.error('Ошибка получения услуг:', error);
-    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    console.error('[Catalog Service] Ошибка получения услуг:', error);
+    console.error('[Catalog Service] Стек ошибки:', error.stack);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Ошибка сервера',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -115,11 +122,18 @@ app.post('/api/masters', requireAuth, async (req, res) => {
 app.get('/api/masters/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    console.log(`[Catalog Service] GET /api/masters/${userId}`);
     const salonMasters = await masters.getByUserId(parseInt(userId));
+    console.log(`[Catalog Service] Мастера найдены: ${salonMasters ? salonMasters.length : 0}`);
     res.json({ success: true, masters: salonMasters });
   } catch (error) {
-    console.error('Ошибка получения мастеров:', error);
-    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    console.error('[Catalog Service] Ошибка получения мастеров:', error);
+    console.error('[Catalog Service] Стек ошибки:', error.stack);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Ошибка сервера',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
