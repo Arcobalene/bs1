@@ -3,12 +3,11 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Копируем package.json файлы
-COPY package*.json ./
-COPY gateway/package*.json ./gateway/
+# Копируем только package.json сервиса для оптимизации кэширования слоев
+COPY gateway/package*.json ./
 COPY shared ./shared/
 
-# Устанавливаем зависимости
+# Устанавливаем зависимости только из package.json сервиса
 # Используем npm install вместо npm ci, так как package-lock.json может быть устаревшим
 # npm install обновит зависимости согласно package.json и создаст актуальный lock файл
 # Добавляем retry и увеличенные таймауты для стабильности сети
