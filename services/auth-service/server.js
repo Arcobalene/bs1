@@ -227,7 +227,8 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     res.json({ 
       success: true, 
       message: 'Вход выполнен',
-      role: user.role
+      role: user.role,
+      userId: user.id // Добавляем userId для синхронизации сессии в gateway
     });
   } catch (error) {
     console.error('Ошибка входа:', error);

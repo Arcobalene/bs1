@@ -60,8 +60,8 @@ app.use(session({
   }
 }));
 
-// Middleware для синхронизации сессии gateway с auth-service
-// Если есть cookie сессии, но нет userId в сессии gateway, запрашиваем /api/user у auth-service
+// Middleware для синхронизации сессии gateway с user-service
+// Если есть cookie сессии, но нет userId в сессии gateway, запрашиваем /api/user у user-service
 app.use(async (req, res, next) => {
   // Если есть cookie сессии, но нет userId в сессии gateway, синхронизируем
   if (req.cookies && req.cookies['beauty.studio.sid'] && !req.session.userId && req.path.startsWith('/api/')) {
@@ -71,12 +71,12 @@ app.use(async (req, res, next) => {
       try {
         const http = require('http');
         const url = require('url');
-        const authUrl = url.parse(services.auth);
+        const userServiceUrl = url.parse(services.user);
         const cookieHeader = req.headers.cookie || '';
         
         const options = {
-          hostname: authUrl.hostname,
-          port: authUrl.port || 3001,
+          hostname: userServiceUrl.hostname,
+          port: userServiceUrl.port || 3002,
           path: '/api/user',
           method: 'GET',
           headers: {
@@ -91,6 +91,14 @@ app.use(async (req, res, next) => {
             userRes.on('data', (chunk) => { data += chunk; });
             userRes.on('end', () => {
               try {
+                // Проверяем Content-Type перед парсингом
+                const contentType = userRes.headers['content-type'] || '';
+                if (!contentType.includes('application/json')) {
+                  console.log(`[Gateway] Неверный Content-Type при синхронизации: ${contentType}`);
+                  resolve();
+                  return;
+                }
+                
                 const result = JSON.parse(data);
                 if (result.success && result.user && result.user.id) {
                   // Синхронизируем сессию gateway
@@ -104,6 +112,7 @@ app.use(async (req, res, next) => {
                 }
               } catch (e) {
                 console.log(`[Gateway] Ошибка парсинга ответа при синхронизации: ${e.message}`);
+                console.log(`[Gateway] Ответ сервера: ${data.substring(0, 200)}`);
               }
               resolve();
             });
@@ -127,61 +136,6 @@ app.use(async (req, res, next) => {
         // Игнорируем ошибки и продолжаем
       }
     }
-  }
-  
-  // Если это запрос после успешного логина, синхронизируем сессию
-  if (req._needsSessionSync && req.cookies && req.cookies['beauty.studio.sid']) {
-    console.log(`[Gateway] Синхронизация сессии после логина`);
-    try {
-      const http = require('http');
-      const url = require('url');
-      const authUrl = url.parse(services.auth);
-      const cookieHeader = req.headers.cookie || '';
-      
-      const options = {
-        hostname: authUrl.hostname,
-        port: authUrl.port || 3001,
-        path: '/api/user',
-        method: 'GET',
-        headers: {
-          'Cookie': cookieHeader
-        },
-        timeout: 1000
-      };
-      
-      await new Promise((resolve) => {
-        const userReq = http.request(options, (userRes) => {
-          let data = '';
-          userRes.on('data', (chunk) => { data += chunk; });
-          userRes.on('end', () => {
-            try {
-              const result = JSON.parse(data);
-              if (result.success && result.user && result.user.id) {
-                req.session.userId = result.user.id;
-                req.session.originalUserId = result.user.id;
-                req.session.save(() => {
-                  console.log(`[Gateway] Сессия синхронизирована после логина: userId=${result.user.id}`);
-                });
-              }
-            } catch (e) {
-              // Игнорируем ошибки
-            }
-            resolve();
-          });
-        });
-        
-        userReq.on('error', () => resolve());
-        userReq.on('timeout', () => {
-          userReq.destroy();
-          resolve();
-        });
-        
-        userReq.end();
-      });
-    } catch (e) {
-      // Игнорируем ошибки
-    }
-    delete req._needsSessionSync;
   }
   
   next();
@@ -382,13 +336,47 @@ app.use('/api/login', createProxyMiddleware({
   onProxyRes: (proxyRes, req, res) => {
     console.log(`[Gateway] Получен ответ от auth-service: ${proxyRes.statusCode}`);
     
-    // Если логин успешен (200), помечаем запрос для синхронизации сессии
+    // Если логин успешен (200), синхронизируем сессию gateway
     if (proxyRes.statusCode === 200) {
-      // Устанавливаем флаг для последующей синхронизации
-      req._needsSessionSync = true;
+      // Читаем тело ответа для получения userId
+      const chunks = [];
+      
+      proxyRes.on('data', (chunk) => {
+        chunks.push(chunk);
+      });
+      
+      proxyRes.on('end', () => {
+        try {
+          const body = Buffer.concat(chunks).toString();
+          const result = JSON.parse(body);
+          
+          if (result.success && result.userId) {
+            // Синхронизируем сессию gateway с userId из ответа
+            req.session.userId = result.userId;
+            req.session.originalUserId = result.userId;
+            req.session.save(() => {
+              console.log(`[Gateway] Сессия синхронизирована после логина: userId=${result.userId}`);
+            });
+          }
+        } catch (e) {
+          console.log(`[Gateway] Ошибка парсинга ответа логина: ${e.message}`);
+        }
+        
+        // Отправляем оригинальный ответ клиенту
+        res.status(proxyRes.statusCode);
+        Object.keys(proxyRes.headers).forEach(key => {
+          if (key !== 'content-length') {
+            res.setHeader(key, proxyRes.headers[key]);
+          }
+        });
+        res.end(Buffer.concat(chunks));
+      });
+      
+      // Не вызываем оригинальный onProxyRes, так как мы обрабатываем ответ сами
+      return;
     }
     
-    // Вызываем оригинальный onProxyRes из proxyOptions
+    // Для других статусов вызываем оригинальный onProxyRes
     if (proxyOptions.onProxyRes) {
       proxyOptions.onProxyRes(proxyRes, req, res);
     }
