@@ -241,10 +241,20 @@
   // Проверка авторизации и загрузка данных
   async function loadUserData() {
     try {
-      const response = await fetch('/api/user');
+      const response = await fetch('/api/user', {
+        credentials: 'include' // Важно для передачи cookies (сессий)
+      });
+      
+      if (!response.ok) {
+        console.error('Ошибка загрузки данных пользователя:', response.status);
+        window.location.href = '/';
+        return;
+      }
+      
       const result = await response.json();
       
       if (!result.success) {
+        console.error('Ошибка загрузки данных пользователя:', result.message);
         window.location.href = '/';
         return;
       }
@@ -309,7 +319,9 @@
   // Загрузка списка приглашенных мастеров
   async function loadSalonMasters() {
     try {
-      const response = await fetch('/api/salon/masters');
+      const response = await fetch('/api/salon/masters', {
+        credentials: 'include' // Важно для передачи cookies (сессий)
+      });
       
       if (!response.ok) {
         let errorMessage = `HTTP error! status: ${response.status}`;
@@ -523,7 +535,8 @@
     try {
       const response = await fetch(`/api/salon/masters/${masterUserId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include' // Важно для передачи cookies (сессий)
       });
 
       const result = await response.json();
@@ -549,7 +562,8 @@
 
     try {
       const response = await fetch(`/api/salon/masters/${masterUserId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        credentials: 'include' // Важно для передачи cookies (сессий)
       });
 
       const result = await response.json();
@@ -823,7 +837,8 @@
       const response = await fetch('/api/services', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ services })
+        body: JSON.stringify({ services }),
+        credentials: 'include' // Важно для передачи cookies (сессий)
       });
       const result = await response.json();
       if (!result.success) {
@@ -841,7 +856,8 @@
       const response = await fetch('/api/masters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ masters })
+        body: JSON.stringify({ masters }),
+        credentials: 'include' // Важно для передачи cookies (сессий)
       });
       const result = await response.json();
       if (!result.success) {
@@ -883,7 +899,10 @@
   if (logoutLink) {
     logoutLink.addEventListener('click', (e) => {
       e.preventDefault();
-      fetch('/api/logout', { method: 'POST' })
+      fetch('/api/logout', { 
+        method: 'POST',
+        credentials: 'include' // Важно для передачи cookies (сессий)
+      })
         .then(() => {
           window.location.href = '/';
         })
@@ -1322,7 +1341,8 @@
           if (!confirm('Удалить это фото?')) return;
           try {
             const response = await fetch(`/api/masters/${master.id}/photos/${photo.filename}`, {
-              method: 'DELETE'
+              method: 'DELETE',
+              credentials: 'include' // Важно для передачи cookies (сессий)
             });
             const result = await response.json();
             if (result.success) {
@@ -1416,7 +1436,8 @@
         try {
           const uploadResponse = await fetch(`/api/masters/${m.id}/photos`, {
             method: 'POST',
-            body: formData
+            body: formData,
+            credentials: 'include' // Важно для передачи cookies (сессий)
           });
           const uploadResult = await uploadResponse.json();
           if (uploadResult.success && uploadResult.photos) {
