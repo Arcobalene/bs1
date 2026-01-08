@@ -318,6 +318,7 @@ app.use('/api/login', createProxyMiddleware({
   target: services.auth, 
   ...proxyOptions,
   logLevel: 'debug',
+  selfHandleResponse: true, // Полностью контролируем ответ
   onProxyReq: (proxyReq, req, res) => {
     console.log(`[Gateway] Проксирование LOGIN ${req.method} ${req.path} -> ${services.auth}${req.path}`);
     console.log(`[Gateway] Content-Type:`, req.headers['content-type']);
@@ -336,50 +337,63 @@ app.use('/api/login', createProxyMiddleware({
   onProxyRes: (proxyRes, req, res) => {
     console.log(`[Gateway] Получен ответ от auth-service: ${proxyRes.statusCode}`);
     
-    // Если логин успешен (200), синхронизируем сессию gateway
-    if (proxyRes.statusCode === 200) {
-      // Читаем тело ответа для получения userId
-      const chunks = [];
-      
-      proxyRes.on('data', (chunk) => {
-        chunks.push(chunk);
-      });
-      
-      proxyRes.on('end', () => {
-        try {
-          const body = Buffer.concat(chunks).toString();
-          const result = JSON.parse(body);
-          
-          if (result.success && result.userId) {
-            // Синхронизируем сессию gateway с userId из ответа
-            req.session.userId = result.userId;
-            req.session.originalUserId = result.userId;
-            req.session.save(() => {
-              console.log(`[Gateway] Сессия синхронизирована после логина: userId=${result.userId}`);
-            });
-          }
-        } catch (e) {
-          console.log(`[Gateway] Ошибка парсинга ответа логина: ${e.message}`);
+    // С selfHandleResponse: true мы должны полностью обработать ответ
+    // Читаем тело ответа
+    const chunks = [];
+    
+    // Устанавливаем заголовки ДО чтения данных
+    if (!res.headersSent) {
+      res.status(proxyRes.statusCode);
+      // Копируем заголовки от сервиса
+      Object.keys(proxyRes.headers).forEach(key => {
+        // Пропускаем заголовки, которые будут установлены автоматически
+        const lowerKey = key.toLowerCase();
+        if (lowerKey !== 'content-length' && lowerKey !== 'transfer-encoding' && lowerKey !== 'connection') {
+          res.setHeader(key, proxyRes.headers[key]);
         }
-        
-        // Отправляем оригинальный ответ клиенту
-        res.status(proxyRes.statusCode);
-        Object.keys(proxyRes.headers).forEach(key => {
-          if (key !== 'content-length') {
-            res.setHeader(key, proxyRes.headers[key]);
-          }
-        });
-        res.end(Buffer.concat(chunks));
       });
-      
-      // Не вызываем оригинальный onProxyRes, так как мы обрабатываем ответ сами
-      return;
     }
     
-    // Для других статусов вызываем оригинальный onProxyRes
-    if (proxyOptions.onProxyRes) {
-      proxyOptions.onProxyRes(proxyRes, req, res);
-    }
+    proxyRes.on('data', (chunk) => {
+      chunks.push(chunk);
+      // Отправляем данные по мере поступления (streaming)
+      if (!res.headersSent) {
+        res.write(chunk);
+      }
+    });
+    
+    proxyRes.on('end', () => {
+      try {
+        const body = Buffer.concat(chunks).toString();
+        const result = JSON.parse(body);
+        
+        // Если логин успешен (200), синхронизируем сессию gateway
+        if (proxyRes.statusCode === 200 && result.success && result.userId) {
+          // Синхронизируем сессию gateway с userId из ответа
+          req.session.userId = result.userId;
+          req.session.originalUserId = result.userId;
+          req.session.save(() => {
+            console.log(`[Gateway] Сессия синхронизирована после логина: userId=${result.userId}`);
+          });
+        }
+      } catch (e) {
+        console.log(`[Gateway] Ошибка парсинга ответа логина: ${e.message}`);
+      }
+      
+      // Завершаем отправку ответа
+      if (!res.finished) {
+        res.end();
+      }
+    });
+    
+    proxyRes.on('error', (err) => {
+      console.error(`[Gateway] Ошибка чтения ответа от auth-service: ${err.message}`);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Ошибка сервера' });
+      } else if (!res.finished) {
+        res.end();
+      }
+    });
   },
   onError: (err, req, res) => {
     console.error(`[Gateway] Ошибка проксирования LOGIN:`, err.message);
