@@ -94,12 +94,15 @@ app.use(session({
   resave: false, // Не сохранять сессию, если она не была изменена (PostgreSQL сам управляет)
   saveUninitialized: false,
   name: 'beauty.studio.sid', // Имя cookie должно совпадать с оригинальным
+  rolling: false, // Не обновлять cookie при каждом запросе (только при изменении)
   cookie: {
     secure: cookieSecure,
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 часа
     sameSite: 'lax',
-    path: '/'
+    path: '/',
+    // Не устанавливаем domain, чтобы cookie работал на всех поддоменах
+    // domain: undefined
   }
 }));
 
@@ -108,7 +111,8 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
     // Логируем состояние сессии перед обработкой запроса
     if (req.session) {
-      console.log(`[Gateway] Сессия перед запросом ${req.path}: userId=${req.session.userId || 'нет'}, sessionID=${req.sessionID || 'нет'}, cookie=${req.cookies ? Object.keys(req.cookies).join(', ') : 'нет'}`);
+      const cookieValue = req.cookies && req.cookies['beauty.studio.sid'] ? req.cookies['beauty.studio.sid'].substring(0, 20) + '...' : 'нет';
+      console.log(`[Gateway] Сессия перед запросом ${req.path}: userId=${req.session.userId || 'нет'}, sessionID=${req.sessionID || 'нет'}, cookie=${cookieValue}`);
     } else {
       console.log(`[Gateway] Нет сессии для запроса ${req.path}`);
     }
@@ -489,7 +493,28 @@ app.use('/api/login', createProxyMiddleware({
                   console.error(`[Gateway] Ошибка сохранения сессии после логина: ${err.message}`);
                   reject(err);
                 } else {
-                  console.log(`[Gateway] Сессия синхронизирована после логина: userId=${result.userId}, sessionID=${req.sessionID}, cookie будет установлен`);
+                  // После сохранения сессии, express-session должен установить cookie
+                  // Но при selfHandleResponse: true нужно убедиться, что cookie установлен
+                  // Проверяем, установлен ли cookie в заголовках ответа
+                  const setCookieHeader = res.getHeader('Set-Cookie');
+                  if (!setCookieHeader) {
+                    console.log(`[Gateway] Cookie не установлен автоматически, устанавливаем вручную для sessionID=${req.sessionID}`);
+                    // Устанавливаем cookie вручную, используя те же параметры, что и в конфигурации сессии
+                    const cookieName = 'beauty.studio.sid';
+                    const cookieValue = req.sessionID;
+                    const cookieOptions = {
+                      httpOnly: true,
+                      secure: cookieSecure,
+                      maxAge: 24 * 60 * 60 * 1000,
+                      sameSite: 'lax',
+                      path: '/'
+                    };
+                    res.cookie(cookieName, cookieValue, cookieOptions);
+                    console.log(`[Gateway] Cookie установлен вручную: ${cookieName}=${cookieValue.substring(0, 20)}...`);
+                  } else {
+                    console.log(`[Gateway] Cookie установлен автоматически: ${Array.isArray(setCookieHeader) ? setCookieHeader[0].substring(0, 50) : setCookieHeader.substring(0, 50)}...`);
+                  }
+                  console.log(`[Gateway] Сессия синхронизирована после логина: userId=${result.userId}, sessionID=${req.sessionID}`);
                   resolve();
                 }
               });
@@ -506,14 +531,28 @@ app.use('/api/login', createProxyMiddleware({
       // Отправляем ответ клиенту после обработки
       if (!res.headersSent) {
         res.status(proxyRes.statusCode);
-        // Копируем заголовки от сервиса
+        
+        // Копируем заголовки от сервиса, но НЕ перезаписываем Set-Cookie
         Object.keys(proxyRes.headers).forEach(key => {
           // Пропускаем заголовки, которые будут установлены автоматически
           const lowerKey = key.toLowerCase();
-          if (lowerKey !== 'content-length' && lowerKey !== 'transfer-encoding' && lowerKey !== 'connection') {
+          if (lowerKey !== 'content-length' && lowerKey !== 'transfer-encoding' && lowerKey !== 'connection' && lowerKey !== 'set-cookie') {
             res.setHeader(key, proxyRes.headers[key]);
           }
         });
+        
+        // Важно: express-session должен установить cookie автоматически при сохранении сессии
+        // Проверяем, установлен ли cookie в заголовках
+        const setCookieHeaders = res.getHeader('Set-Cookie');
+        if (setCookieHeaders) {
+          console.log(`[Gateway] Cookie установлен в ответе логина: ${Array.isArray(setCookieHeaders) ? setCookieHeaders[0].substring(0, 100) : setCookieHeaders.substring(0, 100)}...`);
+        } else {
+          console.log(`[Gateway] ВНИМАНИЕ: Cookie не установлен в ответе логина! sessionID=${req.sessionID}`);
+          // Если cookie не установлен, устанавливаем его вручную
+          // express-session должен был установить его, но при selfHandleResponse: true может не сработать
+          // Попробуем вызвать req.session.regenerate() или установить cookie вручную
+        }
+        
         // Устанавливаем Content-Length
         res.setHeader('Content-Length', Buffer.byteLength(Buffer.concat(chunks)));
         res.end(Buffer.concat(chunks));
