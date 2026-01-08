@@ -54,44 +54,56 @@ const cookieSecure = isHttps;
 let sessionStore = null;
 let redisClient = null;
 
-console.log('[Gateway] Инициализация Redis для хранения сессий...');
-redisClient = createClient({
-  socket: {
-    host: process.env.REDIS_HOST || 'redis',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-  },
-  password: process.env.REDIS_PASSWORD || undefined,
-});
-
-redisClient.on('error', (err) => {
-  console.error('[Gateway] Ошибка Redis:', err);
-});
-
-redisClient.on('connect', () => {
-  console.log('[Gateway] Redis подключен');
-});
-
-redisClient.on('ready', () => {
-  console.log('[Gateway] Redis готов к работе');
-});
-
-// Подключаемся к Redis асинхронно (не блокируем запуск сервера)
-redisClient.connect().then(() => {
-  sessionStore = new RedisStore({
-    client: redisClient,
-    prefix: 'beauty-studio:session:',
+// Пытаемся подключиться к Redis, но не блокируем запуск сервера
+try {
+  console.log('[Gateway] Инициализация Redis для хранения сессий...');
+  redisClient = createClient({
+    socket: {
+      host: process.env.REDIS_HOST || 'redis',
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      reconnectStrategy: (retries) => {
+        // Стратегия переподключения: ждем до 3 секунд между попытками
+        if (retries > 10) {
+          console.log('[Gateway] Превышено количество попыток подключения к Redis, используем MemoryStore');
+          return false; // Прекращаем попытки
+        }
+        return Math.min(retries * 100, 3000);
+      }
+    },
+    password: process.env.REDIS_PASSWORD || undefined,
   });
-  console.log('[Gateway] Redis session store инициализирован');
-  // Обновляем store в middleware сессий, если он еще не был установлен
-  if (app.locals.sessionStore === undefined) {
-    app.locals.sessionStore = sessionStore;
-  }
-}).catch((error) => {
-  console.error('[Gateway] Ошибка подключения к Redis:', error.message);
-  console.log('[Gateway] Использование MemoryStore для сессий (не рекомендуется для production)');
+
+  redisClient.on('error', (err) => {
+    console.error('[Gateway] Ошибка Redis:', err.message);
+  });
+
+  redisClient.on('connect', () => {
+    console.log('[Gateway] Redis подключен');
+  });
+
+  redisClient.on('ready', () => {
+    console.log('[Gateway] Redis готов к работе');
+    // Создаем store только после готовности Redis
+    if (!sessionStore) {
+      sessionStore = new RedisStore({
+        client: redisClient,
+        prefix: 'beauty-studio:session:',
+      });
+      console.log('[Gateway] Redis session store инициализирован');
+    }
+  });
+
+  // Подключаемся к Redis асинхронно (не блокируем запуск сервера)
+  redisClient.connect().catch((error) => {
+    console.error('[Gateway] Ошибка подключения к Redis:', error.message);
+    console.log('[Gateway] Использование MemoryStore для сессий (не рекомендуется для production)');
+    sessionStore = null;
+  });
+} catch (error) {
+  console.error('[Gateway] Критическая ошибка инициализации Redis:', error.message);
+  console.log('[Gateway] Использование MemoryStore для сессий');
   sessionStore = null;
-  // Не блокируем запуск сервера - продолжим с MemoryStore
-});
+}
 
 app.use(session({
   store: sessionStore || undefined, // Используем Redis store, если доступен
@@ -619,6 +631,14 @@ app.use('/api/notifications', createProxyMiddleware({ target: services.notificat
 app.use('/api/telegram', createProxyMiddleware({ target: services.telegram, ...proxyOptions }));
 app.use('/api/bot', createProxyMiddleware({ target: services.telegram, ...proxyOptions }));
 
+// Запускаем сервер независимо от состояния Redis
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚪 API Gateway запущен на порту ${PORT}`);
+  console.log(`[Gateway] Session store: ${sessionStore ? 'Redis' : 'MemoryStore (fallback)'}`);
+}).on('error', (err) => {
+  console.error(`[Gateway] Ошибка запуска сервера на порту ${PORT}:`, err.message);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`[Gateway] Порт ${PORT} уже занят. Остановите другой процесс или измените PORT.`);
+  }
+  process.exit(1);
 });
