@@ -117,21 +117,22 @@ async function initApp() {
   // Настраиваем express-session с правильным store
   app.use(session({
     store: sessionStore || undefined, // Используем Redis store, если доступен
-  secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
-  resave: false, // Не сохранять сессию, если она не была изменена
-  saveUninitialized: false,
-  name: 'beauty.studio.sid', // Имя cookie должно совпадать с оригинальным
-  rolling: false, // Не обновлять cookie при каждом запросе (только при изменении)
-  cookie: {
-    secure: cookieSecure,
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 часа
-    sameSite: 'lax',
-    path: '/',
-    // Не устанавливаем domain, чтобы cookie работал на всех поддоменах
-    // domain: undefined
-  }
-}));
+    secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
+    resave: false, // Не сохранять сессию, если она не была изменена
+    saveUninitialized: false,
+    name: 'beauty.studio.sid', // Имя cookie должно совпадать с оригинальным
+    rolling: false, // Не обновлять cookie при каждом запросе (только при изменении)
+    cookie: {
+      secure: cookieSecure,
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 часа
+      sameSite: 'lax',
+      path: '/',
+      // Не устанавливаем domain, чтобы cookie работал на всех поддоменах
+      // domain: undefined
+    }
+  }));
+}
 
 // Middleware для логирования состояния сессии
 app.use((req, res, next) => {
