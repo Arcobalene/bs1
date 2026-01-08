@@ -280,7 +280,17 @@ app.get('/api/client', async (req, res) => {
 app.get('/api/salon/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const user = await dbUsers.getById(parseInt(userId));
+    console.log(`[User Service] GET /api/salon/${userId}`);
+    
+    // Валидация userId
+    const parsedUserId = parseInt(userId);
+    if (isNaN(parsedUserId) || parsedUserId <= 0) {
+      console.error(`[User Service] Неверный userId: ${userId}`);
+      return res.status(400).json({ success: false, message: 'Неверный ID салона' });
+    }
+    
+    const user = await dbUsers.getById(parsedUserId);
+    console.log(`[User Service] Пользователь найден: ${user ? 'да' : 'нет'}`);
     
     if (!user) {
       return res.status(404).json({ success: false, message: 'Салон не найден' });
@@ -326,8 +336,13 @@ app.get('/api/salon/:userId', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Ошибка получения данных салона:', error);
-    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    console.error('[User Service] Ошибка получения данных салона:', error);
+    console.error('[User Service] Стек ошибки:', error.stack);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Ошибка сервера',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
