@@ -82,13 +82,15 @@ app.use((req, res, next) => {
 app.use(cookieParser());
 
 // Структурированное логирование запросов
+// ВАЖНО: Это middleware будет перемещено после инициализации сессий
+// Временно используем безопасный доступ
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
     logger.info('Incoming request', {
       method: req.method,
       path: req.path,
       ip: req.ip,
-      userId: req.session?.userId || null
+      userId: (req.session && req.session.userId) ? req.session.userId : null
     });
   }
   next();
@@ -192,7 +194,7 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/') && req.session) {
     logger.debug('Session state', {
       path: req.path,
-      userId: req.session.userId || null,
+      userId: (req.session && req.session.userId) ? req.session.userId : null,
       sessionID: req.sessionID || null
     });
   }
@@ -220,7 +222,7 @@ app.use((req, res, next) => {
 
 // Middleware для синхронизации сессии gateway с user-service
 app.use(asyncHandler(async (req, res, next) => {
-  if (req.cookies && req.cookies['beauty.studio.sid'] && !req.session.userId && req.path.startsWith('/api/')) {
+  if (req.cookies && req.cookies['beauty.studio.sid'] && req.session && !req.session.userId && req.path.startsWith('/api/')) {
     if (!req.path.includes('/login') && !req.path.includes('/register')) {
       logger.debug('Attempting session synchronization', { path: req.path });
       
@@ -259,7 +261,7 @@ app.use(asyncHandler(async (req, res, next) => {
                 }
 
                 const result = JSON.parse(data);
-                if (result.success && result.user && result.user.id) {
+                if (result.success && result.user && result.user.id && req.session) {
                   req.session.userId = result.user.id;
                   req.session.originalUserId = result.user.id;
                   req.session.touch();
@@ -524,9 +526,11 @@ app.use('/api/login', createProxyMiddleware({
             sessionID: req.sessionID
           });
 
-          req.session.userId = result.userId;
-          req.session.originalUserId = result.userId;
-          req.session.touch();
+          if (req.session) {
+            req.session.userId = result.userId;
+            req.session.originalUserId = result.userId;
+            req.session.touch();
+          }
 
           try {
             await new Promise((resolve, reject) => {
