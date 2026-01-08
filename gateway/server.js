@@ -15,6 +15,14 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
+// Логирование всех входящих запросов для отладки
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    console.log(`[Gateway] Входящий запрос: ${req.method} ${req.path}`);
+  }
+  next();
+});
+
 // Настройка сессий (важно: имя cookie должно совпадать с оригинальным)
 const isHttps = process.env.NODE_ENV === 'production' || process.env.BEHIND_HTTPS_PROXY === 'true';
 const cookieSecure = isHttps;
@@ -56,6 +64,9 @@ const proxyOptions = {
   xfwd: true, // Передавать оригинальные заголовки
   secure: false, // Отключить проверку SSL для внутренних соединений
   onProxyReq: (proxyReq, req, res) => {
+    // Логируем запрос для отладки
+    console.log(`[Gateway] Проксирование ${req.method} ${req.path} -> ${proxyReq.path}`);
+    
     // Передаем cookies от клиента к сервису
     if (req.headers.cookie) {
       proxyReq.setHeader('Cookie', req.headers.cookie);
@@ -65,17 +76,28 @@ const proxyOptions = {
     console.error(`[Gateway] Проксирование ошибка для ${req.method} ${req.path}:`, err.message);
     console.error(`[Gateway] Целевой сервис: ${req.url}`);
     console.error(`[Gateway] Код ошибки: ${err.code || 'N/A'}`);
+    
+    // Игнорируем ECONNRESET если ответ уже отправлен
+    if (err.code === 'ECONNRESET' && res.headersSent) {
+      console.log(`[Gateway] Соединение закрыто после отправки ответа (это нормально)`);
+      return;
+    }
+    
     if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
       console.error(`[Gateway] Сервис недоступен или не отвечает. Проверьте, запущен ли сервис.`);
     }
+    
     if (process.env.NODE_ENV === 'development') {
       console.error(`[Gateway] Полный стек ошибки:`, err);
     }
+    
     if (!res.headersSent) {
-      const statusCode = err.code === 'ETIMEDOUT' ? 504 : 502;
+      const statusCode = err.code === 'ETIMEDOUT' ? 504 : (err.code === 'ECONNRESET' ? 502 : 502);
       res.status(statusCode).json({ 
         success: false, 
-        message: err.code === 'ETIMEDOUT' ? 'Превышено время ожидания ответа от сервиса' : 'Сервис временно недоступен',
+        message: err.code === 'ETIMEDOUT' ? 'Превышено время ожидания ответа от сервиса' : 
+                 err.code === 'ECONNRESET' ? 'Соединение с сервисом прервано' :
+                 'Сервис временно недоступен',
         error: process.env.NODE_ENV === 'development' ? err.message : undefined
       });
     }
@@ -172,10 +194,32 @@ app.get('/health', (req, res) => {
 
 // Проксирование API запросов (после HTML страниц)
 // Auth endpoints
-app.use('/api/register', createProxyMiddleware({ target: services.auth, ...proxyOptions }));
+app.use('/api/register', createProxyMiddleware({ 
+  target: services.auth, 
+  ...proxyOptions,
+  logLevel: 'debug'
+}));
 app.use('/api/register/master', createProxyMiddleware({ target: services.auth, ...proxyOptions }));
 app.use('/api/register-client', createProxyMiddleware({ target: services.user, ...proxyOptions }));
-app.use('/api/login', createProxyMiddleware({ target: services.auth, ...proxyOptions }));
+app.use('/api/login', createProxyMiddleware({ 
+  target: services.auth, 
+  ...proxyOptions,
+  logLevel: 'debug',
+  onProxyReq: (proxyReq, req, res) => {
+    // Логируем только безопасную информацию (без пароля)
+    const safeBody = req.body ? {
+      username: req.body.username,
+      // Пароль не логируем по соображениям безопасности
+      hasPassword: !!req.body.password
+    } : null;
+    console.log(`[Gateway] Проксирование LOGIN ${req.method} ${req.path} -> ${services.auth}${req.path}`);
+    console.log(`[Gateway] Safe body info:`, safeBody);
+    // Передаем cookies от клиента к сервису
+    if (req.headers.cookie) {
+      proxyReq.setHeader('Cookie', req.headers.cookie);
+    }
+  }
+}));
 app.use('/api/login-client', createProxyMiddleware({ target: services.user, ...proxyOptions }));
 app.use('/api/logout', createProxyMiddleware({ target: services.auth, ...proxyOptions }));
 app.use('/api/logout-client', createProxyMiddleware({ target: services.user, ...proxyOptions }));

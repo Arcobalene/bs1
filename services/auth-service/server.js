@@ -180,32 +180,54 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     req.session.userId = user.id;
     req.session.originalUserId = req.session.originalUserId || user.id;
     
-    // Явно сохраняем сессию перед отправкой ответа с таймаутом
-    const saveTimeout = setTimeout(() => {
-      if (!res.headersSent) {
-        console.error('Таймаут сохранения сессии при входе');
-        res.status(500).json({ success: false, message: 'Ошибка сервера при входе' });
-      }
-    }, 5000); // 5 секунд таймаут для сохранения сессии
+    console.log(`[Auth] Сессия установлена для userId: ${user.id}`);
     
-    req.session.save((err) => {
-      clearTimeout(saveTimeout);
-      
-      if (err) {
-        console.error('Ошибка сохранения сессии:', err);
-        if (!res.headersSent) {
-          return res.status(500).json({ success: false, message: 'Ошибка сервера при входе' });
-        }
-        return;
-      }
-      
+    // Сохраняем сессию ПЕРЕД отправкой ответа, чтобы избежать race condition
+    // Используем Promise с таймаутом для предотвращения зависания
+    try {
+      await new Promise((resolve, reject) => {
+        const saveTimeout = setTimeout(() => {
+          console.error('[Auth] Таймаут сохранения сессии (5 сек)');
+          reject(new Error('Session save timeout'));
+        }, 5000);
+        
+        req.session.save((err) => {
+          clearTimeout(saveTimeout);
+          
+          if (err) {
+            console.error('[Auth] Ошибка сохранения сессии:', err);
+            reject(err);
+          } else {
+            console.log('[Auth] Сессия сохранена успешно');
+            resolve();
+          }
+        });
+      });
+    } catch (saveError) {
+      // Если сохранение сессии не удалось, возвращаем ошибку и выходим из функции
+      console.error('[Auth] Критическая ошибка сохранения сессии:', saveError);
       if (!res.headersSent) {
-        res.json({ 
-          success: true, 
-          message: 'Вход выполнен',
-          role: user.role
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Ошибка сервера при входе' 
         });
       }
+      // Если заголовки уже отправлены, просто выходим
+      return;
+    }
+    
+    // Отправляем ответ только после успешного сохранения сессии
+    // Проверяем, что ответ еще не был отправлен (на случай ошибки выше)
+    if (res.headersSent) {
+      console.error('[Auth] Попытка отправить ответ после того, как заголовки уже отправлены');
+      return;
+    }
+    
+    console.log(`[Auth] Отправка ответа об успешном входе для пользователя: ${user.id}`);
+    res.json({ 
+      success: true, 
+      message: 'Вход выполнен',
+      role: user.role
     });
   } catch (error) {
     console.error('Ошибка входа:', error);
