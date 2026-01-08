@@ -34,6 +34,10 @@ app.use(cookieParser());
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
     console.log(`[Gateway] Входящий запрос: ${req.method} ${req.path}`);
+    // Логируем информацию о сессии для отладки
+    if (req.session && req.session.userId) {
+      console.log(`[Gateway] Сессия gateway: userId=${req.session.userId}`);
+    }
   }
   next();
 });
@@ -55,6 +59,75 @@ app.use(session({
     path: '/'
   }
 }));
+
+// Middleware для синхронизации сессии gateway с auth-service
+// Если есть cookie сессии, но нет userId в сессии gateway, запрашиваем /api/user у auth-service
+app.use(async (req, res, next) => {
+  // Если есть cookie сессии, но нет userId в сессии gateway, синхронизируем
+  if (req.cookies && req.cookies['beauty.studio.sid'] && !req.session.userId && req.path.startsWith('/api/')) {
+    // Пропускаем запросы логина/регистрации, чтобы избежать циклических запросов
+    if (!req.path.includes('/login') && !req.path.includes('/register')) {
+      console.log(`[Gateway] Попытка синхронизации сессии для ${req.path}`);
+      try {
+        const http = require('http');
+        const url = require('url');
+        const authUrl = url.parse(services.auth);
+        const cookieHeader = req.headers.cookie || '';
+        
+        const options = {
+          hostname: authUrl.hostname,
+          port: authUrl.port || 3001,
+          path: '/api/user',
+          method: 'GET',
+          headers: {
+            'Cookie': cookieHeader
+          },
+          timeout: 1000 // Очень короткий таймаут, чтобы не блокировать запрос
+        };
+        
+        await new Promise((resolve) => {
+          const userReq = http.request(options, (userRes) => {
+            let data = '';
+            userRes.on('data', (chunk) => { data += chunk; });
+            userRes.on('end', () => {
+              try {
+                const result = JSON.parse(data);
+                if (result.success && result.user && result.user.id) {
+                  // Синхронизируем сессию gateway
+                  req.session.userId = result.user.id;
+                  req.session.originalUserId = result.user.id;
+                  console.log(`[Gateway] Сессия синхронизирована: userId=${result.user.id}`);
+                } else {
+                  console.log(`[Gateway] Не удалось синхронизировать сессию: ${result.success}`);
+                }
+              } catch (e) {
+                console.log(`[Gateway] Ошибка парсинга ответа при синхронизации: ${e.message}`);
+              }
+              resolve();
+            });
+          });
+          
+          userReq.on('error', (err) => {
+            console.log(`[Gateway] Ошибка запроса при синхронизации: ${err.message}`);
+            resolve(); // Продолжаем даже при ошибке
+          });
+          
+          userReq.on('timeout', () => {
+            console.log(`[Gateway] Таймаут при синхронизации сессии`);
+            userReq.destroy();
+            resolve(); // Продолжаем даже при таймауте
+          });
+          
+          userReq.end();
+        });
+      } catch (e) {
+        console.log(`[Gateway] Исключение при синхронизации: ${e.message}`);
+        // Игнорируем ошибки и продолжаем
+      }
+    }
+  }
+  next();
+});
 
 // Статические файлы
 app.use(express.static(path.join(__dirname, 'public')));
@@ -85,6 +158,14 @@ const proxyOptions = {
     // Передаем cookies от клиента к сервису
     if (req.headers.cookie) {
       proxyReq.setHeader('Cookie', req.headers.cookie);
+    }
+    
+    // Передаем userId из сессии gateway в заголовках для синхронизации сессий между сервисами
+    if (req.session && req.session.userId) {
+      proxyReq.setHeader('X-User-Id', req.session.userId.toString());
+      if (req.session.originalUserId) {
+        proxyReq.setHeader('X-Original-User-Id', req.session.originalUserId.toString());
+      }
     }
   },
   onError: (err, req, res) => {
@@ -118,6 +199,8 @@ const proxyOptions = {
     }
   },
   onProxyRes: (proxyRes, req, res) => {
+    console.log(`[Gateway] Получен ответ от сервиса: ${req.method} ${req.path} -> ${proxyRes.statusCode}`);
+    
     // Копируем Set-Cookie заголовки от сервиса в ответ gateway
     // Это важно для правильной работы сессий
     if (proxyRes.headers['set-cookie']) {
