@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Копируем package.json файлы
 COPY package*.json ./
-COPY services/user-service/package*.json ./services/user-service/
+COPY services/[SERVICE_NAME]/package*.json ./services/[SERVICE_NAME]/
 COPY shared ./shared/
 
 # Устанавливаем зависимости
@@ -25,8 +25,8 @@ WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 
 # Копируем код приложения
-COPY services/user-service/server.js ./
-COPY services/user-service/package.json ./
+COPY services/[SERVICE_NAME]/server.js ./
+COPY services/[SERVICE_NAME]/package.json ./
 COPY shared ./shared/
 
 # Создаем непривилегированного пользователя
@@ -36,10 +36,10 @@ RUN addgroup -g 1001 -S nodejs && \
 
 USER nodejs
 
-EXPOSE 3002
+EXPOSE [PORT]
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-  CMD curl -f http://localhost:3002/health || exit 1
+  CMD curl -f http://localhost:[PORT]/health || exit 1
 
 CMD ["node", "server.js"]
 

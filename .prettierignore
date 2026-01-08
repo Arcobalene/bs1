@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+*.log
+package-lock.json
+.env
+.env.*
+!.env.example
+
