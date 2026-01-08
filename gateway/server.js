@@ -75,23 +75,28 @@ redisClient.on('ready', () => {
   console.log('[Gateway] Redis готов к работе');
 });
 
-// Подключаемся к Redis асинхронно
+// Подключаемся к Redis асинхронно (не блокируем запуск сервера)
 redisClient.connect().then(() => {
   sessionStore = new RedisStore({
     client: redisClient,
     prefix: 'beauty-studio:session:',
   });
   console.log('[Gateway] Redis session store инициализирован');
+  // Обновляем store в middleware сессий, если он еще не был установлен
+  if (app.locals.sessionStore === undefined) {
+    app.locals.sessionStore = sessionStore;
+  }
 }).catch((error) => {
-  console.error('[Gateway] Ошибка подключения к Redis:', error);
+  console.error('[Gateway] Ошибка подключения к Redis:', error.message);
   console.log('[Gateway] Использование MemoryStore для сессий (не рекомендуется для production)');
   sessionStore = null;
+  // Не блокируем запуск сервера - продолжим с MemoryStore
 });
 
 app.use(session({
-  store: sessionStore || undefined, // Используем PostgreSQL store, если доступен
+  store: sessionStore || undefined, // Используем Redis store, если доступен
   secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
-  resave: false, // Не сохранять сессию, если она не была изменена (PostgreSQL сам управляет)
+  resave: false, // Не сохранять сессию, если она не была изменена
   saveUninitialized: false,
   name: 'beauty.studio.sid', // Имя cookie должно совпадать с оригинальным
   rolling: false, // Не обновлять cookie при каждом запросе (только при изменении)
