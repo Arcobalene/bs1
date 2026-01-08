@@ -85,7 +85,36 @@ if (process.env.DB_TYPE === 'postgres') {
     console.log('[Gateway] PostgreSQL session store отключен');
   });
   
-  console.log('[Gateway] PostgreSQL session store инициализирован');
+  // Переопределяем методы для логирования
+  const originalGet = sessionStore.get.bind(sessionStore);
+  sessionStore.get = function(sid, callback) {
+    console.log(`[Gateway] Попытка загрузить сессию из PostgreSQL: sessionID=${sid}`);
+    originalGet(sid, (err, session) => {
+      if (err) {
+        console.error(`[Gateway] Ошибка загрузки сессии из PostgreSQL: ${err.message}`);
+      } else if (session) {
+        console.log(`[Gateway] Сессия загружена из PostgreSQL: sessionID=${sid}, userId=${session.userId || 'нет'}`);
+      } else {
+        console.log(`[Gateway] Сессия не найдена в PostgreSQL: sessionID=${sid}`);
+      }
+      callback(err, session);
+    });
+  };
+  
+  const originalSet = sessionStore.set.bind(sessionStore);
+  sessionStore.set = function(sid, session, callback) {
+    console.log(`[Gateway] Сохранение сессии в PostgreSQL: sessionID=${sid}, userId=${session.userId || 'нет'}`);
+    originalSet(sid, session, (err) => {
+      if (err) {
+        console.error(`[Gateway] Ошибка сохранения сессии в PostgreSQL: ${err.message}`);
+      } else {
+        console.log(`[Gateway] Сессия сохранена в PostgreSQL: sessionID=${sid}`);
+      }
+      if (callback) callback(err);
+    });
+  };
+  
+  console.log('[Gateway] PostgreSQL session store инициализирован с логированием');
 } else {
   console.log('[Gateway] Использование MemoryStore для сессий (не рекомендуется для production)');
 }
@@ -113,8 +142,12 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
     // Логируем состояние сессии перед обработкой запроса
     if (req.session) {
-      const cookieValue = req.cookies && req.cookies['beauty.studio.sid'] ? req.cookies['beauty.studio.sid'].substring(0, 20) + '...' : 'нет';
-      console.log(`[Gateway] Сессия перед запросом ${req.path}: userId=${req.session.userId || 'нет'}, sessionID=${req.sessionID || 'нет'}, cookie=${cookieValue}`);
+      // Проверяем как обычный cookie, так и подписанный
+      const regularCookie = req.cookies && req.cookies['beauty.studio.sid'] ? req.cookies['beauty.studio.sid'] : null;
+      const signedCookie = req.signedCookies && req.signedCookies['beauty.studio.sid'] ? req.signedCookies['beauty.studio.sid'] : null;
+      const cookieValue = regularCookie || signedCookie || 'нет';
+      const cookieType = regularCookie ? 'regular' : (signedCookie ? 'signed' : 'none');
+      console.log(`[Gateway] Сессия перед запросом ${req.path}: userId=${req.session.userId || 'нет'}, sessionID=${req.sessionID || 'нет'}, cookie=${cookieValue.substring(0, 20)}... (${cookieType})`);
     } else {
       console.log(`[Gateway] Нет сессии для запроса ${req.path}`);
     }
