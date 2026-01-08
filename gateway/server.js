@@ -60,6 +60,27 @@ app.use(session({
   }
 }));
 
+// Middleware для автоматического сохранения сессии при изменении
+app.use((req, res, next) => {
+  // Сохраняем сессию после отправки ответа, если она была изменена
+  const originalEnd = res.end.bind(res);
+  res.end = function(...args) {
+    if (req.session && req.session.userId) {
+      // Обновляем время жизни сессии и сохраняем асинхронно, не блокируя ответ
+      req.session.touch();
+      req.session.save((err) => {
+        if (err) {
+          console.error(`[Gateway] Ошибка сохранения сессии после запроса ${req.path}:`, err.message);
+        } else {
+          console.log(`[Gateway] Сессия обновлена для userId=${req.session.userId} после запроса ${req.path}`);
+        }
+      });
+    }
+    return originalEnd(...args);
+  };
+  next();
+});
+
 // Middleware для синхронизации сессии gateway с user-service
 // Если есть cookie сессии, но нет userId в сессии gateway, запрашиваем /api/user у user-service
 app.use(async (req, res, next) => {
@@ -104,6 +125,7 @@ app.use(async (req, res, next) => {
                   // Синхронизируем сессию gateway
                   req.session.userId = result.user.id;
                   req.session.originalUserId = result.user.id;
+                  req.session.touch(); // Обновляем время жизни сессии
                   req.session.save(() => {
                     console.log(`[Gateway] Сессия синхронизирована: userId=${result.user.id}`);
                   });
@@ -180,6 +202,9 @@ const proxyOptions = {
         proxyReq.setHeader('X-Original-User-ID', req.session.originalUserId.toString());
       }
       console.log(`[Gateway] Передан заголовок X-User-ID: ${req.session.userId}`);
+      
+      // Обновляем время жизни сессии при каждом запросе (touch session)
+      req.session.touch();
     } else {
       console.log(`[Gateway] Нет userId в сессии для ${req.path}`);
     }
