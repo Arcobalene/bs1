@@ -276,6 +276,79 @@ app.get('/api/client', async (req, res) => {
   }
 });
 
+// API: Получить дизайн салона
+app.get('/api/salon/design', requireAuth, async (req, res) => {
+  try {
+    console.log(`[User Service] GET /api/salon/design, userId: ${req.session.userId}`);
+    
+    if (!req.session.userId) {
+      console.error('[User Service] Нет userId в сессии');
+      return res.status(401).json({ success: false, message: 'Требуется авторизация' });
+    }
+    
+    const user = await dbUsers.getById(req.session.userId);
+    console.log(`[User Service] Пользователь найден: ${user ? 'да' : 'нет'}`);
+    
+    if (!user) {
+      console.error(`[User Service] Пользователь с id ${req.session.userId} не найден`);
+      return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+    }
+    
+    if (user.role !== 'user') {
+      console.error(`[User Service] Неверная роль пользователя: ${user.role}`);
+      return res.status(403).json({ success: false, message: 'Доступ запрещен' });
+    }
+
+    let salonDesign = {};
+    if (user.salon_design) {
+      try {
+        // PostgreSQL JSONB возвращается как объект, но может быть строкой
+        if (typeof user.salon_design === 'string') {
+          salonDesign = JSON.parse(user.salon_design);
+        } else if (typeof user.salon_design === 'object' && user.salon_design !== null) {
+          salonDesign = user.salon_design;
+        } else {
+          salonDesign = {};
+        }
+        console.log(`[User Service] Дизайн салона загружен, тип: ${typeof salonDesign}`);
+      } catch (e) {
+        console.error('[User Service] Ошибка парсинга salon_design:', e);
+        console.error('[User Service] Значение salon_design:', user.salon_design);
+        // Продолжаем с пустым объектом
+        salonDesign = {};
+      }
+    } else {
+      console.log('[User Service] salon_design отсутствует, возвращаем пустой объект');
+    }
+
+    res.json({ success: true, design: salonDesign });
+  } catch (error) {
+    console.error('[User Service] Ошибка получения дизайна салона:', error);
+    console.error('[User Service] Стек ошибки:', error.stack);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Ошибка сервера',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// API: Получить мастеров салона
+app.get('/api/salon/masters', requireAuth, async (req, res) => {
+  try {
+    const user = await dbUsers.getById(req.session.userId);
+    if (!user || user.role !== 'user') {
+      return res.status(403).json({ success: false, message: 'Доступ запрещен' });
+    }
+
+    const salonMastersList = await masters.getByUserId(user.id);
+    res.json({ success: true, masters: salonMastersList });
+  } catch (error) {
+    console.error('Ошибка получения мастеров салона:', error);
+    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
 // API: Получить данные салона (публично)
 app.get('/api/salon/:userId', async (req, res) => {
   try {
@@ -478,81 +551,6 @@ app.delete('/api/users/:userId', requireAuth, async (req, res) => {
   }
 });
 
-// API: Получить дизайн салона
-app.get('/api/salon/design', requireAuth, async (req, res) => {
-  try {
-    console.log(`[User Service] GET /api/salon/design, userId: ${req.session.userId}`);
-    
-    if (!req.session.userId) {
-      console.error('[User Service] Нет userId в сессии');
-      return res.status(401).json({ success: false, message: 'Требуется авторизация' });
-    }
-    
-    const user = await dbUsers.getById(req.session.userId);
-    console.log(`[User Service] Пользователь найден: ${user ? 'да' : 'нет'}`);
-    
-    if (!user) {
-      console.error(`[User Service] Пользователь с id ${req.session.userId} не найден`);
-      return res.status(404).json({ success: false, message: 'Пользователь не найден' });
-    }
-    
-    if (user.role !== 'user') {
-      console.error(`[User Service] Неверная роль пользователя: ${user.role}`);
-      return res.status(403).json({ success: false, message: 'Доступ запрещен' });
-    }
-
-    let salonDesign = {};
-    if (user.salon_design) {
-      try {
-        // PostgreSQL JSONB возвращается как объект, но может быть строкой
-        if (typeof user.salon_design === 'string') {
-          salonDesign = JSON.parse(user.salon_design);
-        } else if (typeof user.salon_design === 'object' && user.salon_design !== null) {
-          salonDesign = user.salon_design;
-        } else {
-          salonDesign = {};
-        }
-        console.log(`[User Service] Дизайн салона загружен, тип: ${typeof salonDesign}`);
-      } catch (e) {
-        console.error('[User Service] Ошибка парсинга salon_design:', e);
-        console.error('[User Service] Значение salon_design:', user.salon_design);
-        // Продолжаем с пустым объектом
-        salonDesign = {};
-      }
-    } else {
-      console.log('[User Service] salon_design отсутствует, возвращаем пустой объект');
-    }
-
-    res.json({ success: true, design: salonDesign });
-  } catch (error) {
-    console.error('[User Service] Ошибка получения дизайна салона:', error);
-    console.error('[User Service] Стек ошибки:', error.stack);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Ошибка сервера',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// API: Обновить дизайн салона
-app.post('/api/salon/design', requireAuth, async (req, res) => {
-  try {
-    const user = await dbUsers.getById(req.session.userId);
-    if (!user || user.role !== 'user') {
-      return res.status(403).json({ success: false, message: 'Доступ запрещен' });
-    }
-
-    const { design } = req.body;
-    await dbUsers.update(user.id, { salonDesign: design });
-
-    res.json({ success: true, message: 'Дизайн обновлен' });
-  } catch (error) {
-    console.error('Ошибка обновления дизайна салона:', error);
-    res.status(500).json({ success: false, message: 'Ошибка сервера' });
-  }
-});
-
 // API: Обновить данные салона
 app.put('/api/salon', requireAuth, async (req, res) => {
   try {
@@ -574,22 +572,6 @@ app.put('/api/salon', requireAuth, async (req, res) => {
     res.json({ success: true, message: 'Данные салона обновлены' });
   } catch (error) {
     console.error('Ошибка обновления данных салона:', error);
-    res.status(500).json({ success: false, message: 'Ошибка сервера' });
-  }
-});
-
-// API: Получить мастеров салона
-app.get('/api/salon/masters', requireAuth, async (req, res) => {
-  try {
-    const user = await dbUsers.getById(req.session.userId);
-    if (!user || user.role !== 'user') {
-      return res.status(403).json({ success: false, message: 'Доступ запрещен' });
-    }
-
-    const salonMastersList = await masters.getByUserId(user.id);
-    res.json({ success: true, masters: salonMastersList });
-  } catch (error) {
-    console.error('Ошибка получения мастеров салона:', error);
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
