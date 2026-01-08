@@ -585,7 +585,16 @@ app.get('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => {
     }
 
     const { masterUserId } = req.params;
-    const masterRecords = await masters.getByMasterUserId(parseInt(masterUserId));
+    console.log(`[User Service] GET /api/salon/masters/${masterUserId}`);
+    
+    // Валидация masterUserId
+    const parsedMasterUserId = parseInt(masterUserId);
+    if (isNaN(parsedMasterUserId) || parsedMasterUserId <= 0) {
+      console.error(`[User Service] Неверный masterUserId: ${masterUserId}`);
+      return res.status(400).json({ success: false, message: 'Неверный ID мастера' });
+    }
+    
+    const masterRecords = await masters.getByMasterUserId(parsedMasterUserId);
     const master = masterRecords.find(m => m.user_id === user.id);
 
     if (!master) {
@@ -594,8 +603,13 @@ app.get('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => {
 
     res.json({ success: true, master });
   } catch (error) {
-    console.error('Ошибка получения мастера салона:', error);
-    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    console.error('[User Service] Ошибка получения мастера салона:', error);
+    console.error('[User Service] Стек ошибки:', error.stack);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Ошибка сервера',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -608,12 +622,26 @@ app.delete('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => 
     }
 
     const { masterUserId } = req.params;
-    await salonMasters.remove(user.id, parseInt(masterUserId));
+    console.log(`[User Service] DELETE /api/salon/masters/${masterUserId}`);
+    
+    // Валидация masterUserId
+    const parsedMasterUserId = parseInt(masterUserId);
+    if (isNaN(parsedMasterUserId) || parsedMasterUserId <= 0) {
+      console.error(`[User Service] Неверный masterUserId: ${masterUserId}`);
+      return res.status(400).json({ success: false, message: 'Неверный ID мастера' });
+    }
+    
+    await salonMasters.remove(user.id, parsedMasterUserId);
 
     res.json({ success: true, message: 'Мастер удален из салона' });
   } catch (error) {
-    console.error('Ошибка удаления мастера из салона:', error);
-    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    console.error('[User Service] Ошибка удаления мастера из салона:', error);
+    console.error('[User Service] Стек ошибки:', error.stack);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Ошибка сервера',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
