@@ -281,6 +281,12 @@ services:
       - PORT=3000
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
       - BEHIND_HTTPS_PROXY=true
+      - DB_TYPE=postgres
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-beauty_studio}
+      - DB_USER=${DB_USER:-beauty_user}
+      - DB_PASSWORD=${DB_PASSWORD:-beauty_password}
       - AUTH_SERVICE_URL=http://auth-service:3001
       - USER_SERVICE_URL=http://user-service:3002
       - BOOKING_SERVICE_URL=http://booking-service:3003
@@ -294,6 +300,8 @@ services:
     networks:
       - beauty-network
     depends_on:
+      db:
+        condition: service_healthy
       auth-service:
         condition: service_healthy
       user-service:

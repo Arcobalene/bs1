@@ -3,6 +3,8 @@ const session = require('express-session');
 const cookieParser = require('cookie-parser');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const path = require('path');
+const pgSession = require('connect-pg-simple')(session);
+const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -46,9 +48,39 @@ app.use((req, res, next) => {
 const isHttps = process.env.NODE_ENV === 'production' || process.env.BEHIND_HTTPS_PROXY === 'true';
 const cookieSecure = isHttps;
 
+// Настройка PostgreSQL для хранения сессий
+let sessionStore = null;
+if (process.env.DB_TYPE === 'postgres') {
+  console.log('[Gateway] Использование PostgreSQL для хранения сессий...');
+  const pgPool = new Pool({
+    host: process.env.DB_HOST || 'db',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    database: process.env.DB_NAME || 'beauty_studio',
+    user: process.env.DB_USER || 'beauty_user',
+    password: process.env.DB_PASSWORD || 'beauty_password',
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 30000,
+  });
+
+  pgPool.on('error', (err) => {
+    console.error('[Gateway] Ошибка подключения к PostgreSQL для сессий:', err);
+  });
+
+  sessionStore = new pgSession({
+    pool: pgPool,
+    tableName: 'session', // Таблица для хранения сессий
+    createTableIfMissing: true, // Автоматически создавать таблицу, если её нет
+  });
+  console.log('[Gateway] PostgreSQL session store инициализирован');
+} else {
+  console.log('[Gateway] Использование MemoryStore для сессий (не рекомендуется для production)');
+}
+
 app.use(session({
+  store: sessionStore || undefined, // Используем PostgreSQL store, если доступен
   secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
-  resave: true, // Синхронизировано с auth-service и user-service
+  resave: false, // Не сохранять сессию, если она не была изменена (PostgreSQL сам управляет)
   saveUninitialized: false,
   name: 'beauty.studio.sid', // Имя cookie должно совпадать с оригинальным
   cookie: {
