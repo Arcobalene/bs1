@@ -214,9 +214,32 @@ app.use('/api/login', createProxyMiddleware({
     } : null;
     console.log(`[Gateway] Проксирование LOGIN ${req.method} ${req.path} -> ${services.auth}${req.path}`);
     console.log(`[Gateway] Safe body info:`, safeBody);
+    console.log(`[Gateway] Content-Type:`, req.headers['content-type']);
+    console.log(`[Gateway] Body length:`, req.body ? JSON.stringify(req.body).length : 0);
+    
     // Передаем cookies от клиента к сервису
     if (req.headers.cookie) {
       proxyReq.setHeader('Cookie', req.headers.cookie);
+    }
+    
+    // Убеждаемся, что Content-Type установлен
+    if (!proxyReq.getHeader('Content-Type') && req.headers['content-type']) {
+      proxyReq.setHeader('Content-Type', req.headers['content-type']);
+    }
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    console.log(`[Gateway] Получен ответ от auth-service: ${proxyRes.statusCode}`);
+    // Вызываем оригинальный onProxyRes из proxyOptions
+    if (proxyOptions.onProxyRes) {
+      proxyOptions.onProxyRes(proxyRes, req, res);
+    }
+  },
+  onError: (err, req, res) => {
+    console.error(`[Gateway] Ошибка проксирования LOGIN:`, err.message);
+    console.error(`[Gateway] Код ошибки:`, err.code);
+    // Вызываем оригинальный onError из proxyOptions
+    if (proxyOptions.onError) {
+      proxyOptions.onError(err, req, res);
     }
   }
 }));
