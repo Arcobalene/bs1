@@ -643,12 +643,16 @@ app.use('/api/telegram', createProxyMiddleware({ target: services.telegram, ...p
 app.use('/api/bot', createProxyMiddleware({ target: services.telegram, ...proxyOptions }));
 
 // Инициализируем приложение и запускаем сервер
+console.log('[Gateway] Начало инициализации приложения...');
 initApp().then(() => {
   console.log(`[Gateway] Session store: ${sessionStore ? 'Redis' : 'MemoryStore (fallback)'}`);
+  console.log('[Gateway] Запуск сервера...');
   
   // Запускаем сервер и ждем, пока он будет готов принимать соединения
   const server = app.listen(PORT, '0.0.0.0', () => {
+    const address = server.address();
     console.log(`🚪 API Gateway запущен на порту ${PORT}`);
+    console.log(`[Gateway] Сервер слушает на ${address.address}:${address.port}`);
     console.log(`[Gateway] Сервер готов принимать соединения`);
   }).on('error', (err) => {
     console.error(`[Gateway] Ошибка запуска сервера на порту ${PORT}:`, err.message);
@@ -660,17 +664,30 @@ initApp().then(() => {
   
   // Обработка ошибок сервера
   server.on('listening', () => {
-    console.log(`[Gateway] Сервер слушает на 0.0.0.0:${PORT}`);
+    const address = server.address();
+    console.log(`[Gateway] Сервер успешно слушает на ${address.address}:${address.port}`);
+  });
+  
+  server.on('error', (err) => {
+    console.error(`[Gateway] Ошибка сервера:`, err.message);
   });
 }).catch((error) => {
   console.error('[Gateway] Критическая ошибка инициализации:', error);
+  console.log('[Gateway] Запуск сервера с MemoryStore...');
   // Все равно запускаем сервер с MemoryStore
   const server = app.listen(PORT, '0.0.0.0', () => {
+    const address = server.address();
     console.log(`🚪 API Gateway запущен на порту ${PORT} (с MemoryStore)`);
+    console.log(`[Gateway] Сервер слушает на ${address.address}:${address.port}`);
     console.log(`[Gateway] Сервер готов принимать соединения`);
   });
   
   server.on('listening', () => {
-    console.log(`[Gateway] Сервер слушает на 0.0.0.0:${PORT}`);
+    const address = server.address();
+    console.log(`[Gateway] Сервер успешно слушает на ${address.address}:${address.port}`);
+  });
+  
+  server.on('error', (err) => {
+    console.error(`[Gateway] Ошибка сервера:`, err.message);
   });
 });
