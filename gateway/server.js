@@ -54,59 +54,69 @@ const cookieSecure = isHttps;
 let sessionStore = null;
 let redisClient = null;
 
-// Пытаемся подключиться к Redis, но не блокируем запуск сервера
-try {
-  console.log('[Gateway] Инициализация Redis для хранения сессий...');
-  redisClient = createClient({
-    socket: {
-      host: process.env.REDIS_HOST || 'redis',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      reconnectStrategy: (retries) => {
-        // Стратегия переподключения: ждем до 3 секунд между попытками
-        if (retries > 10) {
-          console.log('[Gateway] Превышено количество попыток подключения к Redis, используем MemoryStore');
-          return false; // Прекращаем попытки
+// Инициализируем Redis и ждем подключения перед запуском сервера
+async function initRedis() {
+  try {
+    console.log('[Gateway] Инициализация Redis для хранения сессий...');
+    redisClient = createClient({
+      socket: {
+        host: process.env.REDIS_HOST || 'redis',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        reconnectStrategy: (retries) => {
+          // Стратегия переподключения: ждем до 3 секунд между попытками
+          if (retries > 10) {
+            console.log('[Gateway] Превышено количество попыток подключения к Redis, используем MemoryStore');
+            return false; // Прекращаем попытки
+          }
+          return Math.min(retries * 100, 3000);
         }
-        return Math.min(retries * 100, 3000);
-      }
-    },
-    password: process.env.REDIS_PASSWORD || undefined,
-  });
+      },
+      password: process.env.REDIS_PASSWORD || undefined,
+    });
 
-  redisClient.on('error', (err) => {
-    console.error('[Gateway] Ошибка Redis:', err.message);
-  });
+    redisClient.on('error', (err) => {
+      console.error('[Gateway] Ошибка Redis:', err.message);
+    });
 
-  redisClient.on('connect', () => {
-    console.log('[Gateway] Redis подключен');
-  });
+    redisClient.on('connect', () => {
+      console.log('[Gateway] Redis подключен');
+    });
 
-  redisClient.on('ready', () => {
-    console.log('[Gateway] Redis готов к работе');
-    // Создаем store только после готовности Redis
-    if (!sessionStore) {
-      sessionStore = new RedisStore({
-        client: redisClient,
-        prefix: 'beauty-studio:session:',
-      });
-      console.log('[Gateway] Redis session store инициализирован');
-    }
-  });
+    redisClient.on('ready', () => {
+      console.log('[Gateway] Redis готов к работе');
+    });
 
-  // Подключаемся к Redis асинхронно (не блокируем запуск сервера)
-  redisClient.connect().catch((error) => {
+    // Пытаемся подключиться с таймаутом 5 секунд
+    await Promise.race([
+      redisClient.connect(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Redis connection timeout')), 5000)
+      )
+    ]);
+
+    // Создаем store после успешного подключения
+    sessionStore = new RedisStore({
+      client: redisClient,
+      prefix: 'beauty-studio:session:',
+    });
+    console.log('[Gateway] Redis session store инициализирован');
+    return true;
+  } catch (error) {
     console.error('[Gateway] Ошибка подключения к Redis:', error.message);
     console.log('[Gateway] Использование MemoryStore для сессий (не рекомендуется для production)');
     sessionStore = null;
-  });
-} catch (error) {
-  console.error('[Gateway] Критическая ошибка инициализации Redis:', error.message);
-  console.log('[Gateway] Использование MemoryStore для сессий');
-  sessionStore = null;
+    return false;
+  }
 }
 
-app.use(session({
-  store: sessionStore || undefined, // Используем Redis store, если доступен
+// Инициализируем приложение после подключения к Redis
+async function initApp() {
+  // Инициализируем Redis
+  const redisAvailable = await initRedis();
+  
+  // Настраиваем express-session с правильным store
+  app.use(session({
+    store: sessionStore || undefined, // Используем Redis store, если доступен
   secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
   resave: false, // Не сохранять сессию, если она не была изменена
   saveUninitialized: false,
@@ -631,14 +641,23 @@ app.use('/api/notifications', createProxyMiddleware({ target: services.notificat
 app.use('/api/telegram', createProxyMiddleware({ target: services.telegram, ...proxyOptions }));
 app.use('/api/bot', createProxyMiddleware({ target: services.telegram, ...proxyOptions }));
 
-// Запускаем сервер независимо от состояния Redis
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚪 API Gateway запущен на порту ${PORT}`);
+// Инициализируем приложение и запускаем сервер
+initApp().then(() => {
   console.log(`[Gateway] Session store: ${sessionStore ? 'Redis' : 'MemoryStore (fallback)'}`);
-}).on('error', (err) => {
-  console.error(`[Gateway] Ошибка запуска сервера на порту ${PORT}:`, err.message);
-  if (err.code === 'EADDRINUSE') {
-    console.error(`[Gateway] Порт ${PORT} уже занят. Остановите другой процесс или измените PORT.`);
-  }
-  process.exit(1);
+  
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚪 API Gateway запущен на порту ${PORT}`);
+  }).on('error', (err) => {
+    console.error(`[Gateway] Ошибка запуска сервера на порту ${PORT}:`, err.message);
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[Gateway] Порт ${PORT} уже занят. Остановите другой процесс или измените PORT.`);
+    }
+    process.exit(1);
+  });
+}).catch((error) => {
+  console.error('[Gateway] Критическая ошибка инициализации:', error);
+  // Все равно запускаем сервер с MemoryStore
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚪 API Gateway запущен на порту ${PORT} (с MemoryStore)`);
+  });
 });
