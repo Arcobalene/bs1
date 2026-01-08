@@ -3,8 +3,8 @@ const session = require('express-session');
 const cookieParser = require('cookie-parser');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const path = require('path');
-const pgSession = require('connect-pg-simple')(session);
-const { Pool } = require('pg');
+const RedisStore = require('connect-redis').default;
+const { createClient } = require('redis');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -50,74 +50,43 @@ app.use((req, res, next) => {
 const isHttps = process.env.NODE_ENV === 'production' || process.env.BEHIND_HTTPS_PROXY === 'true';
 const cookieSecure = isHttps;
 
-// Настройка PostgreSQL для хранения сессий
+// Настройка Redis для хранения сессий
 let sessionStore = null;
-if (process.env.DB_TYPE === 'postgres') {
-  console.log('[Gateway] Использование PostgreSQL для хранения сессий...');
-  const pgPool = new Pool({
-    host: process.env.DB_HOST || 'db',
-    port: parseInt(process.env.DB_PORT || '5432'),
-    database: process.env.DB_NAME || 'beauty_studio',
-    user: process.env.DB_USER || 'beauty_user',
-    password: process.env.DB_PASSWORD || 'beauty_password',
-    max: 10,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 30000,
-  });
+let redisClient = null;
 
-  pgPool.on('error', (err) => {
-    console.error('[Gateway] Ошибка подключения к PostgreSQL для сессий:', err);
-  });
+console.log('[Gateway] Инициализация Redis для хранения сессий...');
+redisClient = createClient({
+  socket: {
+    host: process.env.REDIS_HOST || 'redis',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+  },
+  password: process.env.REDIS_PASSWORD || undefined,
+});
 
-  sessionStore = new pgSession({
-    pool: pgPool,
-    tableName: 'session', // Таблица для хранения сессий
-    createTableIfMissing: true, // Автоматически создавать таблицу, если её нет
-    pruneSessionInterval: false, // Отключаем автоматическую очистку (используем maxAge в cookie)
+redisClient.on('error', (err) => {
+  console.error('[Gateway] Ошибка Redis:', err);
+});
+
+redisClient.on('connect', () => {
+  console.log('[Gateway] Redis подключен');
+});
+
+redisClient.on('ready', () => {
+  console.log('[Gateway] Redis готов к работе');
+});
+
+// Подключаемся к Redis асинхронно
+redisClient.connect().then(() => {
+  sessionStore = new RedisStore({
+    client: redisClient,
+    prefix: 'beauty-studio:session:',
   });
-  
-  // Добавляем обработчики событий для отладки
-  sessionStore.on('connect', () => {
-    console.log('[Gateway] PostgreSQL session store подключен');
-  });
-  
-  sessionStore.on('disconnect', () => {
-    console.log('[Gateway] PostgreSQL session store отключен');
-  });
-  
-  // Переопределяем методы для логирования
-  const originalGet = sessionStore.get.bind(sessionStore);
-  sessionStore.get = function(sid, callback) {
-    console.log(`[Gateway] Попытка загрузить сессию из PostgreSQL: sessionID=${sid}`);
-    originalGet(sid, (err, session) => {
-      if (err) {
-        console.error(`[Gateway] Ошибка загрузки сессии из PostgreSQL: ${err.message}`);
-      } else if (session) {
-        console.log(`[Gateway] Сессия загружена из PostgreSQL: sessionID=${sid}, userId=${session.userId || 'нет'}`);
-      } else {
-        console.log(`[Gateway] Сессия не найдена в PostgreSQL: sessionID=${sid}`);
-      }
-      callback(err, session);
-    });
-  };
-  
-  const originalSet = sessionStore.set.bind(sessionStore);
-  sessionStore.set = function(sid, session, callback) {
-    console.log(`[Gateway] Сохранение сессии в PostgreSQL: sessionID=${sid}, userId=${session.userId || 'нет'}`);
-    originalSet(sid, session, (err) => {
-      if (err) {
-        console.error(`[Gateway] Ошибка сохранения сессии в PostgreSQL: ${err.message}`);
-      } else {
-        console.log(`[Gateway] Сессия сохранена в PostgreSQL: sessionID=${sid}`);
-      }
-      if (callback) callback(err);
-    });
-  };
-  
-  console.log('[Gateway] PostgreSQL session store инициализирован с логированием');
-} else {
+  console.log('[Gateway] Redis session store инициализирован');
+}).catch((error) => {
+  console.error('[Gateway] Ошибка подключения к Redis:', error);
   console.log('[Gateway] Использование MemoryStore для сессий (не рекомендуется для production)');
-}
+  sessionStore = null;
+});
 
 app.use(session({
   store: sessionStore || undefined, // Используем PostgreSQL store, если доступен
