@@ -1,21 +1,70 @@
+/**
+ * API Gateway - Рефакторенная версия
+ * Использует структурированное логирование, централизованную обработку ошибок
+ * и валидацию конфигурации
+ */
+
 const express = require('express');
 const session = require('express-session');
 const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
+const compression = require('compression');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const path = require('path');
 const RedisStore = require('connect-redis').default;
 const { createClient } = require('redis');
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+// Импорт общих модулей
+// В Docker контейнере server.js находится в /app/, а shared в /app/shared/
+const { validateEnv } = require('./shared/config');
+const { createLogger } = require('./shared/logger');
+const { errorHandler, asyncHandler } = require('./shared/errors');
 
-// Trust proxy для работы за nginx (важно для правильной работы cookies и HTTPS)
+// Валидация переменных окружения
+const config = validateEnv();
+
+// Создание логгера
+const logger = createLogger('Gateway');
+
+// Инициализация Express приложения
+const app = express();
+const PORT = config.PORT;
+
+// Сохраняем логгер в app.locals для доступа в middleware
+app.locals.logger = logger;
+
+// Trust proxy для работы за nginx
 app.set('trust proxy', 1);
 
-// Middleware
-// Парсим JSON только для не-API запросов, чтобы body мог быть передан через прокси
+// Безопасность: Helmet для защиты HTTP заголовков
+app.use(helmet({
+  contentSecurityPolicy: config.NODE_ENV === 'production' ? undefined : false,
+  crossOriginEmbedderPolicy: false
+}));
+
+// CORS настройка
+app.use(cors({
+  origin: config.NODE_ENV === 'production' ? false : true, // В production настраивается через nginx
+  credentials: true
+}));
+
+// Сжатие ответов
+app.use(compression());
+
+// Rate limiting для защиты от DDoS
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 минут
+  max: 100, // максимум 100 запросов с одного IP
+  message: { success: false, message: 'Слишком много запросов, попробуйте позже' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use('/api/', limiter);
+
+// Парсинг JSON и URL-encoded (только для не-API запросов)
 app.use((req, res, next) => {
-  // Для API запросов не парсим body здесь - прокси сделает это
   if (req.path.startsWith('/api/')) {
     return next();
   }
@@ -23,163 +72,146 @@ app.use((req, res, next) => {
 });
 
 app.use((req, res, next) => {
-  // Для API запросов не парсим urlencoded здесь
   if (req.path.startsWith('/api/')) {
     return next();
   }
   express.urlencoded({ extended: true, limit: '10mb' })(req, res, next);
 });
 
-// Используем cookie-parser БЕЗ секрета, так как express-session не использует подписанные cookies
-// Express-session сам управляет cookies и не требует подписи от cookie-parser
+// Cookie parser
 app.use(cookieParser());
 
-// Логирование всех входящих запросов для отладки
+// Структурированное логирование запросов
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
-    console.log(`[Gateway] Входящий запрос: ${req.method} ${req.path}`);
-    // Логируем информацию о сессии для отладки
-    if (req.session && req.session.userId) {
-      console.log(`[Gateway] Сессия gateway: userId=${req.session.userId}`);
-    }
+    logger.info('Incoming request', {
+      method: req.method,
+      path: req.path,
+      ip: req.ip,
+      userId: req.session?.userId || null
+    });
   }
   next();
 });
 
-// Настройка сессий (важно: имя cookie должно совпадать с оригинальным)
-const isHttps = process.env.NODE_ENV === 'production' || process.env.BEHIND_HTTPS_PROXY === 'true';
-const cookieSecure = isHttps;
-
-// Настройка Redis для хранения сессий
+// Настройка сессий
+const isHttps = config.NODE_ENV === 'production' || config.BEHIND_HTTPS_PROXY;
 let sessionStore = null;
 let redisClient = null;
 
-// Инициализируем Redis и ждем подключения перед запуском сервера
+/**
+ * Инициализация Redis для хранения сессий
+ */
 async function initRedis() {
   try {
-    console.log('[Gateway] Инициализация Redis для хранения сессий...');
+    logger.info('Initializing Redis connection...');
+    
     redisClient = createClient({
       socket: {
-        host: process.env.REDIS_HOST || 'redis',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
+        host: config.REDIS_HOST,
+        port: config.REDIS_PORT,
         reconnectStrategy: (retries) => {
-          // Стратегия переподключения: ждем до 3 секунд между попытками
           if (retries > 10) {
-            console.log('[Gateway] Превышено количество попыток подключения к Redis, используем MemoryStore');
-            return false; // Прекращаем попытки
+            logger.warn('Redis connection retries exceeded, using MemoryStore');
+            return false;
           }
           return Math.min(retries * 100, 3000);
         }
       },
-      password: process.env.REDIS_PASSWORD || undefined,
+      password: config.REDIS_PASSWORD || undefined
     });
 
     redisClient.on('error', (err) => {
-      console.error('[Gateway] Ошибка Redis:', err.message);
+      logger.error('Redis error', { error: err.message });
     });
 
     redisClient.on('connect', () => {
-      console.log('[Gateway] Redis подключен');
+      logger.info('Redis connected');
     });
 
     redisClient.on('ready', () => {
-      console.log('[Gateway] Redis готов к работе');
+      logger.info('Redis ready');
     });
 
-    // Пытаемся подключиться с таймаутом 5 секунд
+    // Подключение с таймаутом
     await Promise.race([
       redisClient.connect(),
-      new Promise((_, reject) => 
+      new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Redis connection timeout')), 5000)
       )
     ]);
 
-    // Создаем store после успешного подключения
+    // Создание Redis store
     sessionStore = new RedisStore({
       client: redisClient,
-      prefix: 'beauty-studio:session:',
+      prefix: 'beauty-studio:session:'
     });
-    console.log('[Gateway] Redis session store инициализирован');
+    
+    logger.info('Redis session store initialized');
     return true;
   } catch (error) {
-    console.error('[Gateway] Ошибка подключения к Redis:', error.message);
-    console.log('[Gateway] Использование MemoryStore для сессий (не рекомендуется для production)');
+    logger.error('Redis connection failed', { error: error.message });
+    logger.warn('Using MemoryStore for sessions (not recommended for production)');
     sessionStore = null;
     return false;
   }
 }
 
-// Инициализируем приложение после подключения к Redis
+/**
+ * Инициализация приложения
+ */
 async function initApp() {
-  // Инициализируем Redis
+  // Инициализация Redis
   const redisAvailable = await initRedis();
-  
-  // Настраиваем express-session с правильным store
+
+  // Настройка express-session
   app.use(session({
-    store: sessionStore || undefined, // Используем Redis store, если доступен
-    secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
-    resave: false, // Не сохранять сессию, если она не была изменена
+    store: sessionStore || undefined,
+    secret: config.SESSION_SECRET,
+    resave: false,
     saveUninitialized: false,
-    name: 'beauty.studio.sid', // Имя cookie должно совпадать с оригинальным
-    rolling: false, // Не обновлять cookie при каждом запросе (только при изменении)
+    name: 'beauty.studio.sid',
+    rolling: false,
     cookie: {
-      secure: cookieSecure,
+      secure: isHttps,
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000, // 24 часа
       sameSite: 'lax',
-      path: '/',
-      // Не устанавливаем domain, чтобы cookie работал на всех поддоменах
-      // domain: undefined
+      path: '/'
     }
   }));
+
+  logger.info('Session configuration', {
+    store: redisAvailable ? 'Redis' : 'MemoryStore',
+    secure: isHttps
+  });
 }
 
 // Middleware для логирования состояния сессии
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/')) {
-    // Логируем состояние сессии перед обработкой запроса
-    if (req.session) {
-      // Проверяем как обычный cookie, так и подписанный
-      const regularCookie = req.cookies && req.cookies['beauty.studio.sid'] ? req.cookies['beauty.studio.sid'] : null;
-      const signedCookie = req.signedCookies && req.signedCookies['beauty.studio.sid'] ? req.signedCookies['beauty.studio.sid'] : null;
-      const cookieValue = regularCookie || signedCookie || 'нет';
-      const cookieType = regularCookie ? 'regular' : (signedCookie ? 'signed' : 'none');
-      console.log(`[Gateway] Сессия перед запросом ${req.path}: userId=${req.session.userId || 'нет'}, sessionID=${req.sessionID || 'нет'}, cookie=${cookieValue.substring(0, 20)}... (${cookieType})`);
-    } else {
-      console.log(`[Gateway] Нет сессии для запроса ${req.path}`);
-    }
+  if (req.path.startsWith('/api/') && req.session) {
+    logger.debug('Session state', {
+      path: req.path,
+      userId: req.session.userId || null,
+      sessionID: req.sessionID || null
+    });
   }
   next();
 });
 
-// Middleware для автоматического сохранения сессии при изменении
+// Middleware для автоматического сохранения сессии
 app.use((req, res, next) => {
-  // Сохраняем сессию после отправки ответа, если она была изменена
   const originalEnd = res.end.bind(res);
   res.end = function(...args) {
-    // Сохраняем сессию только если она была изменена или содержит userId
-    if (req.session) {
-      // Если есть userId, обновляем время жизни и сохраняем
-      if (req.session.userId) {
-        req.session.touch();
-        req.session.save((err) => {
-          if (err) {
-            console.error(`[Gateway] Ошибка сохранения сессии после запроса ${req.path}:`, err.message);
-          } else {
-            // Логируем только для API запросов, чтобы не засорять логи
-            if (req.path.startsWith('/api/')) {
-              console.log(`[Gateway] Сессия сохранена для userId=${req.session.userId} после запроса ${req.path}, sessionID=${req.sessionID}`);
-            }
-          }
-        });
-      } else if (req.session._modified) {
-        // Если сессия была изменена, но нет userId, все равно сохраняем
-        req.session.save((err) => {
-          if (err) {
-            console.error(`[Gateway] Ошибка сохранения измененной сессии после запроса ${req.path}:`, err.message);
-          }
-        });
-      }
+    if (req.session && req.session.userId) {
+      req.session.touch();
+      req.session.save((err) => {
+        if (err) {
+          logger.error('Session save error', { error: err.message, path: req.path });
+        } else {
+          logger.debug('Session saved', { userId: req.session.userId, path: req.path });
+        }
+      });
     }
     return originalEnd(...args);
   };
@@ -187,203 +219,177 @@ app.use((req, res, next) => {
 });
 
 // Middleware для синхронизации сессии gateway с user-service
-// Если есть cookie сессии, но нет userId в сессии gateway, запрашиваем /api/user у user-service
-app.use(async (req, res, next) => {
-  // Если есть cookie сессии, но нет userId в сессии gateway, синхронизируем
+app.use(asyncHandler(async (req, res, next) => {
   if (req.cookies && req.cookies['beauty.studio.sid'] && !req.session.userId && req.path.startsWith('/api/')) {
-    // Пропускаем запросы логина/регистрации, чтобы избежать циклических запросов
     if (!req.path.includes('/login') && !req.path.includes('/register')) {
-      console.log(`[Gateway] Попытка синхронизации сессии для ${req.path}`);
+      logger.debug('Attempting session synchronization', { path: req.path });
+      
       try {
         const http = require('http');
         const url = require('url');
-        const userServiceUrl = url.parse(services.user);
+        const userServiceUrl = url.parse(config.USER_SERVICE_URL);
         const cookieHeader = req.headers.cookie || '';
-        
+
         const options = {
           hostname: userServiceUrl.hostname,
           port: userServiceUrl.port || 3002,
           path: '/api/user',
           method: 'GET',
-          headers: {
-            'Cookie': cookieHeader
-          },
-          timeout: 5000 // Увеличенный таймаут для надежности синхронизации
+          headers: { 'Cookie': cookieHeader },
+          timeout: 5000
         };
-        
+
         await new Promise((resolve) => {
           const userReq = http.request(options, (userRes) => {
             let data = '';
             userRes.on('data', (chunk) => { data += chunk; });
             userRes.on('end', async () => {
               try {
-                // Проверяем статус ответа
                 if (userRes.statusCode !== 200) {
-                  console.log(`[Gateway] Неверный статус при синхронизации: ${userRes.statusCode}`);
-                  console.log(`[Gateway] Тело ответа: ${data.substring(0, 200)}`);
+                  logger.debug('Session sync failed', { statusCode: userRes.statusCode });
                   resolve();
                   return;
                 }
-                
-                // Проверяем Content-Type перед парсингом
+
                 const contentType = userRes.headers['content-type'] || '';
                 if (!contentType.includes('application/json')) {
-                  console.log(`[Gateway] Неверный Content-Type при синхронизации: ${contentType}, данные: ${data.substring(0, 200)}`);
+                  logger.debug('Invalid content type in session sync', { contentType });
                   resolve();
                   return;
                 }
-                
+
                 const result = JSON.parse(data);
                 if (result.success && result.user && result.user.id) {
-                  // Синхронизируем сессию gateway
                   req.session.userId = result.user.id;
                   req.session.originalUserId = result.user.id;
-                  req.session.touch(); // Обновляем время жизни сессии
-                  
-                  // Сохраняем сессию с ожиданием завершения
+                  req.session.touch();
+
                   await new Promise((saveResolve) => {
                     req.session.save((err) => {
                       if (err) {
-                        console.error(`[Gateway] Ошибка сохранения сессии при синхронизации: ${err.message}`);
+                        logger.error('Session save error during sync', { error: err.message });
                       } else {
-                        console.log(`[Gateway] Сессия синхронизирована: userId=${result.user.id}`);
+                        logger.info('Session synchronized', { userId: result.user.id });
                       }
                       saveResolve();
                     });
                   });
-                } else {
-                  console.log(`[Gateway] Не удалось синхронизировать сессию: success=${result.success}, user=${result.user ? 'есть' : 'нет'}`);
-                  if (result.message) {
-                    console.log(`[Gateway] Сообщение об ошибке: ${result.message}`);
-                  }
-                  console.log(`[Gateway] Полный ответ: ${JSON.stringify(result).substring(0, 300)}`);
                 }
               } catch (e) {
-                console.log(`[Gateway] Ошибка парсинга ответа при синхронизации: ${e.message}`);
-                console.log(`[Gateway] Ответ сервера: ${data.substring(0, 200)}`);
+                logger.warn('Session sync parse error', { error: e.message });
               }
               resolve();
             });
           });
-          
+
           userReq.on('error', (err) => {
-            console.log(`[Gateway] Ошибка запроса при синхронизации: ${err.message}`);
-            resolve(); // Продолжаем даже при ошибке
+            logger.warn('Session sync request error', { error: err.message });
+            resolve();
           });
-          
+
           userReq.on('timeout', () => {
-            console.log(`[Gateway] Таймаут при синхронизации сессии`);
             userReq.destroy();
-            resolve(); // Продолжаем даже при таймауте
+            logger.warn('Session sync timeout');
+            resolve();
           });
-          
+
           userReq.end();
         });
       } catch (e) {
-        console.log(`[Gateway] Исключение при синхронизации: ${e.message}`);
-        // Игнорируем ошибки и продолжаем
+        logger.warn('Session sync exception', { error: e.message });
       }
     }
   }
-  
   next();
-});
+}));
 
 // Статические файлы
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Проксирование к микросервисам
+// Конфигурация микросервисов
 const services = {
-  auth: process.env.AUTH_SERVICE_URL || 'http://auth-service:3001',
-  user: process.env.USER_SERVICE_URL || 'http://user-service:3002',
-  booking: process.env.BOOKING_SERVICE_URL || 'http://booking-service:3003',
-  catalog: process.env.CATALOG_SERVICE_URL || 'http://catalog-service:3004',
-  file: process.env.FILE_SERVICE_URL || 'http://file-service:3005',
-  notification: process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:3006',
-  telegram: process.env.TELEGRAM_SERVICE_URL || 'http://telegram-service:3007'
+  auth: config.AUTH_SERVICE_URL,
+  user: config.USER_SERVICE_URL,
+  booking: config.BOOKING_SERVICE_URL,
+  catalog: config.CATALOG_SERVICE_URL,
+  file: config.FILE_SERVICE_URL,
+  notification: config.NOTIFICATION_SERVICE_URL,
+  telegram: config.TELEGRAM_SERVICE_URL
 };
 
-// Настройка прокси с передачей сессий
+// Настройка прокси
 const proxyOptions = {
   changeOrigin: true,
-  cookieDomainRewrite: false, // Не перезаписываем домен cookies
-  timeout: 120000, // 120 секунд timeout (увеличено для стабильности)
+  cookieDomainRewrite: false,
+  timeout: 120000,
   proxyTimeout: 120000,
-  xfwd: true, // Передавать оригинальные заголовки
-  secure: false, // Отключить проверку SSL для внутренних соединений
+  xfwd: true,
+  secure: false,
   onProxyReq: (proxyReq, req, res) => {
-    // Логируем запрос для отладки
-    console.log(`[Gateway] Проксирование ${req.method} ${req.path} -> ${proxyReq.path}`);
-    console.log(`[Gateway] Сессия gateway: userId=${req.session?.userId || 'нет'}, cookies=${req.cookies ? Object.keys(req.cookies).join(', ') : 'нет'}`);
-    
-    // Передаем cookies от клиента к сервису
+    logger.debug('Proxying request', {
+      method: req.method,
+      path: req.path,
+      target: proxyReq.path,
+      userId: req.session?.userId || null
+    });
+
     if (req.headers.cookie) {
       proxyReq.setHeader('Cookie', req.headers.cookie);
     }
-    
-    // Передаем userId из сессии gateway в заголовках для синхронизации сессий между сервисами
+
     if (req.session && req.session.userId) {
       proxyReq.setHeader('X-User-ID', req.session.userId.toString());
       if (req.session.originalUserId) {
         proxyReq.setHeader('X-Original-User-ID', req.session.originalUserId.toString());
       }
-      console.log(`[Gateway] Передан заголовок X-User-ID: ${req.session.userId}`);
-      
-      // Обновляем время жизни сессии при каждом запросе (touch session)
       req.session.touch();
-    } else {
-      console.log(`[Gateway] Нет userId в сессии для ${req.path}`);
-    }
-  },
-  onError: (err, req, res) => {
-    console.error(`[Gateway] Проксирование ошибка для ${req.method} ${req.path}:`, err.message);
-    console.error(`[Gateway] Целевой сервис: ${req.url}`);
-    console.error(`[Gateway] Код ошибки: ${err.code || 'N/A'}`);
-    
-    // Игнорируем ECONNRESET если ответ уже отправлен
-    if (err.code === 'ECONNRESET' && res.headersSent) {
-      console.log(`[Gateway] Соединение закрыто после отправки ответа (это нормально)`);
-      return;
-    }
-    
-    if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
-      console.error(`[Gateway] Сервис недоступен или не отвечает. Проверьте, запущен ли сервис.`);
-    }
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.error(`[Gateway] Полный стек ошибки:`, err);
-    }
-    
-    if (!res.headersSent) {
-      const statusCode = err.code === 'ETIMEDOUT' ? 504 : (err.code === 'ECONNRESET' ? 502 : 502);
-      res.status(statusCode).json({ 
-        success: false, 
-        message: err.code === 'ETIMEDOUT' ? 'Превышено время ожидания ответа от сервиса' : 
-                 err.code === 'ECONNRESET' ? 'Соединение с сервисом прервано' :
-                 'Сервис временно недоступен',
-        error: process.env.NODE_ENV === 'development' ? err.message : undefined
-      });
     }
   },
   onProxyRes: (proxyRes, req, res) => {
-    console.log(`[Gateway] Получен ответ от сервиса: ${req.method} ${req.path} -> ${proxyRes.statusCode}`);
-    
-    // Копируем Set-Cookie заголовки от сервиса в ответ gateway
-    // Это важно для правильной работы сессий
+    logger.debug('Proxy response', {
+      method: req.method,
+      path: req.path,
+      statusCode: proxyRes.statusCode
+    });
+
     if (proxyRes.headers['set-cookie']) {
-      // Если Set-Cookie это массив, обрабатываем каждый элемент
-      const setCookieHeaders = Array.isArray(proxyRes.headers['set-cookie']) 
-        ? proxyRes.headers['set-cookie'] 
+      const setCookieHeaders = Array.isArray(proxyRes.headers['set-cookie'])
+        ? proxyRes.headers['set-cookie']
         : [proxyRes.headers['set-cookie']];
-      
+
       setCookieHeaders.forEach(cookie => {
         res.appendHeader('Set-Cookie', cookie);
+      });
+    }
+  },
+  onError: (err, req, res) => {
+    logger.error('Proxy error', {
+      method: req.method,
+      path: req.path,
+      error: err.message,
+      code: err.code
+    });
+
+    if (err.code === 'ECONNRESET' && res.headersSent) {
+      logger.debug('Connection reset after response sent (normal)');
+      return;
+    }
+
+    if (!res.headersSent) {
+      const statusCode = err.code === 'ETIMEDOUT' ? 504 : 502;
+      res.status(statusCode).json({
+        success: false,
+        message: err.code === 'ETIMEDOUT' ? 'Превышено время ожидания ответа от сервиса' :
+                 err.code === 'ECONNRESET' ? 'Соединение с сервисом прервано' :
+                 'Сервис временно недоступен',
+        error: config.NODE_ENV === 'development' ? err.message : undefined
       });
     }
   }
 };
 
-// HTML страницы (должны быть ДО API проксирования)
+// HTML страницы
+// В Docker контейнере views находится в /app/views/
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'views/index.html'));
 });
@@ -452,242 +458,347 @@ app.get('/landing', (req, res) => {
   res.sendFile(path.join(__dirname, 'views/landing.html'));
 });
 
-// Health check (перед API проксированием)
+// Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'gateway', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    service: 'gateway',
+    timestamp: new Date().toISOString(),
+    redis: redisClient && redisClient.isReady ? 'connected' : 'disconnected'
+  });
 });
 
-// Проксирование API запросов (после HTML страниц)
+// API проксирование
 // Auth endpoints
-app.use('/api/register', createProxyMiddleware({ 
-  target: services.auth, 
-  ...proxyOptions,
-  logLevel: 'debug'
+app.use('/api/register', createProxyMiddleware({
+  target: services.auth,
+  ...proxyOptions
 }));
-app.use('/api/register/master', createProxyMiddleware({ target: services.auth, ...proxyOptions }));
-app.use('/api/register-client', createProxyMiddleware({ target: services.user, ...proxyOptions }));
-app.use('/api/login', createProxyMiddleware({ 
-  target: services.auth, 
+
+app.use('/api/register/master', createProxyMiddleware({
+  target: services.auth,
+  ...proxyOptions
+}));
+
+app.use('/api/register-client', createProxyMiddleware({
+  target: services.user,
+  ...proxyOptions
+}));
+
+// Login с особой обработкой для синхронизации сессии
+app.use('/api/login', createProxyMiddleware({
+  target: services.auth,
   ...proxyOptions,
-  logLevel: 'debug',
-  selfHandleResponse: true, // Полностью контролируем ответ
+  selfHandleResponse: true,
   onProxyReq: (proxyReq, req, res) => {
-    console.log(`[Gateway] Проксирование LOGIN ${req.method} ${req.path} -> ${services.auth}${req.path}`);
-    console.log(`[Gateway] Content-Type:`, req.headers['content-type']);
-    console.log(`[Gateway] Content-Length:`, req.headers['content-length']);
-    
-    // Передаем cookies от клиента к сервису
+    logger.debug('Proxying login request', {
+      contentType: req.headers['content-type'],
+      contentLength: req.headers['content-length']
+    });
+
     if (req.headers.cookie) {
       proxyReq.setHeader('Cookie', req.headers.cookie);
     }
-    
-    // Убеждаемся, что Content-Type установлен
+
     if (!proxyReq.getHeader('Content-Type') && req.headers['content-type']) {
       proxyReq.setHeader('Content-Type', req.headers['content-type']);
     }
   },
   onProxyRes: (proxyRes, req, res) => {
-    console.log(`[Gateway] Получен ответ от auth-service: ${proxyRes.statusCode}`);
-    
-    // С selfHandleResponse: true мы должны полностью обработать ответ
-    // Читаем тело ответа полностью перед отправкой
+    logger.debug('Login response received', { statusCode: proxyRes.statusCode });
+
     const chunks = [];
-    
+
     proxyRes.on('data', (chunk) => {
       chunks.push(chunk);
     });
-    
+
     proxyRes.on('end', async () => {
       try {
         const body = Buffer.concat(chunks).toString();
         const result = JSON.parse(body);
-        
-        // Если логин успешен (200), синхронизируем сессию gateway
+
         if (proxyRes.statusCode === 200 && result.success && result.userId) {
-          console.log(`[Gateway] Логин успешен, синхронизация сессии для userId=${result.userId}, текущий sessionID=${req.sessionID}`);
-          
-          // Синхронизируем сессию gateway с userId из ответа
+          logger.info('Login successful, syncing session', {
+            userId: result.userId,
+            sessionID: req.sessionID
+          });
+
           req.session.userId = result.userId;
           req.session.originalUserId = result.userId;
-          req.session.touch(); // Обновляем время жизни сессии
-          
-          // Ждем сохранения сессии перед отправкой ответа
+          req.session.touch();
+
           try {
             await new Promise((resolve, reject) => {
               const timeout = setTimeout(() => {
-                console.error(`[Gateway] Таймаут сохранения сессии после логина`);
+                logger.error('Session save timeout after login');
                 reject(new Error('Session save timeout'));
-              }, 5000); // Увеличен таймаут до 5 секунд
-              
+              }, 5000);
+
               req.session.save((err) => {
                 clearTimeout(timeout);
                 if (err) {
-                  console.error(`[Gateway] Ошибка сохранения сессии после логина: ${err.message}`);
+                  logger.error('Session save error after login', { error: err.message });
                   reject(err);
                 } else {
-                  // После сохранения сессии, express-session должен установить cookie
-                  // Но при selfHandleResponse: true express-session не устанавливает cookie автоматически
-                  // Нужно установить cookie вручную, используя правильный формат express-session
-                  // Express-session использует подписанные cookies с префиксом 's:'
-                  const cookieName = 'beauty.studio.sid';
-                  
-                  // При selfHandleResponse: true express-session не устанавливает cookie автоматически
-                  // Нужно установить cookie вручную, используя правильные параметры из req.session.cookie
-                  // Express-session НЕ использует подписанные cookies - он использует обычные cookies
-                  const cookieOptions = {
-                    httpOnly: req.session.cookie.httpOnly !== false,
-                    secure: req.session.cookie.secure !== false,
-                    maxAge: req.session.cookie.maxAge || 24 * 60 * 60 * 1000,
-                    sameSite: req.session.cookie.sameSite || 'lax',
-                    path: req.session.cookie.path || '/'
-                  };
-                  
-                  // Устанавливаем cookie с sessionID (express-session использует обычные cookies, не подписанные)
-                  res.cookie(cookieName, req.sessionID, cookieOptions);
-                  console.log(`[Gateway] Cookie установлен вручную: ${cookieName}=${req.sessionID.substring(0, 20)}..., options=${JSON.stringify(cookieOptions)}`);
-                  console.log(`[Gateway] Сессия синхронизирована после логина: userId=${result.userId}, sessionID=${req.sessionID}`);
+                  logger.info('Session synced after login', {
+                    userId: result.userId,
+                    sessionID: req.sessionID
+                  });
                   resolve();
                 }
               });
             });
           } catch (saveError) {
-            console.error(`[Gateway] Критическая ошибка сохранения сессии: ${saveError.message}`);
-            // Продолжаем отправку ответа даже при ошибке сохранения сессии
+            logger.error('Critical session save error', { error: saveError.message });
           }
         }
       } catch (e) {
-        console.log(`[Gateway] Ошибка обработки ответа логина: ${e.message}`);
+        logger.warn('Login response parse error', { error: e.message });
       }
-      
-      // Отправляем ответ клиенту после обработки
+
       if (!res.headersSent) {
         res.status(proxyRes.statusCode);
-        
-        // Копируем заголовки от сервиса, но НЕ перезаписываем Set-Cookie
+
         Object.keys(proxyRes.headers).forEach(key => {
-          // Пропускаем заголовки, которые будут установлены автоматически
           const lowerKey = key.toLowerCase();
-          if (lowerKey !== 'content-length' && lowerKey !== 'transfer-encoding' && lowerKey !== 'connection' && lowerKey !== 'set-cookie') {
+          if (lowerKey !== 'content-length' && lowerKey !== 'transfer-encoding' &&
+              lowerKey !== 'connection' && lowerKey !== 'set-cookie') {
             res.setHeader(key, proxyRes.headers[key]);
           }
         });
-        
-        // Важно: express-session должен установить cookie автоматически при сохранении сессии
-        // Проверяем, установлен ли cookie в заголовках
-        const setCookieHeaders = res.getHeader('Set-Cookie');
-        if (setCookieHeaders) {
-          const cookieStr = Array.isArray(setCookieHeaders) ? setCookieHeaders[0] : setCookieHeaders;
-          console.log(`[Gateway] Cookie установлен в ответе логина: ${cookieStr.substring(0, 100)}...`);
-          // Проверяем формат cookie - должен быть 's:sessionID.signature'
-          if (cookieStr.includes('s:')) {
-            console.log(`[Gateway] Cookie имеет правильный формат с подписью`);
-          } else {
-            console.log(`[Gateway] ВНИМАНИЕ: Cookie не имеет формата с подписью!`);
-          }
-        } else {
-          console.log(`[Gateway] ВНИМАНИЕ: Cookie не установлен в ответе логина! sessionID=${req.sessionID}`);
-        }
-        
-        // Устанавливаем Content-Length
+
         res.setHeader('Content-Length', Buffer.byteLength(Buffer.concat(chunks)));
         res.end(Buffer.concat(chunks));
       } else if (!res.finished) {
         res.end();
       }
     });
-    
+
     proxyRes.on('error', (err) => {
-      console.error(`[Gateway] Ошибка чтения ответа от auth-service: ${err.message}`);
+      logger.error('Login response error', { error: err.message });
       if (!res.headersSent) {
         res.status(500).json({ success: false, message: 'Ошибка сервера' });
       } else if (!res.finished) {
         res.end();
       }
     });
-  },
-  onError: (err, req, res) => {
-    console.error(`[Gateway] Ошибка проксирования LOGIN:`, err.message);
-    console.error(`[Gateway] Код ошибки:`, err.code);
-    // Вызываем оригинальный onError из proxyOptions
-    if (proxyOptions.onError) {
-      proxyOptions.onError(err, req, res);
-    }
   }
 }));
-app.use('/api/login-client', createProxyMiddleware({ target: services.user, ...proxyOptions }));
-app.use('/api/logout', createProxyMiddleware({ target: services.auth, ...proxyOptions }));
-app.use('/api/logout-client', createProxyMiddleware({ target: services.user, ...proxyOptions }));
+
+app.use('/api/login-client', createProxyMiddleware({
+  target: services.user,
+  ...proxyOptions
+}));
+
+app.use('/api/logout', createProxyMiddleware({
+  target: services.auth,
+  ...proxyOptions
+}));
+
+app.use('/api/logout-client', createProxyMiddleware({
+  target: services.user,
+  ...proxyOptions
+}));
 
 // User endpoints
-app.use('/api/user', createProxyMiddleware({ target: services.user, ...proxyOptions }));
-app.use('/api/users', createProxyMiddleware({ target: services.user, ...proxyOptions }));
-app.use('/api/salon', createProxyMiddleware({ target: services.user, ...proxyOptions }));
-app.use('/api/salons', createProxyMiddleware({ target: services.user, ...proxyOptions }));
-app.use('/api/clients', createProxyMiddleware({ target: services.user, ...proxyOptions }));
-app.use('/api/client', createProxyMiddleware({ target: services.user, ...proxyOptions }));
+app.use('/api/user', createProxyMiddleware({
+  target: services.user,
+  ...proxyOptions
+}));
 
-app.use('/api/bookings', createProxyMiddleware({ target: services.booking, ...proxyOptions }));
+app.use('/api/users', createProxyMiddleware({
+  target: services.user,
+  ...proxyOptions
+}));
 
-app.use('/api/services', createProxyMiddleware({ target: services.catalog, ...proxyOptions }));
+app.use('/api/salon', createProxyMiddleware({
+  target: services.user,
+  ...proxyOptions
+}));
 
-// Фото мастеров должны проксироваться в file-service (ПЕРЕД общим /api/masters)
-app.use('/api/masters/photos', createProxyMiddleware({ target: services.file, ...proxyOptions }));
-app.use('/api/master/photos', createProxyMiddleware({ target: services.file, ...proxyOptions }));
-app.use('/api/masters', createProxyMiddleware({ target: services.catalog, ...proxyOptions }));
+app.use('/api/salons', createProxyMiddleware({
+  target: services.user,
+  ...proxyOptions
+}));
 
-app.use('/api/minio', createProxyMiddleware({ target: services.file, ...proxyOptions }));
+app.use('/api/clients', createProxyMiddleware({
+  target: services.user,
+  ...proxyOptions
+}));
 
-app.use('/api/notifications', createProxyMiddleware({ target: services.notification, ...proxyOptions }));
+app.use('/api/client', createProxyMiddleware({
+  target: services.user,
+  ...proxyOptions
+}));
 
-app.use('/api/telegram', createProxyMiddleware({ target: services.telegram, ...proxyOptions }));
-app.use('/api/bot', createProxyMiddleware({ target: services.telegram, ...proxyOptions }));
+// Booking endpoints
+app.use('/api/bookings', createProxyMiddleware({
+  target: services.booking,
+  ...proxyOptions
+}));
 
-// Инициализируем приложение и запускаем сервер
-console.log('[Gateway] Начало инициализации приложения...');
-initApp().then(() => {
-  console.log(`[Gateway] Session store: ${sessionStore ? 'Redis' : 'MemoryStore (fallback)'}`);
-  console.log('[Gateway] Запуск сервера...');
-  
-  // Запускаем сервер и ждем, пока он будет готов принимать соединения
-  const server = app.listen(PORT, '0.0.0.0', () => {
-    const address = server.address();
-    console.log(`🚪 API Gateway запущен на порту ${PORT}`);
-    console.log(`[Gateway] Сервер слушает на ${address.address}:${address.port}`);
-    console.log(`[Gateway] Сервер готов принимать соединения`);
-  }).on('error', (err) => {
-    console.error(`[Gateway] Ошибка запуска сервера на порту ${PORT}:`, err.message);
-    if (err.code === 'EADDRINUSE') {
-      console.error(`[Gateway] Порт ${PORT} уже занят. Остановите другой процесс или измените PORT.`);
+// Catalog endpoints
+app.use('/api/services', createProxyMiddleware({
+  target: services.catalog,
+  ...proxyOptions
+}));
+
+// File endpoints (должны быть перед общим /api/masters)
+app.use('/api/masters/photos', createProxyMiddleware({
+  target: services.file,
+  ...proxyOptions
+}));
+
+app.use('/api/master/photos', createProxyMiddleware({
+  target: services.file,
+  ...proxyOptions
+}));
+
+app.use('/api/masters', createProxyMiddleware({
+  target: services.catalog,
+  ...proxyOptions
+}));
+
+app.use('/api/minio', createProxyMiddleware({
+  target: services.file,
+  ...proxyOptions
+}));
+
+// Notification endpoints
+app.use('/api/notifications', createProxyMiddleware({
+  target: services.notification,
+  ...proxyOptions
+}));
+
+// Telegram endpoints
+app.use('/api/telegram', createProxyMiddleware({
+  target: services.telegram,
+  ...proxyOptions
+}));
+
+app.use('/api/bot', createProxyMiddleware({
+  target: services.telegram,
+  ...proxyOptions
+}));
+
+// Централизованная обработка ошибок (должна быть последней)
+app.use(errorHandler);
+
+// Обработка 404
+app.use((req, res) => {
+  logger.warn('Route not found', { method: req.method, path: req.path });
+  res.status(404).json({
+    success: false,
+    error: {
+      code: 'NOT_FOUND',
+      message: 'Маршрут не найден'
     }
-    process.exit(1);
-  });
-  
-  // Обработка ошибок сервера
-  server.on('listening', () => {
-    const address = server.address();
-    console.log(`[Gateway] Сервер успешно слушает на ${address.address}:${address.port}`);
-  });
-  
-  server.on('error', (err) => {
-    console.error(`[Gateway] Ошибка сервера:`, err.message);
-  });
-}).catch((error) => {
-  console.error('[Gateway] Критическая ошибка инициализации:', error);
-  console.log('[Gateway] Запуск сервера с MemoryStore...');
-  // Все равно запускаем сервер с MemoryStore
-  const server = app.listen(PORT, '0.0.0.0', () => {
-    const address = server.address();
-    console.log(`🚪 API Gateway запущен на порту ${PORT} (с MemoryStore)`);
-    console.log(`[Gateway] Сервер слушает на ${address.address}:${address.port}`);
-    console.log(`[Gateway] Сервер готов принимать соединения`);
-  });
-  
-  server.on('listening', () => {
-    const address = server.address();
-    console.log(`[Gateway] Сервер успешно слушает на ${address.address}:${address.port}`);
-  });
-  
-  server.on('error', (err) => {
-    console.error(`[Gateway] Ошибка сервера:`, err.message);
   });
 });
+
+// Инициализация и запуск сервера
+async function startServer() {
+  try {
+    logger.info('Starting application initialization...');
+    
+    await initApp();
+    
+    logger.info('Session store', {
+      type: sessionStore ? 'Redis' : 'MemoryStore (fallback)'
+    });
+
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      const address = server.address();
+      logger.info('Gateway started', {
+        port: PORT,
+        address: `${address.address}:${address.port}`,
+        environment: config.NODE_ENV
+      });
+    });
+
+    server.on('error', (err) => {
+      logger.error('Server error', {
+        error: err.message,
+        code: err.code
+      });
+
+      if (err.code === 'EADDRINUSE') {
+        logger.error(`Port ${PORT} is already in use`);
+      }
+      process.exit(1);
+    });
+
+    server.on('listening', () => {
+      const address = server.address();
+      logger.info('Server listening', {
+        address: `${address.address}:${address.port}`
+      });
+    });
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      logger.info('SIGTERM received, shutting down gracefully...');
+      server.close(() => {
+        logger.info('Server closed');
+        if (redisClient) {
+          redisClient.quit().then(() => {
+            logger.info('Redis connection closed');
+            process.exit(0);
+          });
+        } else {
+          process.exit(0);
+        }
+      });
+    });
+
+    process.on('SIGINT', () => {
+      logger.info('SIGINT received, shutting down gracefully...');
+      server.close(() => {
+        logger.info('Server closed');
+        if (redisClient) {
+          redisClient.quit().then(() => {
+            logger.info('Redis connection closed');
+            process.exit(0);
+          });
+        } else {
+          process.exit(0);
+        }
+      });
+    });
+
+  } catch (error) {
+    logger.error('Critical initialization error', {
+      error: error.message,
+      stack: error.stack
+    });
+    
+    // Запускаем сервер с MemoryStore в случае ошибки
+    logger.warn('Starting server with MemoryStore fallback');
+    
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      const address = server.address();
+      logger.info('Gateway started with MemoryStore', {
+        port: PORT,
+        address: `${address.address}:${address.port}`
+      });
+    });
+
+    server.on('listening', () => {
+      const address = server.address();
+      logger.info('Server listening', {
+        address: `${address.address}:${address.port}`
+      });
+    });
+  }
+}
+
+// Запуск сервера
+startServer().catch((error) => {
+  logger.error('Fatal error during startup', {
+    error: error.message,
+    stack: error.stack
+  });
+  process.exit(1);
+});
+
