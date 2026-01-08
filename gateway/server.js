@@ -11,8 +11,23 @@ const PORT = process.env.PORT || 3000;
 app.set('trust proxy', 1);
 
 // Middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Парсим JSON только для не-API запросов, чтобы body мог быть передан через прокси
+app.use((req, res, next) => {
+  // Для API запросов не парсим body здесь - прокси сделает это
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
+  express.json({ limit: '10mb' })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  // Для API запросов не парсим urlencoded здесь
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
+  express.urlencoded({ extended: true, limit: '10mb' })(req, res, next);
+});
+
 app.use(cookieParser());
 
 // Логирование всех входящих запросов для отладки
@@ -206,16 +221,9 @@ app.use('/api/login', createProxyMiddleware({
   ...proxyOptions,
   logLevel: 'debug',
   onProxyReq: (proxyReq, req, res) => {
-    // Логируем только безопасную информацию (без пароля)
-    const safeBody = req.body ? {
-      username: req.body.username,
-      // Пароль не логируем по соображениям безопасности
-      hasPassword: !!req.body.password
-    } : null;
     console.log(`[Gateway] Проксирование LOGIN ${req.method} ${req.path} -> ${services.auth}${req.path}`);
-    console.log(`[Gateway] Safe body info:`, safeBody);
     console.log(`[Gateway] Content-Type:`, req.headers['content-type']);
-    console.log(`[Gateway] Body length:`, req.body ? JSON.stringify(req.body).length : 0);
+    console.log(`[Gateway] Content-Length:`, req.headers['content-length']);
     
     // Передаем cookies от клиента к сервису
     if (req.headers.cookie) {
