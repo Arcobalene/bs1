@@ -338,31 +338,14 @@ app.use('/api/login', createProxyMiddleware({
     console.log(`[Gateway] Получен ответ от auth-service: ${proxyRes.statusCode}`);
     
     // С selfHandleResponse: true мы должны полностью обработать ответ
-    // Читаем тело ответа
+    // Читаем тело ответа полностью перед отправкой
     const chunks = [];
-    
-    // Устанавливаем заголовки ДО чтения данных
-    if (!res.headersSent) {
-      res.status(proxyRes.statusCode);
-      // Копируем заголовки от сервиса
-      Object.keys(proxyRes.headers).forEach(key => {
-        // Пропускаем заголовки, которые будут установлены автоматически
-        const lowerKey = key.toLowerCase();
-        if (lowerKey !== 'content-length' && lowerKey !== 'transfer-encoding' && lowerKey !== 'connection') {
-          res.setHeader(key, proxyRes.headers[key]);
-        }
-      });
-    }
     
     proxyRes.on('data', (chunk) => {
       chunks.push(chunk);
-      // Отправляем данные по мере поступления (streaming)
-      if (!res.headersSent) {
-        res.write(chunk);
-      }
     });
     
-    proxyRes.on('end', () => {
+    proxyRes.on('end', async () => {
       try {
         const body = Buffer.concat(chunks).toString();
         const result = JSON.parse(body);
@@ -372,16 +355,50 @@ app.use('/api/login', createProxyMiddleware({
           // Синхронизируем сессию gateway с userId из ответа
           req.session.userId = result.userId;
           req.session.originalUserId = result.userId;
-          req.session.save(() => {
-            console.log(`[Gateway] Сессия синхронизирована после логина: userId=${result.userId}`);
-          });
+          
+          // Ждем сохранения сессии перед отправкой ответа
+          try {
+            await new Promise((resolve, reject) => {
+              const timeout = setTimeout(() => {
+                console.error(`[Gateway] Таймаут сохранения сессии после логина`);
+                reject(new Error('Session save timeout'));
+              }, 2000);
+              
+              req.session.save((err) => {
+                clearTimeout(timeout);
+                if (err) {
+                  console.error(`[Gateway] Ошибка сохранения сессии после логина: ${err.message}`);
+                  reject(err);
+                } else {
+                  console.log(`[Gateway] Сессия синхронизирована после логина: userId=${result.userId}`);
+                  resolve();
+                }
+              });
+            });
+          } catch (saveError) {
+            console.error(`[Gateway] Критическая ошибка сохранения сессии: ${saveError.message}`);
+            // Продолжаем отправку ответа даже при ошибке сохранения сессии
+          }
         }
       } catch (e) {
-        console.log(`[Gateway] Ошибка парсинга ответа логина: ${e.message}`);
+        console.log(`[Gateway] Ошибка обработки ответа логина: ${e.message}`);
       }
       
-      // Завершаем отправку ответа
-      if (!res.finished) {
+      // Отправляем ответ клиенту после обработки
+      if (!res.headersSent) {
+        res.status(proxyRes.statusCode);
+        // Копируем заголовки от сервиса
+        Object.keys(proxyRes.headers).forEach(key => {
+          // Пропускаем заголовки, которые будут установлены автоматически
+          const lowerKey = key.toLowerCase();
+          if (lowerKey !== 'content-length' && lowerKey !== 'transfer-encoding' && lowerKey !== 'connection') {
+            res.setHeader(key, proxyRes.headers[key]);
+          }
+        });
+        // Устанавливаем Content-Length
+        res.setHeader('Content-Length', Buffer.byteLength(Buffer.concat(chunks)));
+        res.end(Buffer.concat(chunks));
+      } else if (!res.finished) {
         res.end();
       }
     });
