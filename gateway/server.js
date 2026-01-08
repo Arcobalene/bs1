@@ -96,7 +96,9 @@ app.use(async (req, res, next) => {
                   // Синхронизируем сессию gateway
                   req.session.userId = result.user.id;
                   req.session.originalUserId = result.user.id;
-                  console.log(`[Gateway] Сессия синхронизирована: userId=${result.user.id}`);
+                  req.session.save(() => {
+                    console.log(`[Gateway] Сессия синхронизирована: userId=${result.user.id}`);
+                  });
                 } else {
                   console.log(`[Gateway] Не удалось синхронизировать сессию: ${result.success}`);
                 }
@@ -126,6 +128,62 @@ app.use(async (req, res, next) => {
       }
     }
   }
+  
+  // Если это запрос после успешного логина, синхронизируем сессию
+  if (req._needsSessionSync && req.cookies && req.cookies['beauty.studio.sid']) {
+    console.log(`[Gateway] Синхронизация сессии после логина`);
+    try {
+      const http = require('http');
+      const url = require('url');
+      const authUrl = url.parse(services.auth);
+      const cookieHeader = req.headers.cookie || '';
+      
+      const options = {
+        hostname: authUrl.hostname,
+        port: authUrl.port || 3001,
+        path: '/api/user',
+        method: 'GET',
+        headers: {
+          'Cookie': cookieHeader
+        },
+        timeout: 1000
+      };
+      
+      await new Promise((resolve) => {
+        const userReq = http.request(options, (userRes) => {
+          let data = '';
+          userRes.on('data', (chunk) => { data += chunk; });
+          userRes.on('end', () => {
+            try {
+              const result = JSON.parse(data);
+              if (result.success && result.user && result.user.id) {
+                req.session.userId = result.user.id;
+                req.session.originalUserId = result.user.id;
+                req.session.save(() => {
+                  console.log(`[Gateway] Сессия синхронизирована после логина: userId=${result.user.id}`);
+                });
+              }
+            } catch (e) {
+              // Игнорируем ошибки
+            }
+            resolve();
+          });
+        });
+        
+        userReq.on('error', () => resolve());
+        userReq.on('timeout', () => {
+          userReq.destroy();
+          resolve();
+        });
+        
+        userReq.end();
+      });
+    } catch (e) {
+      // Игнорируем ошибки
+    }
+    delete req._needsSessionSync;
+  }
+  
   next();
 });
 
@@ -162,10 +220,13 @@ const proxyOptions = {
     
     // Передаем userId из сессии gateway в заголовках для синхронизации сессий между сервисами
     if (req.session && req.session.userId) {
-      proxyReq.setHeader('X-User-Id', req.session.userId.toString());
+      proxyReq.setHeader('X-User-ID', req.session.userId.toString());
       if (req.session.originalUserId) {
-        proxyReq.setHeader('X-Original-User-Id', req.session.originalUserId.toString());
+        proxyReq.setHeader('X-Original-User-ID', req.session.originalUserId.toString());
       }
+      console.log(`[Gateway] Передан заголовок X-User-ID: ${req.session.userId}`);
+    } else {
+      console.log(`[Gateway] Нет userId в сессии для ${req.path}`);
     }
   },
   onError: (err, req, res) => {
@@ -320,6 +381,13 @@ app.use('/api/login', createProxyMiddleware({
   },
   onProxyRes: (proxyRes, req, res) => {
     console.log(`[Gateway] Получен ответ от auth-service: ${proxyRes.statusCode}`);
+    
+    // Если логин успешен (200), помечаем запрос для синхронизации сессии
+    if (proxyRes.statusCode === 200) {
+      // Устанавливаем флаг для последующей синхронизации
+      req._needsSessionSync = true;
+    }
+    
     // Вызываем оригинальный onProxyRes из proxyOptions
     if (proxyOptions.onProxyRes) {
       proxyOptions.onProxyRes(proxyRes, req, res);

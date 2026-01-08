@@ -37,6 +37,19 @@ app.use(session({
 
 // Middleware для проверки аутентификации
 function requireAuth(req, res, next) {
+  // Проверяем сессию или заголовок X-User-ID от gateway (для синхронизации сессий)
+  const userIdFromHeader = req.headers['x-user-id'];
+  
+  if (userIdFromHeader) {
+    // Если userId передан через заголовок от gateway, синхронизируем сессию
+    if (!req.session.userId) {
+      req.session.userId = parseInt(userIdFromHeader);
+    }
+    if (req.headers['x-original-user-id'] && !req.session.originalUserId) {
+      req.session.originalUserId = parseInt(req.headers['x-original-user-id']);
+    }
+  }
+  
   if (!req.session || !req.session.userId) {
     return res.status(401).json({ success: false, message: 'Требуется авторизация' });
   }
