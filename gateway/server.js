@@ -40,7 +40,19 @@ app.set('trust proxy', 1);
 
 // Безопасность: Helmet для защиты HTTP заголовков
 app.use(helmet({
-  contentSecurityPolicy: config.NODE_ENV === 'production' ? undefined : false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdnjs.cloudflare.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
+      connectSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: config.NODE_ENV === 'production' ? [] : null
+    }
+  },
   crossOriginEmbedderPolicy: false
 }));
 
