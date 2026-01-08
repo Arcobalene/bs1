@@ -71,7 +71,18 @@ if (process.env.DB_TYPE === 'postgres') {
     pool: pgPool,
     tableName: 'session', // Таблица для хранения сессий
     createTableIfMissing: true, // Автоматически создавать таблицу, если её нет
+    pruneSessionInterval: false, // Отключаем автоматическую очистку (используем maxAge в cookie)
   });
+  
+  // Добавляем обработчики событий для отладки
+  sessionStore.on('connect', () => {
+    console.log('[Gateway] PostgreSQL session store подключен');
+  });
+  
+  sessionStore.on('disconnect', () => {
+    console.log('[Gateway] PostgreSQL session store отключен');
+  });
+  
   console.log('[Gateway] PostgreSQL session store инициализирован');
 } else {
   console.log('[Gateway] Использование MemoryStore для сессий (не рекомендуется для production)');
@@ -92,6 +103,19 @@ app.use(session({
   }
 }));
 
+// Middleware для логирования состояния сессии
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    // Логируем состояние сессии перед обработкой запроса
+    if (req.session) {
+      console.log(`[Gateway] Сессия перед запросом ${req.path}: userId=${req.session.userId || 'нет'}, sessionID=${req.sessionID || 'нет'}, cookie=${req.cookies ? Object.keys(req.cookies).join(', ') : 'нет'}`);
+    } else {
+      console.log(`[Gateway] Нет сессии для запроса ${req.path}`);
+    }
+  }
+  next();
+});
+
 // Middleware для автоматического сохранения сессии при изменении
 app.use((req, res, next) => {
   // Сохраняем сессию после отправки ответа, если она была изменена
@@ -108,7 +132,7 @@ app.use((req, res, next) => {
           } else {
             // Логируем только для API запросов, чтобы не засорять логи
             if (req.path.startsWith('/api/')) {
-              console.log(`[Gateway] Сессия обновлена для userId=${req.session.userId} после запроса ${req.path}`);
+              console.log(`[Gateway] Сессия сохранена для userId=${req.session.userId} после запроса ${req.path}, sessionID=${req.sessionID}`);
             }
           }
         });
@@ -444,9 +468,12 @@ app.use('/api/login', createProxyMiddleware({
         
         // Если логин успешен (200), синхронизируем сессию gateway
         if (proxyRes.statusCode === 200 && result.success && result.userId) {
+          console.log(`[Gateway] Логин успешен, синхронизация сессии для userId=${result.userId}, текущий sessionID=${req.sessionID}`);
+          
           // Синхронизируем сессию gateway с userId из ответа
           req.session.userId = result.userId;
           req.session.originalUserId = result.userId;
+          req.session.touch(); // Обновляем время жизни сессии
           
           // Ждем сохранения сессии перед отправкой ответа
           try {
@@ -454,7 +481,7 @@ app.use('/api/login', createProxyMiddleware({
               const timeout = setTimeout(() => {
                 console.error(`[Gateway] Таймаут сохранения сессии после логина`);
                 reject(new Error('Session save timeout'));
-              }, 2000);
+              }, 5000); // Увеличен таймаут до 5 секунд
               
               req.session.save((err) => {
                 clearTimeout(timeout);
@@ -462,7 +489,7 @@ app.use('/api/login', createProxyMiddleware({
                   console.error(`[Gateway] Ошибка сохранения сессии после логина: ${err.message}`);
                   reject(err);
                 } else {
-                  console.log(`[Gateway] Сессия синхронизирована после логина: userId=${result.userId}`);
+                  console.log(`[Gateway] Сессия синхронизирована после логина: userId=${result.userId}, sessionID=${req.sessionID}, cookie будет установлен`);
                   resolve();
                 }
               });
