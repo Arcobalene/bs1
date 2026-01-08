@@ -65,16 +65,29 @@ app.use((req, res, next) => {
   // Сохраняем сессию после отправки ответа, если она была изменена
   const originalEnd = res.end.bind(res);
   res.end = function(...args) {
-    if (req.session && req.session.userId) {
-      // Обновляем время жизни сессии и сохраняем асинхронно, не блокируя ответ
-      req.session.touch();
-      req.session.save((err) => {
-        if (err) {
-          console.error(`[Gateway] Ошибка сохранения сессии после запроса ${req.path}:`, err.message);
-        } else {
-          console.log(`[Gateway] Сессия обновлена для userId=${req.session.userId} после запроса ${req.path}`);
-        }
-      });
+    // Сохраняем сессию только если она была изменена или содержит userId
+    if (req.session) {
+      // Если есть userId, обновляем время жизни и сохраняем
+      if (req.session.userId) {
+        req.session.touch();
+        req.session.save((err) => {
+          if (err) {
+            console.error(`[Gateway] Ошибка сохранения сессии после запроса ${req.path}:`, err.message);
+          } else {
+            // Логируем только для API запросов, чтобы не засорять логи
+            if (req.path.startsWith('/api/')) {
+              console.log(`[Gateway] Сессия обновлена для userId=${req.session.userId} после запроса ${req.path}`);
+            }
+          }
+        });
+      } else if (req.session._modified) {
+        // Если сессия была изменена, но нет userId, все равно сохраняем
+        req.session.save((err) => {
+          if (err) {
+            console.error(`[Gateway] Ошибка сохранения измененной сессии после запроса ${req.path}:`, err.message);
+          }
+        });
+      }
     }
     return originalEnd(...args);
   };
@@ -103,19 +116,27 @@ app.use(async (req, res, next) => {
           headers: {
             'Cookie': cookieHeader
           },
-          timeout: 1000 // Очень короткий таймаут, чтобы не блокировать запрос
+          timeout: 5000 // Увеличенный таймаут для надежности синхронизации
         };
         
         await new Promise((resolve) => {
           const userReq = http.request(options, (userRes) => {
             let data = '';
             userRes.on('data', (chunk) => { data += chunk; });
-            userRes.on('end', () => {
+            userRes.on('end', async () => {
               try {
+                // Проверяем статус ответа
+                if (userRes.statusCode !== 200) {
+                  console.log(`[Gateway] Неверный статус при синхронизации: ${userRes.statusCode}`);
+                  console.log(`[Gateway] Тело ответа: ${data.substring(0, 200)}`);
+                  resolve();
+                  return;
+                }
+                
                 // Проверяем Content-Type перед парсингом
                 const contentType = userRes.headers['content-type'] || '';
                 if (!contentType.includes('application/json')) {
-                  console.log(`[Gateway] Неверный Content-Type при синхронизации: ${contentType}`);
+                  console.log(`[Gateway] Неверный Content-Type при синхронизации: ${contentType}, данные: ${data.substring(0, 200)}`);
                   resolve();
                   return;
                 }
@@ -126,11 +147,24 @@ app.use(async (req, res, next) => {
                   req.session.userId = result.user.id;
                   req.session.originalUserId = result.user.id;
                   req.session.touch(); // Обновляем время жизни сессии
-                  req.session.save(() => {
-                    console.log(`[Gateway] Сессия синхронизирована: userId=${result.user.id}`);
+                  
+                  // Сохраняем сессию с ожиданием завершения
+                  await new Promise((saveResolve) => {
+                    req.session.save((err) => {
+                      if (err) {
+                        console.error(`[Gateway] Ошибка сохранения сессии при синхронизации: ${err.message}`);
+                      } else {
+                        console.log(`[Gateway] Сессия синхронизирована: userId=${result.user.id}`);
+                      }
+                      saveResolve();
+                    });
                   });
                 } else {
-                  console.log(`[Gateway] Не удалось синхронизировать сессию: ${result.success}`);
+                  console.log(`[Gateway] Не удалось синхронизировать сессию: success=${result.success}, user=${result.user ? 'есть' : 'нет'}`);
+                  if (result.message) {
+                    console.log(`[Gateway] Сообщение об ошибке: ${result.message}`);
+                  }
+                  console.log(`[Gateway] Полный ответ: ${JSON.stringify(result).substring(0, 300)}`);
                 }
               } catch (e) {
                 console.log(`[Gateway] Ошибка парсинга ответа при синхронизации: ${e.message}`);
