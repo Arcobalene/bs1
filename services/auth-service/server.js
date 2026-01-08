@@ -128,8 +128,15 @@ app.post('/api/register/master', async (req, res) => {
     req.session.userId = userId;
     req.session.originalUserId = userId;
     
-    // Отправляем ответ (сессия сохранится автоматически благодаря resave: true)
-    res.status(201).json({ success: true, message: 'Регистрация успешна' });
+    // Явно сохраняем сессию перед отправкой ответа
+    req.session.save((err) => {
+      if (err) {
+        console.error('Ошибка сохранения сессии:', err);
+        return res.status(500).json({ success: false, message: 'Ошибка сервера при регистрации' });
+      }
+      
+      res.status(201).json({ success: true, message: 'Регистрация успешна' });
+    });
   } catch (error) {
     console.error('Ошибка регистрации мастера:', error);
     res.status(500).json({ success: false, message: 'Ошибка сервера при регистрации' });
@@ -139,36 +146,66 @@ app.post('/api/register/master', async (req, res) => {
 // API: Вход
 app.post('/api/login', loginLimiter, async (req, res) => {
   try {
+    console.log('[Auth] Получен запрос на вход');
     const { username, password } = req.body;
     
     if (!username || !password) {
+      console.log('[Auth] Отсутствуют username или password');
       return res.status(400).json({ success: false, message: 'Заполните все поля' });
     }
 
     const trimmedUsername = username.trim();
+    console.log(`[Auth] Поиск пользователя: ${trimmedUsername}`);
     const user = await dbUsers.getByUsername(trimmedUsername);
     
     if (!user) {
+      console.log(`[Auth] Пользователь не найден: ${trimmedUsername}`);
       return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
     }
 
     if (user.is_active === false || user.is_active === 0) {
+      console.log(`[Auth] Аккаунт заблокирован: ${trimmedUsername}`);
       return res.status(403).json({ success: false, message: 'Аккаунт заблокирован администратором' });
     }
 
+    console.log(`[Auth] Проверка пароля для пользователя: ${trimmedUsername}`);
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
+      console.log(`[Auth] Неверный пароль для пользователя: ${trimmedUsername}`);
       return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
     }
+
+    console.log(`[Auth] Пароль верный, создание сессии для пользователя: ${user.id}`);
 
     req.session.userId = user.id;
     req.session.originalUserId = req.session.originalUserId || user.id;
     
-    // Отправляем ответ (сессия сохранится автоматически благодаря resave: true)
-    res.json({ 
-      success: true, 
-      message: 'Вход выполнен',
-      role: user.role
+    // Явно сохраняем сессию перед отправкой ответа с таймаутом
+    const saveTimeout = setTimeout(() => {
+      if (!res.headersSent) {
+        console.error('Таймаут сохранения сессии при входе');
+        res.status(500).json({ success: false, message: 'Ошибка сервера при входе' });
+      }
+    }, 5000); // 5 секунд таймаут для сохранения сессии
+    
+    req.session.save((err) => {
+      clearTimeout(saveTimeout);
+      
+      if (err) {
+        console.error('Ошибка сохранения сессии:', err);
+        if (!res.headersSent) {
+          return res.status(500).json({ success: false, message: 'Ошибка сервера при входе' });
+        }
+        return;
+      }
+      
+      if (!res.headersSent) {
+        res.json({ 
+          success: true, 
+          message: 'Вход выполнен',
+          role: user.role
+        });
+      }
     });
   } catch (error) {
     console.error('Ошибка входа:', error);

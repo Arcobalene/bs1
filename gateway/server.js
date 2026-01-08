@@ -50,37 +50,48 @@ const services = {
 // Настройка прокси с передачей сессий
 const proxyOptions = {
   changeOrigin: true,
-  cookieDomainRewrite: '',
+  cookieDomainRewrite: false, // Не перезаписываем домен cookies
   timeout: 120000, // 120 секунд timeout (увеличено для стабильности)
   proxyTimeout: 120000,
   xfwd: true, // Передавать оригинальные заголовки
   secure: false, // Отключить проверку SSL для внутренних соединений
   onProxyReq: (proxyReq, req, res) => {
-    // Передаем сессию через заголовки (если нужно)
-    if (req.session) {
-      // Сессии передаются через cookies автоматически
+    // Передаем cookies от клиента к сервису
+    if (req.headers.cookie) {
+      proxyReq.setHeader('Cookie', req.headers.cookie);
     }
   },
   onError: (err, req, res) => {
     console.error(`[Gateway] Проксирование ошибка для ${req.method} ${req.path}:`, err.message);
     console.error(`[Gateway] Целевой сервис: ${req.url}`);
     console.error(`[Gateway] Код ошибки: ${err.code || 'N/A'}`);
+    if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+      console.error(`[Gateway] Сервис недоступен или не отвечает. Проверьте, запущен ли сервис.`);
+    }
     if (process.env.NODE_ENV === 'development') {
       console.error(`[Gateway] Полный стек ошибки:`, err);
     }
     if (!res.headersSent) {
-      res.status(502).json({ 
+      const statusCode = err.code === 'ETIMEDOUT' ? 504 : 502;
+      res.status(statusCode).json({ 
         success: false, 
-        message: 'Сервис временно недоступен',
+        message: err.code === 'ETIMEDOUT' ? 'Превышено время ожидания ответа от сервиса' : 'Сервис временно недоступен',
         error: process.env.NODE_ENV === 'development' ? err.message : undefined
       });
     }
   },
   onProxyRes: (proxyRes, req, res) => {
-    // Копируем Set-Cookie заголовки от auth-service в ответ gateway
+    // Копируем Set-Cookie заголовки от сервиса в ответ gateway
     // Это важно для правильной работы сессий
     if (proxyRes.headers['set-cookie']) {
-      res.setHeader('Set-Cookie', proxyRes.headers['set-cookie']);
+      // Если Set-Cookie это массив, обрабатываем каждый элемент
+      const setCookieHeaders = Array.isArray(proxyRes.headers['set-cookie']) 
+        ? proxyRes.headers['set-cookie'] 
+        : [proxyRes.headers['set-cookie']];
+      
+      setCookieHeaders.forEach(cookie => {
+        res.appendHeader('Set-Cookie', cookie);
+      });
     }
   }
 };
