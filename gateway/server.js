@@ -34,7 +34,7 @@ app.use(session({
 }));
 
 // Статические файлы
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, '../public')));
 
 // Проксирование к микросервисам
 const services = {
@@ -87,71 +87,71 @@ const proxyOptions = {
 
 // HTML страницы (должны быть ДО API проксирования)
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/index.html'));
+  res.sendFile(path.join(__dirname, '../views/index.html'));
 });
 
 app.get('/booking', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/booking.html'));
+  res.sendFile(path.join(__dirname, '../views/booking.html'));
 });
 
 app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/login.html'));
+  res.sendFile(path.join(__dirname, '../views/login.html'));
 });
 
 app.get('/register', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/register.html'));
+  res.sendFile(path.join(__dirname, '../views/register.html'));
 });
 
 app.get('/register/master', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/register-master.html'));
+  res.sendFile(path.join(__dirname, '../views/register-master.html'));
 });
 
 app.get('/master', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/master.html'));
+  res.sendFile(path.join(__dirname, '../views/master.html'));
 });
 
 app.get('/master/calendar', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/master.html'));
+  res.sendFile(path.join(__dirname, '../views/master.html'));
 });
 
 app.get('/master/profile', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/master.html'));
+  res.sendFile(path.join(__dirname, '../views/master.html'));
 });
 
 app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/admin.html'));
+  res.sendFile(path.join(__dirname, '../views/admin.html'));
 });
 
 app.get('/calendar', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/calendar.html'));
+  res.sendFile(path.join(__dirname, '../views/calendar.html'));
 });
 
 app.get('/services', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/services.html'));
+  res.sendFile(path.join(__dirname, '../views/services.html'));
 });
 
 app.get('/users', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/users.html'));
+  res.sendFile(path.join(__dirname, '../views/users.html'));
 });
 
 app.get('/clients', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/clients.html'));
+  res.sendFile(path.join(__dirname, '../views/clients.html'));
 });
 
 app.get('/client-cabinet', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/client-cabinet.html'));
+  res.sendFile(path.join(__dirname, '../views/client-cabinet.html'));
 });
 
 app.get('/register-client', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/register-client.html'));
+  res.sendFile(path.join(__dirname, '../views/register-client.html'));
 });
 
 app.get('/login-client', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/login-client.html'));
+  res.sendFile(path.join(__dirname, '../views/login-client.html'));
 });
 
 app.get('/landing', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/landing.html'));
+  res.sendFile(path.join(__dirname, '../views/landing.html'));
 });
 
 // Health check (перед API проксированием)
@@ -180,6 +180,10 @@ app.use('/api/client', createProxyMiddleware({ target: services.user, ...proxyOp
 app.use('/api/bookings', createProxyMiddleware({ target: services.booking, ...proxyOptions }));
 
 app.use('/api/services', createProxyMiddleware({ target: services.catalog, ...proxyOptions }));
+
+// Фото мастеров должны проксироваться в file-service (ПЕРЕД общим /api/masters)
+app.use('/api/masters/photos', createProxyMiddleware({ target: services.file, ...proxyOptions }));
+app.use('/api/master/photos', createProxyMiddleware({ target: services.file, ...proxyOptions }));
 app.use('/api/masters', createProxyMiddleware({ target: services.catalog, ...proxyOptions }));
 
 app.use('/api/minio', createProxyMiddleware({ target: services.file, ...proxyOptions }));
