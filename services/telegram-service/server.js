@@ -102,16 +102,37 @@ function sendTelegramRequest(method, params = {}) {
 // API: Получить настройки Telegram (админ)
 app.get('/api/telegram/settings', requireAuth, async (req, res) => {
   try {
+    console.log(`[Telegram Service] GET /api/telegram/settings, userId: ${req.session.userId}`);
+    
+    if (!req.session.userId) {
+      console.error('[Telegram Service] Нет userId в сессии');
+      return res.status(401).json({ success: false, message: 'Требуется авторизация' });
+    }
+    
     const user = await dbUsers.getById(req.session.userId);
-    if (!user || user.role !== 'user') {
+    console.log(`[Telegram Service] Пользователь найден: ${user ? 'да' : 'нет'}`);
+    
+    if (!user) {
+      console.error(`[Telegram Service] Пользователь с id ${req.session.userId} не найден`);
+      return res.status(404).json({ success: false, message: 'Пользователь не найден' });
+    }
+    
+    if (user.role !== 'user') {
+      console.error(`[Telegram Service] Неверная роль пользователя: ${user.role}`);
       return res.status(403).json({ success: false, message: 'Доступ запрещен' });
     }
 
     const settings = user.telegram_settings || {};
+    console.log(`[Telegram Service] Настройки Telegram загружены`);
     res.json({ success: true, settings });
   } catch (error) {
-    console.error('Ошибка получения настроек Telegram:', error);
-    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    console.error('[Telegram Service] Ошибка получения настроек Telegram:', error);
+    console.error('[Telegram Service] Стек ошибки:', error.stack);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Ошибка сервера',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

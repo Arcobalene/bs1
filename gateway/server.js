@@ -166,6 +166,7 @@ const proxyOptions = {
   onProxyReq: (proxyReq, req, res) => {
     // Логируем запрос для отладки
     console.log(`[Gateway] Проксирование ${req.method} ${req.path} -> ${proxyReq.path}`);
+    console.log(`[Gateway] Сессия gateway: userId=${req.session?.userId || 'нет'}, cookies=${req.cookies ? Object.keys(req.cookies).join(', ') : 'нет'}`);
     
     // Передаем cookies от клиента к сервису
     if (req.headers.cookie) {
