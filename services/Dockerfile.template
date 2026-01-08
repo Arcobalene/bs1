@@ -11,7 +11,13 @@ COPY shared ./shared/
 # Устанавливаем зависимости
 # Используем npm install вместо npm ci, так как package-lock.json может быть устаревшим
 # npm install обновит зависимости согласно package.json и создаст актуальный lock файл
-RUN npm install --production --omit=dev && npm cache clean --force
+# Добавляем retry и увеличенные таймауты для стабильности сети
+RUN npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set fetch-timeout 300000 && \
+    npm install --production --omit=dev && \
+    npm cache clean --force
 
 # Production образ
 FROM node:18-alpine
