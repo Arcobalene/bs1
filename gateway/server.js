@@ -317,8 +317,7 @@ app.use(asyncHandler(async (req, res, next) => {
   next();
 }));
 
-// Статические файлы
-app.use(express.static(path.join(__dirname, 'public')));
+// Статические файлы будут установлены после API роутов
 
 // Конфигурация микросервисов
 const services = {
