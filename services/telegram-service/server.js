@@ -1,5 +1,4 @@
 const express = require('express');
-const session = require('express-session');
 const https = require('https');
 
 // Импортируем общие модули
@@ -15,20 +14,8 @@ const TELEGRAM_WEBHOOK_URL = process.env.TELEGRAM_WEBHOOK_URL || '';
 // Настройка стандартного middleware
 setupStandardMiddleware(app);
 
-// Настройка сессий
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
-  resave: true,
-  saveUninitialized: false,
-  name: 'beauty.studio.sid',
-  cookie: {
-    secure: process.env.NODE_ENV === 'production' || process.env.BEHIND_HTTPS_PROXY === 'true',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'lax',
-    path: '/'
-  }
-}));
+// Session управляется централизованно в gateway
+// Сервис получает userId через заголовок X-User-ID от gateway
 
 // Функция для отправки запроса к Telegram API
 function sendTelegramRequest(method, params = {}) {

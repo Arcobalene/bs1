@@ -1,5 +1,4 @@
 const express = require('express');
-const session = require('express-session');
 const bcrypt = require('bcrypt');
 const path = require('path');
 
@@ -14,20 +13,8 @@ const PORT = process.env.PORT || 3002;
 // Настройка стандартного middleware
 setupStandardMiddleware(app);
 
-// Настройка сессий (важно: имя cookie должно совпадать с gateway и auth-service)
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
-  resave: true,
-  saveUninitialized: false,
-  name: 'beauty.studio.sid', // Имя cookie должно совпадать с gateway и auth-service
-  cookie: {
-    secure: process.env.NODE_ENV === 'production' || process.env.BEHIND_HTTPS_PROXY === 'true',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 часа
-    sameSite: 'lax',
-    path: '/'
-  }
-}));
+// Session управляется централизованно в gateway
+// Сервис получает userId через заголовок X-User-ID от gateway
 
 // API: Получить данные текущего пользователя
 app.get('/api/user', requireAuth, async (req, res) => {

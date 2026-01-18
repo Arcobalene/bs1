@@ -1,5 +1,4 @@
 const express = require('express');
-const session = require('express-session');
 
 // Импортируем общие модули
 const { bookings, users: dbUsers, initDatabase } = require('../../shared/database');
@@ -12,21 +11,8 @@ const PORT = process.env.PORT || 3003;
 // Настройка стандартного middleware
 setupStandardMiddleware(app);
 
-// Настройка сессий (сервис получает userId от gateway через headers)
-const isHttps = process.env.NODE_ENV === 'production' || process.env.BEHIND_HTTPS_PROXY === 'true';
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
-  resave: true,
-  saveUninitialized: false,
-  name: 'beauty.studio.sid',
-  cookie: {
-    secure: isHttps,
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'lax',
-    path: '/'
-  }
-}));
+// Session управляется централизованно в gateway
+// Сервис получает userId через заголовок X-User-ID от gateway
 
 // API: Проверить доступность
 app.post('/api/bookings/check-availability', async (req, res) => {

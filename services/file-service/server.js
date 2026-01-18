@@ -1,5 +1,4 @@
 const express = require('express');
-const session = require('express-session');
 const multer = require('multer');
 const Minio = require('minio');
 const crypto = require('crypto');
@@ -14,20 +13,8 @@ const PORT = process.env.PORT || 3005;
 // Настройка стандартного middleware
 setupStandardMiddleware(app);
 
-// Настройка сессий
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
-  resave: true,
-  saveUninitialized: false,
-  name: 'beauty.studio.sid',
-  cookie: {
-    secure: process.env.NODE_ENV === 'production' || process.env.BEHIND_HTTPS_PROXY === 'true',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'lax',
-    path: '/'
-  }
-}));
+// Session управляется централизованно в gateway
+// Сервис получает userId через заголовок X-User-ID от gateway
 
 // Настройка MinIO
 const minioClient = new Minio.Client({
