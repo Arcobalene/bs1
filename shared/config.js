@@ -114,6 +114,7 @@ function validateEnv() {
     FILE_SERVICE_URL: validateUrl(process.env.FILE_SERVICE_URL, 'http://file-service:3005', 'FILE_SERVICE_URL'),
     NOTIFICATION_SERVICE_URL: validateUrl(process.env.NOTIFICATION_SERVICE_URL, 'http://notification-service:3006', 'NOTIFICATION_SERVICE_URL'),
     TELEGRAM_SERVICE_URL: validateUrl(process.env.TELEGRAM_SERVICE_URL, 'http://telegram-service:3007', 'TELEGRAM_SERVICE_URL'),
+    LANDING_SERVICE_URL: validateUrl(process.env.LANDING_SERVICE_URL, 'http://landing-service:3008', 'LANDING_SERVICE_URL'),
 
     // MinIO
     MINIO_ENDPOINT: process.env.MINIO_ENDPOINT || 'minio',

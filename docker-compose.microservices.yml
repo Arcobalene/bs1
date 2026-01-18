@@ -308,6 +308,29 @@ services:
       retries: 3
       start_period: 40s
 
+  # Landing Service
+  landing-service:
+    build:
+      context: .
+      dockerfile: services/landing-service/Dockerfile
+    container_name: beauty-studio-landing
+    ports:
+      - "3008:3008"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - LOG_LEVEL=INFO
+      - PORT=3008
+      - BEHIND_HTTPS_PROXY=true
+    networks:
+      - beauty-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
   # API Gateway
   gateway:
     build:
@@ -332,6 +355,7 @@ services:
       - FILE_SERVICE_URL=http://file-service:3005
       - NOTIFICATION_SERVICE_URL=http://notification-service:3006
       - TELEGRAM_SERVICE_URL=http://telegram-service:3007
+      - LANDING_SERVICE_URL=http://landing-service:3008
     volumes:
       - ./views:/app/views
       - ./public:/app/public
@@ -354,6 +378,8 @@ services:
         condition: service_started
       telegram-service:
         condition: service_started
+      landing-service:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]

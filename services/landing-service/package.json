@@ -1,0 +1,25 @@
+{
+  "name": "landing-service",
+  "version": "1.0.0",
+  "description": "Сервис лендинг-страницы",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "express": "^4.21.1",
+    "compression": "^1.7.5",
+    "helmet": "^8.0.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "eslint": "^9.15.0",
+    "prettier": "^3.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

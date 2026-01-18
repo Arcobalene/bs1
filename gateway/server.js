@@ -335,7 +335,8 @@ const services = {
   catalog: config.CATALOG_SERVICE_URL,
   file: config.FILE_SERVICE_URL,
   notification: config.NOTIFICATION_SERVICE_URL,
-  telegram: config.TELEGRAM_SERVICE_URL
+  telegram: config.TELEGRAM_SERVICE_URL,
+  landing: config.LANDING_SERVICE_URL
 };
 
 // Настройка прокси
@@ -475,9 +476,8 @@ app.get('/login-client', (req, res) => {
   res.sendFile(path.join(__dirname, 'views/login-client.html'));
 });
 
-app.get('/landing', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/landing.html'));
-});
+// Лендинг-страница проксируется на landing-service
+// Удалено: маршрут /landing теперь обслуживается landing-service через прокси
 
 // Health check
 app.get('/health', (req, res) => {
@@ -706,7 +706,36 @@ app.use('/api/bot', createProxyMiddleware({
   ...proxyOptions
 }));
 
-// Статические файлы (CSS, JS, изображения)
+// Landing Service - проксирование лендинг-страницы и статических файлов
+// Проксируем весь /landing на landing-service
+app.use('/landing', createProxyMiddleware({
+  target: services.landing,
+  ...proxyOptions,
+  pathRewrite: {
+    '^/landing': '/' // Убираем /landing из пути при проксировании
+  }
+}));
+
+// Проксируем статические файлы лендинга (если они запрашиваются через gateway)
+// Это нужно для CSS/JS файлов, которые могут запрашиваться относительно корня
+app.use((req, res, next) => {
+  // Проверяем, если это запрос статического файла после посещения /landing
+  if (req.path.match(/\.(css|js|jpg|jpeg|png|gif|svg|ico|woff|woff2|ttf|eot)$/i)) {
+    const referer = req.get('referer') || '';
+    // Если referer указывает на /landing, проксируем на landing-service
+    if (referer.includes('/landing')) {
+      return createProxyMiddleware({
+        target: services.landing,
+        ...proxyOptions,
+        pathRewrite: (path) => path, // Оставляем путь как есть
+        changeOrigin: true
+      })(req, res, next);
+    }
+  }
+  next();
+});
+
+// Статические файлы (CSS, JS, изображения) для gateway и других страниц
 // В Docker контейнере public находится в /app/public/
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: config.NODE_ENV === 'production' ? '1d' : '0',
