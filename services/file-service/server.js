@@ -171,12 +171,25 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
     res.setHeader('Content-Type', stat.metaData['content-type'] || 'image/jpeg');
     res.setHeader('Content-Length', stat.size);
     stream.pipe(res);
+    
+    // Обработка ошибок потока
+    stream.on('error', (streamError) => {
+      if (!res.headersSent) {
+        console.error('Ошибка потока при получении фото:', streamError);
+        res.status(500).json({ success: false, message: 'Ошибка получения фото' });
+      }
+    });
   } catch (error) {
-    if (error.code === 'NoSuchKey') {
-      return res.status(404).json({ success: false, message: 'Фото не найдено' });
+    if (error.code === 'NoSuchKey' || error.code === 'NotFound') {
+      if (!res.headersSent) {
+        return res.status(404).json({ success: false, message: 'Фото не найдено' });
+      }
+      return;
     }
     console.error('Ошибка получения фото:', error);
-    res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Ошибка сервера' });
+    }
   }
 });
 

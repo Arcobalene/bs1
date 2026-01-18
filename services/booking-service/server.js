@@ -70,8 +70,12 @@ app.post('/api/bookings/check-availability', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Неверный формат времени' });
     }
 
-    const endMinutes = startMinutes + parseInt(duration);
-    const endTimeStr = `${Math.floor(endMinutes / 60)}:${String(endMinutes % 60).padStart(2, '0')}`;
+    const durationMinutes = parseInt(duration, 10);
+    if (isNaN(durationMinutes) || durationMinutes <= 0) {
+      return res.status(400).json({ success: false, message: 'Неверная длительность' });
+    }
+
+    const endMinutes = startMinutes + durationMinutes;
 
     // Получаем существующие записи на эту дату
     const existingBookings = await bookings.getByUserIdAndDate(userId, formatDate(date));
@@ -83,7 +87,16 @@ app.post('/api/bookings/check-availability', async (req, res) => {
       }
       
       const bookingStart = timeToMinutes(booking.time);
+      if (!bookingStart) {
+        return false; // Пропускаем записи с некорректным временем
+      }
+      
       const bookingEnd = timeToMinutes(booking.end_time || booking.time);
+      if (!bookingEnd || bookingEnd <= bookingStart) {
+        // Если нет времени окончания, предполагаем минимальную длительность 30 минут
+        const bookingEndTime = bookingStart + 30;
+        return checkTimeOverlap(startMinutes, endMinutes, bookingStart, bookingEndTime);
+      }
       
       return checkTimeOverlap(startMinutes, endMinutes, bookingStart, bookingEnd);
     });
