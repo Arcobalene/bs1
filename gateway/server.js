@@ -28,9 +28,19 @@ const config = validateEnv();
 // Создание логгера
 const logger = createLogger('Gateway');
 
+// Отключение debug логов Express в production
+if (config.NODE_ENV === 'production') {
+  process.env.DEBUG = '';
+}
+
 // Инициализация Express приложения
 const app = express();
 const PORT = config.PORT;
+
+// Установка режима production для Express
+if (config.NODE_ENV === 'production') {
+  app.set('env', 'production');
+}
 
 // Сохраняем логгер в app.locals для доступа в middleware
 app.locals.logger = logger;
@@ -93,12 +103,10 @@ app.use((req, res, next) => {
 // Cookie parser
 app.use(cookieParser());
 
-// Структурированное логирование запросов
-// ВАЖНО: Это middleware будет перемещено после инициализации сессий
-// Временно используем безопасный доступ
+// Структурированное логирование запросов (только для API, исключая healthcheck)
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/')) {
-    logger.info('Incoming request', {
+  if (req.path.startsWith('/api/') && req.path !== '/health') {
+    logger.debug('Incoming request', {
       method: req.method,
       path: req.path,
       ip: req.ip,
@@ -473,6 +481,7 @@ app.get('/landing', (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
+  // Не логируем healthcheck запросы для уменьшения шума в логах
   res.json({
     status: 'ok',
     service: 'gateway',
@@ -695,6 +704,14 @@ app.use('/api/telegram', createProxyMiddleware({
 app.use('/api/bot', createProxyMiddleware({
   target: services.telegram,
   ...proxyOptions
+}));
+
+// Статические файлы (CSS, JS, изображения)
+// В Docker контейнере public находится в /app/public/
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: config.NODE_ENV === 'production' ? '1d' : '0',
+  etag: true,
+  lastModified: true
 }));
 
 // Централизованная обработка ошибок (должна быть последней)
