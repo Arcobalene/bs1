@@ -3,8 +3,8 @@ const session = require('express-session');
 const cookieParser = require('cookie-parser');
 
 // Импортируем общие модули
-const { bookings, users: dbUsers, initDatabase } = require('./shared/database');
-const { timeToMinutes, checkTimeOverlap, formatDate } = require('./shared/utils');
+const { bookings, users: dbUsers, initDatabase } = require('../../shared/database');
+const { timeToMinutes, checkTimeOverlap, formatDate } = require('../../shared/utils');
 
 const app = express();
 const PORT = process.env.PORT || 3003;

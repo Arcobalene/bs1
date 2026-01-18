@@ -6,8 +6,8 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 // Импортируем общие модули
-const { users: dbUsers, initDatabase } = require('./shared/database');
-const { validateUsername, validatePassword, validateEmail, validatePhone, normalizeToE164 } = require('./shared/utils');
+const { users: dbUsers, initDatabase } = require('../../shared/database');
+const { validateUsername, validatePassword, validateEmail, validatePhone, normalizeToE164 } = require('../../shared/utils');
 
 const app = express();
 const PORT = process.env.PORT || 3001;

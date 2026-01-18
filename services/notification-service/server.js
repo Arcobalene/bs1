@@ -3,7 +3,7 @@ const session = require('express-session');
 const cookieParser = require('cookie-parser');
 
 // Импортируем общие модули
-const { notifications, users: dbUsers, initDatabase } = require('./shared/database');
+const { notifications, users: dbUsers, initDatabase } = require('../../shared/database');
 
 const app = express();
 const PORT = process.env.PORT || 3006;

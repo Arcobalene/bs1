@@ -6,7 +6,7 @@ const Minio = require('minio');
 const crypto = require('crypto');
 
 // Импортируем общие модули
-const { masters, users: dbUsers, initDatabase } = require('./shared/database');
+const { masters, users: dbUsers, initDatabase } = require('../../shared/database');
 
 const app = express();
 const PORT = process.env.PORT || 3005;

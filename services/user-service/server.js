@@ -5,8 +5,8 @@ const bcrypt = require('bcrypt');
 const path = require('path');
 
 // Импортируем общие модули
-const { users: dbUsers, services, masters, salonMasters, clients, bookings, initDatabase } = require('./shared/database');
-const { validateUsername, validatePassword, validateEmail, validatePhone, normalizeToE164 } = require('./shared/utils');
+const { users: dbUsers, services, masters, salonMasters, clients, bookings, initDatabase } = require('../../shared/database');
+const { validateUsername, validatePassword, validateEmail, validatePhone, normalizeToE164 } = require('../../shared/utils');
 
 const app = express();
 const PORT = process.env.PORT || 3002;

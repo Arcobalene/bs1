@@ -4,8 +4,8 @@ const cookieParser = require('cookie-parser');
 const https = require('https');
 
 // Импортируем общие модули
-const { users: dbUsers, initDatabase } = require('./shared/database');
-const { normalizeToE164 } = require('./shared/utils');
+const { users: dbUsers, initDatabase } = require('../../shared/database');
+const { normalizeToE164 } = require('../../shared/utils');
 
 const app = express();
 const PORT = process.env.PORT || 3007;

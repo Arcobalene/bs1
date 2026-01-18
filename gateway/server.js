@@ -18,9 +18,9 @@ const { createClient } = require('redis');
 
 // Импорт общих модулей
 // В Docker контейнере server.js находится в /app/, а shared в /app/shared/
-const { validateEnv } = require('./shared/config');
-const { createLogger } = require('./shared/logger');
-const { errorHandler, asyncHandler } = require('./shared/errors');
+const { validateEnv } = require('../shared/config');
+const { createLogger } = require('../shared/logger');
+const { errorHandler, asyncHandler } = require('../shared/errors');
 
 // Валидация переменных окружения
 const config = validateEnv();
@@ -413,67 +413,67 @@ const proxyOptions = {
 // HTML страницы
 // В Docker контейнере views находится в /app/views/
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/index.html'));
+  res.sendFile(path.join(__dirname, '../views/index.html'));
 });
 
 app.get('/booking', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/booking.html'));
+  res.sendFile(path.join(__dirname, '../views/booking.html'));
 });
 
 app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/login.html'));
+  res.sendFile(path.join(__dirname, '../views/login.html'));
 });
 
 app.get('/register', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/register.html'));
+  res.sendFile(path.join(__dirname, '../views/register.html'));
 });
 
 app.get('/register/master', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/register-master.html'));
+  res.sendFile(path.join(__dirname, '../views/register-master.html'));
 });
 
 app.get('/master', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/master.html'));
+  res.sendFile(path.join(__dirname, '../views/master.html'));
 });
 
 app.get('/master/calendar', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/master.html'));
+  res.sendFile(path.join(__dirname, '../views/master.html'));
 });
 
 app.get('/master/profile', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/master.html'));
+  res.sendFile(path.join(__dirname, '../views/master.html'));
 });
 
 app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/admin.html'));
+  res.sendFile(path.join(__dirname, '../views/admin.html'));
 });
 
 app.get('/calendar', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/calendar.html'));
+  res.sendFile(path.join(__dirname, '../views/calendar.html'));
 });
 
 app.get('/services', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/services.html'));
+  res.sendFile(path.join(__dirname, '../views/services.html'));
 });
 
 app.get('/users', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/users.html'));
+  res.sendFile(path.join(__dirname, '../views/users.html'));
 });
 
 app.get('/clients', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/clients.html'));
+  res.sendFile(path.join(__dirname, '../views/clients.html'));
 });
 
 app.get('/client-cabinet', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/client-cabinet.html'));
+  res.sendFile(path.join(__dirname, '../views/client-cabinet.html'));
 });
 
 app.get('/register-client', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/register-client.html'));
+  res.sendFile(path.join(__dirname, '../views/register-client.html'));
 });
 
 app.get('/login-client', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views/login-client.html'));
+  res.sendFile(path.join(__dirname, '../views/login-client.html'));
 });
 
 // Лендинг-страница проксируется на landing-service
@@ -737,7 +737,7 @@ app.use((req, res, next) => {
 
 // Статические файлы (CSS, JS, изображения) для gateway и других страниц
 // В Docker контейнере public находится в /app/public/
-app.use(express.static(path.join(__dirname, 'public'), {
+app.use(express.static(path.join(__dirname, '../public'), {
   maxAge: config.NODE_ENV === 'production' ? '1d' : '0',
   etag: true,
   lastModified: true
