@@ -32,3 +32,54 @@ function getWeekStart(date) {
   return d;
 }
 
+// Модальные окна для landing страницы
+document.addEventListener('DOMContentLoaded', function() {
+  // Получаем элементы
+  const loginBtn = document.getElementById('login-btn');
+  const registerBtn = document.getElementById('register-btn');
+  const loginModal = document.getElementById('loginModal');
+  const registerModal = document.getElementById('registerModal');
+  const closeButtons = document.querySelectorAll('.modal-close');
+
+  // Открываем модальное окно входа
+  if (loginBtn) {
+    loginBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      if (loginModal) {
+        loginModal.style.display = 'flex';
+      }
+    });
+  }
+
+  // Открываем модальное окно регистрации
+  if (registerBtn) {
+    registerBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      if (registerModal) {
+        registerModal.style.display = 'flex';
+      }
+    });
+  }
+
+  // Закрываем модальные окна
+  closeButtons.forEach(button => {
+    button.addEventListener('click', function() {
+      const modal = this.closest('.modal-overlay');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    });
+  });
+
+  // Закрываем модальные окна при клике вне их
+  [loginModal, registerModal].forEach(modal => {
+    if (modal) {
+      modal.addEventListener('click', function(e) {
+        if (e.target === this) {
+          this.style.display = 'none';
+        }
+      });
+    }
+  });
+});
+

@@ -413,7 +413,7 @@ const proxyOptions = {
 // HTML страницы
 // В Docker контейнере views находится в /app/views/
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../views/index.html'));
+  res.sendFile(path.join(__dirname, '../views/landing.html'));
 });
 
 app.get('/booking', (req, res) => {
