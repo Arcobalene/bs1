@@ -947,87 +947,6 @@ const bookings = {
   }
 };
 
-// Миграция данных из JSON в БД (если нужно)
-async function migrateFromJSON() {
-  if (DB_TYPE !== 'postgres') {
-    console.log('Миграция из JSON доступна только для SQLite');
-    return;
-  }
-  
-  const path = require('path');
-  const fs = require('fs');
-  const DB_DIR = path.join(__dirname, 'data');
-  const usersFile = path.join(DB_DIR, 'users.json');
-  const bookingsFile = path.join(DB_DIR, 'bookings.json');
-
-  // Проверяем, есть ли уже данные в БД
-  const result = await pool.query('SELECT COUNT(*) as count FROM users');
-  if (parseInt(result.rows[0].count) > 0) {
-    console.log('База данных уже содержит данные. Миграция не требуется.');
-    return;
-  }
-
-  // Мигрируем пользователей
-  if (fs.existsSync(usersFile)) {
-    try {
-      const usersData = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
-      console.log(`Миграция ${usersData.length} пользователей...`);
-      
-      for (const user of usersData) {
-        const userId = await users.create({
-          username: user.username,
-          email: user.email || '',
-          password: user.password,
-          role: user.role || 'user',
-          isActive: user.isActive !== undefined ? user.isActive : true,
-          salonName: user.salonName || '',
-          salonAddress: user.salonAddress || '',
-          salonLat: user.salonLat || null,
-          salonLng: user.salonLng || null
-        });
-
-        // Мигрируем услуги
-        if (user.services && user.services.length > 0) {
-          await services.setForUser(userId, user.services);
-        }
-
-        // Мигрируем мастеров
-        if (user.masters && user.masters.length > 0) {
-          await masters.setForUser(userId, user.masters);
-        }
-      }
-      console.log('Миграция пользователей завершена.');
-    } catch (error) {
-      console.error('Ошибка миграции пользователей:', error);
-    }
-  }
-
-  // Мигрируем записи
-  if (fs.existsSync(bookingsFile)) {
-    try {
-      const bookingsData = JSON.parse(fs.readFileSync(bookingsFile, 'utf8'));
-      console.log(`Миграция ${bookingsData.length} записей...`);
-      
-      for (const booking of bookingsData) {
-        await bookings.create({
-          userId: booking.userId,
-          name: booking.name,
-          phone: booking.phone,
-          service: booking.service,
-          master: booking.master || '',
-          date: booking.date,
-          time: booking.time,
-          endTime: booking.endTime || null,
-          comment: booking.comment || ''
-        });
-      }
-      console.log('Миграция записей завершена.');
-    } catch (error) {
-      console.error('Ошибка миграции записей:', error);
-    }
-  }
-}
-
 // Функции для работы с уведомлениями
 const notifications = {
   getByUserId: async (userId, limit = 100) => {
@@ -1217,6 +1136,5 @@ module.exports = {
   bookings,
   notifications,
   clients,
-  migrateFromJSON,
   initDatabase
 };

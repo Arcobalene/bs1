@@ -73,19 +73,6 @@ function validatePassword(password) {
   return { valid: true };
 }
 
-// Санитизация строки для предотвращения XSS
-function sanitizeString(str, maxLength = 1000) {
-  if (typeof str !== 'string') return '';
-  const trimmed = str.trim().substring(0, maxLength);
-  // Удаляем потенциально опасные HTML теги и символы
-  return trimmed
-    .replace(/[<>]/g, '') // Удаляем < и >
-    .replace(/javascript:/gi, '') // Удаляем javascript: протокол
-    .replace(/on\w+=/gi, '') // Удаляем обработчики событий (onclick, onerror, etc.)
-    .replace(/&#/g, '') // Удаляем HTML entities начало
-    .replace(/&[#\w]+;/g, ''); // Удаляем HTML entities
-}
-
 // Валидация и санитизация email
 function validateEmail(email) {
   if (!email) return { valid: false, message: 'Email обязателен' };
@@ -98,15 +85,6 @@ function validateEmail(email) {
     return { valid: false, message: 'Email слишком длинный' };
   }
   return { valid: true, email: trimmed };
-}
-
-// Валидация ID (положительное целое число)
-function validateId(id, paramName = 'ID') {
-  const num = parseInt(id, 10);
-  if (isNaN(num) || num <= 0 || !Number.isInteger(num)) {
-    return { valid: false, message: `Некорректный ${paramName}` };
-  }
-  return { valid: true, id: num };
 }
 
 // Нормализация номера телефона в формат E.164
@@ -125,23 +103,6 @@ function normalizeToE164(phone) {
   return phone.startsWith('+') ? phone : '+' + digits;
 }
 
-// Форматирование booking для ответа API
-function formatBooking(booking) {
-  return {
-    id: booking.id,
-    userId: booking.user_id,
-    name: booking.name,
-    phone: booking.phone,
-    service: booking.service,
-    master: booking.master,
-    date: formatDate(booking.date),
-    time: formatTime(booking.time),
-    endTime: formatTime(booking.end_time),
-    comment: booking.comment,
-    createdAt: booking.created_at
-  };
-}
-
 module.exports = {
   timeToMinutes,
   formatTime,
@@ -151,9 +112,6 @@ module.exports = {
   validateUsername,
   validatePassword,
   validateEmail,
-  validateId,
-  sanitizeString,
-  normalizeToE164,
-  formatBooking
+  normalizeToE164
 };
 

@@ -6,7 +6,9 @@
       "Bash(curl:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(ssh:*)"
+      "Bash(ssh:*)",
+      "Bash(git push:*)",
+      "Bash(where:*)"
     ]
   }
 }
