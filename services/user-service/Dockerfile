@@ -29,9 +29,8 @@ WORKDIR /app
 # Копируем node_modules из builder
 COPY --from=builder /app/node_modules ./node_modules
 
-# Копируем код приложения
-COPY services/user-service/server.js ./
-COPY services/user-service/package.json ./
+# Копируем код приложения с сохранением структуры директорий
+COPY services/user-service ./services/user-service/
 COPY shared ./shared/
 
 # Создаем непривилегированного пользователя
@@ -40,6 +39,8 @@ RUN addgroup -g 1001 -S nodejs && \
     chown -R nodejs:nodejs /app
 
 USER nodejs
+
+WORKDIR /app/services/user-service
 
 EXPOSE 3002
 
