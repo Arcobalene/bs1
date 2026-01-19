@@ -29,9 +29,8 @@ WORKDIR /app
 # Копируем node_modules из builder
 COPY --from=builder /app/node_modules ./node_modules
 
-# Копируем код приложения
-COPY gateway/server.js ./
-COPY gateway/package.json ./
+# Копируем код приложения с сохранением структуры директорий
+COPY gateway ./gateway/
 COPY shared ./shared/
 COPY views ./views
 COPY public ./public
@@ -42,6 +41,8 @@ RUN addgroup -g 1001 -S nodejs && \
     chown -R nodejs:nodejs /app
 
 USER nodejs
+
+WORKDIR /app/gateway
 
 EXPOSE 3000
 
