@@ -4,9 +4,12 @@ const express = require('express');
 const { bookings, users: dbUsers, initDatabase } = require('../../shared/database');
 const { timeToMinutes, checkTimeOverlap, formatDate } = require('../../shared/utils');
 const { setupStandardMiddleware, requireAuth, errorHandler } = require('../../shared/middleware');
+const { createLogger } = require('../../shared/logger');
+const { validatePositiveInt, validateDate, validateTime } = require('../../shared/validators');
 
 const app = express();
 const PORT = process.env.PORT || 3003;
+const logger = createLogger('booking-service');
 
 // Настройка стандартного middleware
 setupStandardMiddleware(app);
@@ -18,44 +21,58 @@ setupStandardMiddleware(app);
 app.post('/api/bookings/check-availability', async (req, res) => {
   try {
     const { userId, date, time, duration, master } = req.body;
-    
-    if (!userId || !date || !time || !duration) {
-      return res.status(400).json({ success: false, message: 'Не указаны обязательные параметры' });
+
+    // Валидация userId
+    const userIdValidation = validatePositiveInt(userId, 'userId');
+    if (!userIdValidation.valid) {
+      return res.status(400).json({ success: false, message: userIdValidation.message });
+    }
+
+    // Валидация даты
+    const dateValidation = validateDate(date);
+    if (!dateValidation.valid) {
+      return res.status(400).json({ success: false, message: dateValidation.message });
+    }
+
+    // Валидация времени
+    const timeValidation = validateTime(time);
+    if (!timeValidation.valid) {
+      return res.status(400).json({ success: false, message: timeValidation.message });
     }
 
     const startMinutes = timeToMinutes(time);
-    if (!startMinutes) {
+    if (!startMinutes && startMinutes !== 0) {
       return res.status(400).json({ success: false, message: 'Неверный формат времени' });
     }
 
     const durationMinutes = parseInt(duration, 10);
-    if (isNaN(durationMinutes) || durationMinutes <= 0) {
-      return res.status(400).json({ success: false, message: 'Неверная длительность' });
+    if (isNaN(durationMinutes) || durationMinutes <= 0 || durationMinutes > 480) {
+      return res.status(400).json({ success: false, message: 'Неверная длительность (макс. 8 часов)' });
     }
 
     const endMinutes = startMinutes + durationMinutes;
 
     // Получаем существующие записи на эту дату
     const existingBookings = await bookings.getByUserIdAndDate(userId, formatDate(date));
-    
+
     // Проверяем пересечения
     const conflicts = existingBookings.filter(booking => {
       if (master && booking.master && booking.master.trim() !== '' && booking.master !== master) {
         return false; // Разные мастера - нет конфликта
       }
-      
+
       const bookingStart = timeToMinutes(booking.time);
       if (!bookingStart) {
         return false; // Пропускаем записи с некорректным временем
       }
-      
+
       const bookingEnd = timeToMinutes(booking.end_time || booking.time);
       if (!bookingEnd || bookingEnd <= bookingStart) {
         // Если нет времени окончания, предполагаем минимальную длительность 30 минут
         const bookingEndTime = bookingStart + 30;
         return checkTimeOverlap(startMinutes, endMinutes, bookingStart, bookingEndTime);
       }
-      
+
       return checkTimeOverlap(startMinutes, endMinutes, bookingStart, bookingEnd);
     });
 
@@ -65,7 +82,7 @@ app.post('/api/bookings/check-availability', async (req, res) => {
 
     res.json({ success: true, available: true });
   } catch (error) {
-    console.error('Ошибка проверки доступности:', error);
+    logger.error('Ошибка проверки доступности', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -74,7 +91,7 @@ app.post('/api/bookings/check-availability', async (req, res) => {
 app.post('/api/bookings', async (req, res) => {
   try {
     const { userId, name, phone, service, master, date, time, endTime, comment } = req.body;
-    
+
     if (!userId || !name || !phone || !service || !date || !time) {
       return res.status(400).json({ success: false, message: 'Заполните все обязательные поля' });
     }
@@ -93,7 +110,7 @@ app.post('/api/bookings', async (req, res) => {
 
     res.status(201).json({ success: true, id: bookingId, message: 'Запись создана' });
   } catch (error) {
-    console.error('Ошибка создания записи:', error);
+    logger.error('Ошибка создания записи', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -101,11 +118,15 @@ app.post('/api/bookings', async (req, res) => {
 // API: Получить записи салона (по userId из параметра)
 app.get('/api/bookings/:userId', requireAuth, async (req, res) => {
   try {
-    const { userId } = req.params;
-    const userBookings = await bookings.getByUserId(parseInt(userId));
+    const userIdValidation = validatePositiveInt(req.params.userId, 'userId');
+    if (!userIdValidation.valid) {
+      return res.status(400).json({ success: false, message: userIdValidation.message });
+    }
+
+    const userBookings = await bookings.getByUserId(userIdValidation.value);
     res.json({ success: true, bookings: userBookings });
   } catch (error) {
-    console.error('Ошибка получения записей:', error);
+    logger.error('Ошибка получения записей', { error: error.message, userId: req.params.userId });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -129,7 +150,7 @@ app.get('/api/bookings', requireAuth, async (req, res) => {
 
     res.json({ success: true, bookings: userBookings });
   } catch (error) {
-    console.error('Ошибка получения записей:', error);
+    logger.error('Ошибка получения записей', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -145,7 +166,7 @@ app.get('/api/master/bookings', requireAuth, async (req, res) => {
     const masterBookings = await bookings.getByMasterUserId(user.id);
     res.json({ success: true, bookings: masterBookings });
   } catch (error) {
-    console.error('Ошибка получения записей мастера:', error);
+    logger.error('Ошибка получения записей мастера', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -161,7 +182,7 @@ app.get('/api/client/bookings', async (req, res) => {
     const clientBookings = await bookings.getByPhone(phone);
     res.json({ success: true, bookings: clientBookings });
   } catch (error) {
-    console.error('Ошибка получения записей клиента:', error);
+    logger.error('Ошибка получения записей клиента', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -169,9 +190,13 @@ app.get('/api/client/bookings', async (req, res) => {
 // API: Обновить запись
 app.put('/api/bookings/:id', requireAuth, async (req, res) => {
   try {
-    const { id } = req.params;
-    const booking = await bookings.getById(parseInt(id));
-    
+    const idValidation = validatePositiveInt(req.params.id, 'id');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, message: idValidation.message });
+    }
+
+    const booking = await bookings.getById(idValidation.value);
+
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Запись не найдена' });
     }
@@ -182,10 +207,10 @@ app.put('/api/bookings/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Доступ запрещен' });
     }
 
-    await bookings.update(parseInt(id), req.body);
+    await bookings.update(idValidation.value, req.body);
     res.json({ success: true, message: 'Запись обновлена' });
   } catch (error) {
-    console.error('Ошибка обновления записи:', error);
+    logger.error('Ошибка обновления записи', { error: error.message, bookingId: req.params.id });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -193,9 +218,13 @@ app.put('/api/bookings/:id', requireAuth, async (req, res) => {
 // API: Удалить запись
 app.delete('/api/bookings/:id', requireAuth, async (req, res) => {
   try {
-    const { id } = req.params;
-    const booking = await bookings.getById(parseInt(id));
-    
+    const idValidation = validatePositiveInt(req.params.id, 'id');
+    if (!idValidation.valid) {
+      return res.status(400).json({ success: false, message: idValidation.message });
+    }
+
+    const booking = await bookings.getById(idValidation.value);
+
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Запись не найдена' });
     }
@@ -206,10 +235,10 @@ app.delete('/api/bookings/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Доступ запрещен' });
     }
 
-    await bookings.delete(parseInt(id));
+    await bookings.delete(idValidation.value);
     res.json({ success: true, message: 'Запись удалена' });
   } catch (error) {
-    console.error('Ошибка удаления записи:', error);
+    logger.error('Ошибка удаления записи', { error: error.message, bookingId: req.params.id });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -226,13 +255,13 @@ app.use(errorHandler);
 (async () => {
   try {
     await initDatabase();
-    console.log('✅ База данных инициализирована');
-    
+    logger.info('База данных инициализирована');
+
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`📅 Booking Service запущен на порту ${PORT}`);
+      logger.info('Booking Service запущен', { port: PORT });
     });
   } catch (error) {
-    console.error('❌ Ошибка инициализации:', error);
+    logger.error('Ошибка инициализации', { error: error.message, stack: error.stack });
     process.exit(1);
   }
 })();

@@ -534,7 +534,10 @@
             <label for="reg-client-password">Пароль (необязательно)</label>
             <input type="password" id="reg-client-password" placeholder="Минимум 6 символов" />
           </div>
-          <button type="submit" class="btn-primary" style="width: 100%; margin-top: 8px;">Зарегистрироваться</button>
+          <button type="submit" class="btn-primary" id="register-client-btn" style="width: 100%; margin-top: 8px;">
+            <span class="btn-text">Зарегистрироваться</span>
+            <span class="btn-loading" style="display: none;"><i class="fas fa-spinner fa-spin"></i> Загрузка...</span>
+          </button>
           <div id="register-client-error" class="alert alert-error" style="display: none; margin-top: 12px;"></div>
         </form>
       </div>

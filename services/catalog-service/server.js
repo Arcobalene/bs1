@@ -3,9 +3,11 @@ const express = require('express');
 // Импортируем общие модули
 const { services, masters, users: dbUsers, initDatabase } = require('../../shared/database');
 const { setupStandardMiddleware, requireAuth, errorHandler } = require('../../shared/middleware');
+const { createLogger } = require('../../shared/logger');
 
 const app = express();
 const PORT = process.env.PORT || 3004;
+const logger = createLogger('catalog-service');
 
 // Настройка стандартного middleware
 setupStandardMiddleware(app);
@@ -30,7 +32,7 @@ app.post('/api/services', requireAuth, async (req, res) => {
     await services.setForUser(user.id, servicesList);
     res.json({ success: true, message: 'Услуги обновлены' });
   } catch (error) {
-    console.error('Ошибка обновления услуг:', error);
+    logger.error('Ошибка обновления услуг', { error: error.message });
     res.status(500).json({ success: false, message: error.message || 'Ошибка сервера' });
   }
 });
@@ -39,15 +41,14 @@ app.post('/api/services', requireAuth, async (req, res) => {
 app.get('/api/services/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    console.log(`[Catalog Service] GET /api/services/${userId}`);
+    logger.info(`GET /api/services/${userId}`);
     const salonServices = await services.getByUserId(parseInt(userId));
-    console.log(`[Catalog Service] Услуги найдены: ${salonServices ? salonServices.length : 0}`);
+    logger.info(`Услуги найдены: ${salonServices ? salonServices.length : 0}`);
     res.json({ success: true, services: salonServices });
   } catch (error) {
-    console.error('[Catalog Service] Ошибка получения услуг:', error);
-    console.error('[Catalog Service] Стек ошибки:', error.stack);
-    res.status(500).json({ 
-      success: false, 
+    logger.error('Ошибка получения услуг', { error: error.message, stack: error.stack });
+    res.status(500).json({
+      success: false,
       message: 'Ошибка сервера',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -71,7 +72,7 @@ app.post('/api/masters', requireAuth, async (req, res) => {
     await masters.setForUser(user.id, mastersList);
     res.json({ success: true, message: 'Мастера обновлены' });
   } catch (error) {
-    console.error('Ошибка обновления мастеров:', error);
+    logger.error('Ошибка обновления мастеров', { error: error.message });
     res.status(500).json({ success: false, message: error.message || 'Ошибка сервера' });
   }
 });
@@ -80,15 +81,14 @@ app.post('/api/masters', requireAuth, async (req, res) => {
 app.get('/api/masters/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    console.log(`[Catalog Service] GET /api/masters/${userId}`);
+    logger.info(`GET /api/masters/${userId}`);
     const salonMasters = await masters.getByUserId(parseInt(userId));
-    console.log(`[Catalog Service] Мастера найдены: ${salonMasters ? salonMasters.length : 0}`);
+    logger.info(`Мастера найдены: ${salonMasters ? salonMasters.length : 0}`);
     res.json({ success: true, masters: salonMasters });
   } catch (error) {
-    console.error('[Catalog Service] Ошибка получения мастеров:', error);
-    console.error('[Catalog Service] Стек ошибки:', error.stack);
-    res.status(500).json({ 
-      success: false, 
+    logger.error('Ошибка получения мастеров', { error: error.message, stack: error.stack });
+    res.status(500).json({
+      success: false,
       message: 'Ошибка сервера',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -108,7 +108,7 @@ app.get('/api/masters/search', async (req, res) => {
     // Для полноценного поиска нужен более сложный SQL запрос
     res.json({ success: true, masters: [] });
   } catch (error) {
-    console.error('Ошибка поиска мастеров:', error);
+    logger.error('Ошибка поиска мастеров', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -124,13 +124,13 @@ app.use(errorHandler);
 (async () => {
   try {
     await initDatabase();
-    console.log('✅ База данных инициализирована');
-    
+    logger.info('База данных инициализирована');
+
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`📋 Catalog Service запущен на порту ${PORT}`);
+      logger.info(`Catalog Service запущен на порту ${PORT}`);
     });
   } catch (error) {
-    console.error('❌ Ошибка инициализации:', error);
+    logger.error('Ошибка инициализации', { error: error.message });
     process.exit(1);
   }
 })();

@@ -20,7 +20,7 @@ if (DB_TYPE === 'postgres') {
   console.log(`DB_HOST: ${process.env.DB_HOST || 'localhost'}`);
   console.log(`DB_PORT: ${process.env.DB_PORT || '5432'}`);
   console.log(`DB_NAME: ${process.env.DB_NAME || 'beauty_studio'}`);
-  console.log(`DB_USER: ${process.env.DB_USER || 'beauty_user'}`);
+  // Не логируем DB_USER и DB_PASSWORD из соображений безопасности
   
   pool = new Pool({
     host: process.env.DB_HOST || 'localhost',

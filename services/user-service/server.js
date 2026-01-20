@@ -6,9 +6,11 @@ const path = require('path');
 const { users: dbUsers, services, masters, salonMasters, clients, bookings, initDatabase } = require('../../shared/database');
 const { validateUsername, validatePassword, validateEmail, validatePhone, normalizeToE164 } = require('../../shared/utils');
 const { setupStandardMiddleware, requireAuth, errorHandler } = require('../../shared/middleware');
+const { createLogger } = require('../../shared/logger');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
+const logger = createLogger('user-service');
 
 // Настройка стандартного middleware
 setupStandardMiddleware(app);
@@ -46,7 +48,7 @@ app.get('/api/user', requireAuth, async (req, res) => {
           ? JSON.parse(user.salon_design) 
           : user.salon_design;
       } catch (e) {
-        console.error('Ошибка парсинга salon_design:', e);
+        logger.error('Ошибка парсинга salon_design', { error: e.message });
       }
     }
     
@@ -62,7 +64,7 @@ app.get('/api/user', requireAuth, async (req, res) => {
           workHours = { startHour: 10, endHour: 20 };
         }
       } catch (e) {
-        console.error('Ошибка парсинга work_hours:', e);
+        logger.error('Ошибка парсинга work_hours', { error: e.message });
       }
     }
     
@@ -96,7 +98,7 @@ app.get('/api/user', requireAuth, async (req, res) => {
     }
     res.json({ success: true, user: userData });
   } catch (error) {
-    console.error('Ошибка получения данных пользователя:', error);
+    logger.error('Ошибка получения данных пользователя', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -147,7 +149,7 @@ app.post('/api/register-client', async (req, res) => {
     
     res.status(201).json({ success: true, message: 'Регистрация успешна' });
   } catch (error) {
-    console.error('Ошибка регистрации клиента:', error);
+    logger.error('Ошибка регистрации клиента', { error: error.message });
     res.status(500).json({ success: false, message: error.message || 'Ошибка сервера при регистрации' });
   }
 });
@@ -190,7 +192,7 @@ app.post('/api/login-client', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Ошибка входа клиента:', error);
+    logger.error('Ошибка входа клиента', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера при входе' });
   }
 });
@@ -229,7 +231,7 @@ app.get('/api/client', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Ошибка получения данных клиента:', error);
+    logger.error('Ошибка получения данных клиента', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -237,23 +239,23 @@ app.get('/api/client', async (req, res) => {
 // API: Получить дизайн салона
 app.get('/api/salon/design', requireAuth, async (req, res) => {
   try {
-    console.log(`[User Service] GET /api/salon/design, userId: ${req.session.userId}`);
-    
+    logger.info(`GET /api/salon/design, userId: ${req.session.userId}`);
+
     if (!req.session.userId) {
-      console.error('[User Service] Нет userId в сессии');
+      logger.error('Нет userId в сессии');
       return res.status(401).json({ success: false, message: 'Требуется авторизация' });
     }
-    
+
     const user = await dbUsers.getById(req.session.userId);
-    console.log(`[User Service] Пользователь найден: ${user ? 'да' : 'нет'}`);
-    
+    logger.info(`Пользователь найден: ${user ? 'да' : 'нет'}`);
+
     if (!user) {
-      console.error(`[User Service] Пользователь с id ${req.session.userId} не найден`);
+      logger.error(`Пользователь с id ${req.session.userId} не найден`);
       return res.status(404).json({ success: false, message: 'Пользователь не найден' });
     }
-    
+
     if (user.role !== 'user') {
-      console.error(`[User Service] Неверная роль пользователя: ${user.role}`);
+      logger.error(`Неверная роль пользователя: ${user.role}`);
       return res.status(403).json({ success: false, message: 'Доступ запрещен' });
     }
 
@@ -268,23 +270,21 @@ app.get('/api/salon/design', requireAuth, async (req, res) => {
         } else {
           salonDesign = {};
         }
-        console.log(`[User Service] Дизайн салона загружен, тип: ${typeof salonDesign}`);
+        logger.info(`Дизайн салона загружен, тип: ${typeof salonDesign}`);
       } catch (e) {
-        console.error('[User Service] Ошибка парсинга salon_design:', e);
-        console.error('[User Service] Значение salon_design:', user.salon_design);
+        logger.error('Ошибка парсинга salon_design', { error: e.message, value: user.salon_design });
         // Продолжаем с пустым объектом
         salonDesign = {};
       }
     } else {
-      console.log('[User Service] salon_design отсутствует, возвращаем пустой объект');
+      logger.info('salon_design отсутствует, возвращаем пустой объект');
     }
 
     res.json({ success: true, design: salonDesign });
   } catch (error) {
-    console.error('[User Service] Ошибка получения дизайна салона:', error);
-    console.error('[User Service] Стек ошибки:', error.stack);
-    res.status(500).json({ 
-      success: false, 
+    logger.error('Ошибка получения дизайна салона', { error: error.message, stack: error.stack });
+    res.status(500).json({
+      success: false,
       message: 'Ошибка сервера',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -302,7 +302,7 @@ app.get('/api/salon/masters', requireAuth, async (req, res) => {
     const salonMastersList = await masters.getByUserId(user.id);
     res.json({ success: true, masters: salonMastersList });
   } catch (error) {
-    console.error('Ошибка получения мастеров салона:', error);
+    logger.error('Ошибка получения мастеров салона', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -311,17 +311,17 @@ app.get('/api/salon/masters', requireAuth, async (req, res) => {
 app.get('/api/salon/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    console.log(`[User Service] GET /api/salon/${userId}`);
-    
+    logger.info(`GET /api/salon/${userId}`);
+
     // Валидация userId
     const parsedUserId = parseInt(userId);
     if (isNaN(parsedUserId) || parsedUserId <= 0) {
-      console.error(`[User Service] Неверный userId: ${userId}`);
+      logger.error(`Неверный userId: ${userId}`);
       return res.status(400).json({ success: false, message: 'Неверный ID салона' });
     }
-    
+
     const user = await dbUsers.getById(parsedUserId);
-    console.log(`[User Service] Пользователь найден: ${user ? 'да' : 'нет'}`);
+    logger.info(`Пользователь найден: ${user ? 'да' : 'нет'}`);
     
     if (!user) {
       return res.status(404).json({ success: false, message: 'Салон не найден' });
@@ -334,7 +334,7 @@ app.get('/api/salon/:userId', async (req, res) => {
           ? JSON.parse(user.salon_design) 
           : user.salon_design;
       } catch (e) {
-        console.error('Ошибка парсинга salon_design:', e);
+        logger.error('Ошибка парсинга salon_design', { error: e.message });
       }
     }
 
@@ -348,7 +348,7 @@ app.get('/api/salon/:userId', async (req, res) => {
           workHours = { startHour: 10, endHour: 20 };
         }
       } catch (e) {
-        console.error('Ошибка парсинга work_hours:', e);
+        logger.error('Ошибка парсинга work_hours', { error: e.message });
       }
     }
 
@@ -367,10 +367,9 @@ app.get('/api/salon/:userId', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[User Service] Ошибка получения данных салона:', error);
-    console.error('[User Service] Стек ошибки:', error.stack);
-    res.status(500).json({ 
-      success: false, 
+    logger.error('Ошибка получения данных салона', { error: error.message, stack: error.stack });
+    res.status(500).json({
+      success: false,
       message: 'Ошибка сервера',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -389,7 +388,7 @@ app.get('/api/salons', async (req, res) => {
     }));
     res.json({ success: true, salons });
   } catch (error) {
-    console.error('Ошибка получения списка салонов:', error);
+    logger.error('Ошибка получения списка салонов', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -415,7 +414,7 @@ app.get('/api/users', requireAuth, async (req, res) => {
 
     res.json({ success: true, users: usersList });
   } catch (error) {
-    console.error('Ошибка получения списка пользователей:', error);
+    logger.error('Ошибка получения списка пользователей', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -432,7 +431,7 @@ app.post('/api/users/restore', requireAuth, async (req, res) => {
     
     res.json({ success: true, message: 'Аккаунт восстановлен' });
   } catch (error) {
-    console.error('Ошибка восстановления аккаунта:', error);
+    logger.error('Ошибка восстановления аккаунта', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -456,7 +455,7 @@ app.put('/api/users/:userId/toggle', requireAuth, async (req, res) => {
 
     res.json({ success: true, message: `Пользователь ${newStatus ? 'активирован' : 'деактивирован'}` });
   } catch (error) {
-    console.error('Ошибка переключения активности пользователя:', error);
+    logger.error('Ошибка переключения активности пользователя', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -482,7 +481,7 @@ app.post('/api/users/:userId/impersonate', requireAuth, async (req, res) => {
 
     res.json({ success: true, message: 'Вход выполнен' });
   } catch (error) {
-    console.error('Ошибка impersonation:', error);
+    logger.error('Ошибка impersonation', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -504,7 +503,7 @@ app.delete('/api/users/:userId', requireAuth, async (req, res) => {
     await dbUsers.delete(parseInt(userId));
     res.json({ success: true, message: 'Пользователь удален' });
   } catch (error) {
-    console.error('Ошибка удаления пользователя:', error);
+    logger.error('Ошибка удаления пользователя', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -529,7 +528,7 @@ app.put('/api/salon', requireAuth, async (req, res) => {
     await dbUsers.update(user.id, updateData);
     res.json({ success: true, message: 'Данные салона обновлены' });
   } catch (error) {
-    console.error('Ошибка обновления данных салона:', error);
+    logger.error('Ошибка обновления данных салона', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -543,12 +542,12 @@ app.get('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => {
     }
 
     const { masterUserId } = req.params;
-    console.log(`[User Service] GET /api/salon/masters/${masterUserId}`);
-    
+    logger.info(`GET /api/salon/masters/${masterUserId}`);
+
     // Валидация masterUserId
     const parsedMasterUserId = parseInt(masterUserId);
     if (isNaN(parsedMasterUserId) || parsedMasterUserId <= 0) {
-      console.error(`[User Service] Неверный masterUserId: ${masterUserId}`);
+      logger.error(`Неверный masterUserId: ${masterUserId}`);
       return res.status(400).json({ success: false, message: 'Неверный ID мастера' });
     }
     
@@ -561,10 +560,9 @@ app.get('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => {
 
     res.json({ success: true, master });
   } catch (error) {
-    console.error('[User Service] Ошибка получения мастера салона:', error);
-    console.error('[User Service] Стек ошибки:', error.stack);
-    res.status(500).json({ 
-      success: false, 
+    logger.error('Ошибка получения мастера салона', { error: error.message, stack: error.stack });
+    res.status(500).json({
+      success: false,
       message: 'Ошибка сервера',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -580,12 +578,12 @@ app.delete('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => 
     }
 
     const { masterUserId } = req.params;
-    console.log(`[User Service] DELETE /api/salon/masters/${masterUserId}`);
-    
+    logger.info(`DELETE /api/salon/masters/${masterUserId}`);
+
     // Валидация masterUserId
     const parsedMasterUserId = parseInt(masterUserId);
     if (isNaN(parsedMasterUserId) || parsedMasterUserId <= 0) {
-      console.error(`[User Service] Неверный masterUserId: ${masterUserId}`);
+      logger.error(`Неверный masterUserId: ${masterUserId}`);
       return res.status(400).json({ success: false, message: 'Неверный ID мастера' });
     }
     
@@ -593,10 +591,9 @@ app.delete('/api/salon/masters/:masterUserId', requireAuth, async (req, res) => 
 
     res.json({ success: true, message: 'Мастер удален из салона' });
   } catch (error) {
-    console.error('[User Service] Ошибка удаления мастера из салона:', error);
-    console.error('[User Service] Стек ошибки:', error.stack);
-    res.status(500).json({ 
-      success: false, 
+    logger.error('Ошибка удаления мастера из салона', { error: error.message, stack: error.stack });
+    res.status(500).json({
+      success: false,
       message: 'Ошибка сервера',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -640,7 +637,7 @@ app.get('/api/clients', requireAuth, async (req, res) => {
     const clientsList = Array.from(clientsMap.values());
     res.json({ success: true, clients: clientsList });
   } catch (error) {
-    console.error('Ошибка получения списка клиентов:', error);
+    logger.error('Ошибка получения списка клиентов', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -668,7 +665,7 @@ app.get('/api/master/salons', requireAuth, async (req, res) => {
 
     res.json({ success: true, salons: salonsData });
   } catch (error) {
-    console.error('Ошибка получения списка салонов мастера:', error);
+    logger.error('Ошибка получения списка салонов мастера', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -694,7 +691,7 @@ app.get('/api/master/profile', requireAuth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Ошибка получения профиля мастера:', error);
+    logger.error('Ошибка получения профиля мастера', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -713,7 +710,7 @@ app.put('/api/master/profile', requireAuth, async (req, res) => {
     await dbUsers.update(user.id, updateData);
     res.json({ success: true, message: 'Профиль обновлен' });
   } catch (error) {
-    console.error('Ошибка обновления профиля мастера:', error);
+    logger.error('Ошибка обновления профиля мастера', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -730,13 +727,13 @@ app.use(errorHandler);
   try {
     // Инициализируем БД
     await initDatabase();
-    console.log('✅ База данных инициализирована');
-    
+    logger.info('База данных инициализирована');
+
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`👥 User Service запущен на порту ${PORT}`);
+      logger.info(`User Service запущен на порту ${PORT}`);
     });
   } catch (error) {
-    console.error('❌ Ошибка инициализации:', error);
+    logger.error('Ошибка инициализации', { error: error.message });
     process.exit(1);
   }
 })();

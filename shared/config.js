@@ -4,6 +4,9 @@
  */
 
 function validateEnv() {
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const isProduction = nodeEnv === 'production';
+
   // Валидация базы данных
   const dbType = process.env.DB_TYPE || 'postgres';
   if (!['postgres', 'sqlite'].includes(dbType)) {
@@ -30,10 +33,12 @@ function validateEnv() {
     throw new Error('DB_USER должен быть строкой');
   }
 
-  const dbPassword = process.env.DB_PASSWORD || 'beauty_password';
-  if (typeof dbPassword !== 'string') {
-    throw new Error('DB_PASSWORD должен быть строкой');
+  // В production требуем явно заданный пароль БД
+  const dbPassword = process.env.DB_PASSWORD;
+  if (isProduction && !dbPassword) {
+    throw new Error('DB_PASSWORD обязателен в production режиме');
   }
+  const finalDbPassword = dbPassword || 'beauty_password'; // fallback только для dev
 
   // Валидация Redis
   const redisHost = process.env.REDIS_HOST || 'redis';
@@ -51,14 +56,17 @@ function validateEnv() {
     throw new Error('REDIS_PASSWORD должен быть строкой');
   }
 
-  // Валидация сессий
-  const sessionSecret = process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production';
-  if (!sessionSecret || typeof sessionSecret !== 'string' || sessionSecret.length < 32) {
+  // Валидация сессий - в production требуем явно заданный секрет
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (isProduction && (!sessionSecret || sessionSecret === 'beauty-studio-secret-key-change-in-production')) {
+    throw new Error('SESSION_SECRET обязателен в production режиме (минимум 32 символа)');
+  }
+  const finalSessionSecret = sessionSecret || 'beauty-studio-secret-key-change-in-production';
+  if (finalSessionSecret.length < 32) {
     throw new Error('SESSION_SECRET должен быть строкой длиной минимум 32 символа');
   }
 
-  // Валидация окружения
-  const nodeEnv = process.env.NODE_ENV || 'production';
+  // Валидация окружения (уже определено выше)
   if (!['development', 'production', 'test'].includes(nodeEnv)) {
     throw new Error('NODE_ENV должен быть development, production или test');
   }
@@ -91,7 +99,7 @@ function validateEnv() {
     DB_PORT: dbPort,
     DB_NAME: dbName,
     DB_USER: dbUser,
-    DB_PASSWORD: dbPassword,
+    DB_PASSWORD: finalDbPassword,
 
     // Redis
     REDIS_HOST: redisHost,
@@ -99,7 +107,7 @@ function validateEnv() {
     REDIS_PASSWORD: redisPassword,
 
     // Сессии
-    SESSION_SECRET: sessionSecret,
+    SESSION_SECRET: finalSessionSecret,
 
     // Окружение
     NODE_ENV: nodeEnv,
@@ -116,21 +124,42 @@ function validateEnv() {
     TELEGRAM_SERVICE_URL: validateUrl(process.env.TELEGRAM_SERVICE_URL, 'http://telegram-service:3007', 'TELEGRAM_SERVICE_URL'),
     LANDING_SERVICE_URL: validateUrl(process.env.LANDING_SERVICE_URL, 'http://landing-service:3008', 'LANDING_SERVICE_URL'),
 
-    // MinIO
+    // MinIO - в production требуем явно заданные ключи
     MINIO_ENDPOINT: process.env.MINIO_ENDPOINT || 'minio',
     MINIO_PORT: parseInt(process.env.MINIO_PORT || '9000', 10),
-    MINIO_ACCESS_KEY: process.env.MINIO_ACCESS_KEY || 'minioadmin',
-    MINIO_SECRET_KEY: process.env.MINIO_SECRET_KEY || 'minioadmin',
+    MINIO_ACCESS_KEY: (() => {
+      const key = process.env.MINIO_ACCESS_KEY;
+      if (isProduction && (!key || key === 'minioadmin')) {
+        throw new Error('MINIO_ACCESS_KEY обязателен в production режиме');
+      }
+      return key || 'minioadmin';
+    })(),
+    MINIO_SECRET_KEY: (() => {
+      const key = process.env.MINIO_SECRET_KEY;
+      if (isProduction && (!key || key === 'minioadmin')) {
+        throw new Error('MINIO_SECRET_KEY обязателен в production режиме');
+      }
+      return key || 'minioadmin';
+    })(),
     MINIO_USE_SSL: process.env.MINIO_USE_SSL === 'true',
 
     // Telegram
     TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
-    TELEGRAM_WEBHOOK_URL: process.env.TELEGRAM_WEBHOOK_URL || ''
+    TELEGRAM_WEBHOOK_URL: process.env.TELEGRAM_WEBHOOK_URL || '',
+    TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET || ''
   };
 
-  // Предупреждение если используется дефолтный секрет в production
-  if (config.SESSION_SECRET === 'beauty-studio-secret-key-change-in-production' && config.NODE_ENV === 'production') {
-    console.warn('⚠️  ВНИМАНИЕ: Используется дефолтный SESSION_SECRET! Измените его в production!');
+  // Предупреждения для development режима
+  if (!isProduction) {
+    if (config.SESSION_SECRET === 'beauty-studio-secret-key-change-in-production') {
+      console.warn('⚠️  ВНИМАНИЕ: Используется дефолтный SESSION_SECRET! Измените перед деплоем!');
+    }
+    if (config.DB_PASSWORD === 'beauty_password') {
+      console.warn('⚠️  ВНИМАНИЕ: Используется дефолтный DB_PASSWORD! Измените перед деплоем!');
+    }
+    if (config.MINIO_ACCESS_KEY === 'minioadmin') {
+      console.warn('⚠️  ВНИМАНИЕ: Используются дефолтные MinIO credentials! Измените перед деплоем!');
+    }
   }
 
   return config;

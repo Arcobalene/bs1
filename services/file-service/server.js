@@ -6,9 +6,12 @@ const crypto = require('crypto');
 // Импортируем общие модули
 const { masters, users: dbUsers, initDatabase } = require('../../shared/database');
 const { setupStandardMiddleware, requireAuth, errorHandler } = require('../../shared/middleware');
+const { createLogger } = require('../../shared/logger');
+const { validatePositiveInt, validateFilename } = require('../../shared/validators');
 
 const app = express();
 const PORT = process.env.PORT || 3005;
+const logger = createLogger('file-service');
 
 // Настройка стандартного middleware
 setupStandardMiddleware(app);
@@ -33,10 +36,10 @@ async function initMinIO() {
     const exists = await minioClient.bucketExists(BUCKET_NAME);
     if (!exists) {
       await minioClient.makeBucket(BUCKET_NAME);
-      console.log(`✅ Bucket ${BUCKET_NAME} создан`);
+      logger.info(`Bucket ${BUCKET_NAME} создан`);
     }
   } catch (error) {
-    console.error('❌ Ошибка инициализации MinIO:', error);
+    logger.error('Ошибка инициализации MinIO', { error: error.message });
   }
 }
 
@@ -58,7 +61,12 @@ const upload = multer({
 // API: Загрузить фото мастера (для владельца салона)
 app.post('/api/masters/:masterId/photos', requireAuth, upload.single('photo'), async (req, res) => {
   try {
-    const { masterId } = req.params;
+    // Валидация masterId
+    const masterIdValidation = validatePositiveInt(req.params.masterId, 'masterId');
+    if (!masterIdValidation.valid) {
+      return res.status(400).json({ success: false, message: masterIdValidation.message });
+    }
+
     const user = await dbUsers.getById(req.session.userId);
     
     if (!user || user.role !== 'user') {
@@ -71,29 +79,36 @@ app.post('/api/masters/:masterId/photos', requireAuth, upload.single('photo'), a
 
     // Получаем мастера для проверки владельца
     const salonMasters = await masters.getByUserId(user.id);
-    const master = salonMasters.find(m => m.id === parseInt(masterId));
+    const master = salonMasters.find(m => m.id === masterIdValidation.value);
     if (!master) {
       return res.status(404).json({ success: false, message: 'Мастер не найден' });
     }
 
-    const fileExtension = req.file.originalname.split('.').pop();
+    // Безопасно получаем расширение файла
+    const originalName = req.file.originalname || '';
+    const fileExtension = originalName.split('.').pop()?.toLowerCase() || 'jpg';
+    // Проверка на допустимые расширения изображений
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    if (!allowedExtensions.includes(fileExtension)) {
+      return res.status(400).json({ success: false, message: 'Недопустимый формат файла' });
+    }
     const uniqueId = crypto.randomBytes(16).toString('hex');
-    const fileName = `${masterId}/${uniqueId}.${fileExtension}`;
-    
+    const fileName = `${masterIdValidation.value}/${uniqueId}.${fileExtension}`;
+
     await minioClient.putObject(BUCKET_NAME, fileName, req.file.buffer, req.file.size, {
       'Content-Type': req.file.mimetype
     });
 
     // Получаем текущие фото мастера
     const currentPhotos = master.photos || [];
-    const photoUrl = `/api/masters/photos/${masterId}/${fileName.split('/').pop()}`;
+    const photoUrl = `/api/masters/photos/${masterIdValidation.value}/${fileName.split('/').pop()}`;
     const updatedPhotos = [...currentPhotos, photoUrl];
 
-    await masters.updatePhotos(parseInt(masterId), updatedPhotos);
+    await masters.updatePhotos(masterIdValidation.value, updatedPhotos);
 
     res.json({ success: true, photoUrl, message: 'Фото загружено' });
   } catch (error) {
-    console.error('Ошибка загрузки фото:', error);
+    logger.error('Ошибка загрузки фото', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -101,9 +116,16 @@ app.post('/api/masters/:masterId/photos', requireAuth, upload.single('photo'), a
 // API: Получить список фото мастера
 app.get('/api/masters/:masterId/photos', async (req, res) => {
   try {
-    const { masterId } = req.params;
-    const salonMasters = await masters.getByUserId(parseInt(req.query.userId || 0));
-    const master = salonMasters.find(m => m.id === parseInt(masterId));
+    const masterIdValidation = validatePositiveInt(req.params.masterId, 'masterId');
+    if (!masterIdValidation.valid) {
+      return res.status(400).json({ success: false, message: masterIdValidation.message });
+    }
+
+    const userIdValidation = validatePositiveInt(req.query.userId, 'userId');
+    const userId = userIdValidation.valid ? userIdValidation.value : 0;
+
+    const salonMasters = await masters.getByUserId(userId);
+    const master = salonMasters.find(m => m.id === masterIdValidation.value);
     
     if (!master) {
       return res.json({ success: true, photos: [] });
@@ -112,7 +134,7 @@ app.get('/api/masters/:masterId/photos', async (req, res) => {
     const photos = master.photos || [];
     res.json({ success: true, photos });
   } catch (error) {
-    console.error('Ошибка получения фото:', error);
+    logger.error('Ошибка получения фото', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -120,8 +142,18 @@ app.get('/api/masters/:masterId/photos', async (req, res) => {
 // API: Получить фото (stream)
 app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
   try {
-    const { masterId, filename } = req.params;
-    const objectName = `${masterId}/${filename}`;
+    // Валидация параметров
+    const masterIdValidation = validatePositiveInt(req.params.masterId, 'masterId');
+    if (!masterIdValidation.valid) {
+      return res.status(400).json({ success: false, message: masterIdValidation.message });
+    }
+
+    const filenameValidation = validateFilename(req.params.filename);
+    if (!filenameValidation.valid) {
+      return res.status(400).json({ success: false, message: filenameValidation.message });
+    }
+
+    const objectName = `${masterIdValidation.value}/${req.params.filename}`;
     
     const stat = await minioClient.statObject(BUCKET_NAME, objectName);
     const stream = await minioClient.getObject(BUCKET_NAME, objectName);
@@ -133,7 +165,7 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
     // Обработка ошибок потока
     stream.on('error', (streamError) => {
       if (!res.headersSent) {
-        console.error('Ошибка потока при получении фото:', streamError);
+        logger.error('Ошибка потока при получении фото', { error: streamError.message });
         res.status(500).json({ success: false, message: 'Ошибка получения фото' });
       }
     });
@@ -144,7 +176,7 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
       }
       return;
     }
-    console.error('Ошибка получения фото:', error);
+    logger.error('Ошибка получения фото', { error: error.message });
     if (!res.headersSent) {
       res.status(500).json({ success: false, message: 'Ошибка сервера' });
     }
@@ -154,33 +186,43 @@ app.get('/api/masters/photos/:masterId/:filename', async (req, res) => {
 // API: Удалить фото мастера
 app.delete('/api/masters/:masterId/photos/:filename', requireAuth, async (req, res) => {
   try {
-    const { masterId, filename } = req.params;
+    // Валидация параметров
+    const masterIdValidation = validatePositiveInt(req.params.masterId, 'masterId');
+    if (!masterIdValidation.valid) {
+      return res.status(400).json({ success: false, message: masterIdValidation.message });
+    }
+
+    const filenameValidation = validateFilename(req.params.filename);
+    if (!filenameValidation.valid) {
+      return res.status(400).json({ success: false, message: filenameValidation.message });
+    }
+
     const user = await dbUsers.getById(req.session.userId);
-    
+
     if (!user || user.role !== 'user') {
       return res.status(403).json({ success: false, message: 'Доступ запрещен' });
     }
 
     // Получаем мастера
     const salonMasters = await masters.getByUserId(user.id);
-    const master = salonMasters.find(m => m.id === parseInt(masterId));
+    const master = salonMasters.find(m => m.id === masterIdValidation.value);
     if (!master) {
       return res.status(404).json({ success: false, message: 'Мастер не найден' });
     }
 
-    const objectName = `${masterId}/${filename}`;
+    const objectName = `${masterIdValidation.value}/${req.params.filename}`;
     await minioClient.removeObject(BUCKET_NAME, objectName);
 
     // Обновляем список фото
     const currentPhotos = master.photos || [];
-    const photoUrl = `/api/masters/photos/${masterId}/${filename}`;
+    const photoUrl = `/api/masters/photos/${masterIdValidation.value}/${req.params.filename}`;
     const updatedPhotos = currentPhotos.filter(p => p !== photoUrl);
 
-    await masters.updatePhotos(parseInt(masterId), updatedPhotos);
+    await masters.updatePhotos(masterIdValidation.value, updatedPhotos);
 
     res.json({ success: true, message: 'Фото удалено' });
   } catch (error) {
-    console.error('Ошибка удаления фото:', error);
+    logger.error('Ошибка удаления фото', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -222,7 +264,7 @@ app.post('/api/master/photos', requireAuth, upload.single('photo'), async (req, 
 
     res.json({ success: true, photoUrl, message: 'Фото загружено' });
   } catch (error) {
-    console.error('Ошибка загрузки фото:', error);
+    logger.error('Ошибка загрузки фото', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -245,7 +287,7 @@ app.get('/api/master/photos', requireAuth, async (req, res) => {
     const photos = master.photos || [];
     res.json({ success: true, photos });
   } catch (error) {
-    console.error('Ошибка получения фото:', error);
+    logger.error('Ошибка получения фото', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -253,7 +295,12 @@ app.get('/api/master/photos', requireAuth, async (req, res) => {
 // API: Удалить фото (для мастера)
 app.delete('/api/master/photos/:filename', requireAuth, async (req, res) => {
   try {
-    const { filename } = req.params;
+    // Валидация filename (защита от path traversal)
+    const filenameValidation = validateFilename(req.params.filename);
+    if (!filenameValidation.valid) {
+      return res.status(400).json({ success: false, message: filenameValidation.message });
+    }
+
     const user = await dbUsers.getById(req.session.userId);
     
     if (!user || user.role !== 'master') {
@@ -267,19 +314,19 @@ app.delete('/api/master/photos/:filename', requireAuth, async (req, res) => {
 
     const master = masterRecords[0];
     const masterId = master.id;
-    const objectName = `${masterId}/${filename}`;
-    
+    const objectName = `${masterId}/${req.params.filename}`;
+
     await minioClient.removeObject(BUCKET_NAME, objectName);
 
     const currentPhotos = master.photos || [];
-    const photoUrl = `/api/masters/photos/${masterId}/${filename}`;
+    const photoUrl = `/api/masters/photos/${masterId}/${req.params.filename}`;
     const updatedPhotos = currentPhotos.filter(p => p !== photoUrl);
 
     await masters.updatePhotos(masterId, updatedPhotos);
 
     res.json({ success: true, message: 'Фото удалено' });
   } catch (error) {
-    console.error('Ошибка удаления фото:', error);
+    logger.error('Ошибка удаления фото', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -290,7 +337,7 @@ app.get('/api/minio/health', async (req, res) => {
     const exists = await minioClient.bucketExists(BUCKET_NAME);
     res.json({ success: true, status: exists ? 'ok' : 'bucket_not_found' });
   } catch (error) {
-    console.error('Ошибка проверки MinIO:', error);
+    logger.error('Ошибка проверки MinIO', { error: error.message });
     res.status(500).json({ success: false, message: 'MinIO недоступен' });
   }
 });
@@ -306,15 +353,15 @@ app.use(errorHandler);
 (async () => {
   try {
     await initDatabase();
-    console.log('✅ База данных инициализирована');
-    
+    logger.info('База данных инициализирована');
+
     await initMinIO();
-    
+
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`📁 File Service запущен на порту ${PORT}`);
+      logger.info(`File Service запущен на порту ${PORT}`);
     });
   } catch (error) {
-    console.error('❌ Ошибка инициализации:', error);
+    logger.error('Ошибка инициализации', { error: error.message });
     process.exit(1);
   }
 })();

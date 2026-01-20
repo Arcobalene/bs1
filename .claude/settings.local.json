@@ -8,7 +8,10 @@
       "Bash(git commit:*)",
       "Bash(ssh:*)",
       "Bash(git push:*)",
-      "Bash(where:*)"
+      "Bash(where:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)",
+      "Bash(dir \"c:\\\\Users\\\\arcobalene\\\\OneDrive\\\\Documents\\\\bs\\\\nginx\"\" 2>nul || echo \"No nginx directory \")"
     ]
   }
 }

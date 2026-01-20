@@ -3,9 +3,11 @@ const express = require('express');
 // Импортируем общие модули
 const { notifications, users: dbUsers, initDatabase } = require('../../shared/database');
 const { setupStandardMiddleware, requireAuth, errorHandler } = require('../../shared/middleware');
+const { createLogger } = require('../../shared/logger');
 
 const app = express();
 const PORT = process.env.PORT || 3006;
+const logger = createLogger('notification-service');
 
 // Настройка стандартного middleware
 setupStandardMiddleware(app);
@@ -20,7 +22,7 @@ app.get('/api/notifications', requireAuth, async (req, res) => {
     const userNotifications = await notifications.getByUserId(req.session.userId, limit);
     res.json({ success: true, notifications: userNotifications });
   } catch (error) {
-    console.error('Ошибка получения уведомлений:', error);
+    logger.error('Ошибка получения уведомлений', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -44,7 +46,7 @@ app.post('/api/notifications', requireAuth, async (req, res) => {
 
     res.status(201).json({ success: true, notification, message: 'Уведомление создано' });
   } catch (error) {
-    console.error('Ошибка создания уведомления:', error);
+    logger.error('Ошибка создания уведомления', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -56,7 +58,7 @@ app.put('/api/notifications/:id/read', requireAuth, async (req, res) => {
     await notifications.markAsRead(parseInt(id), req.session.userId);
     res.json({ success: true, message: 'Уведомление отмечено как прочитанное' });
   } catch (error) {
-    console.error('Ошибка обновления уведомления:', error);
+    logger.error('Ошибка обновления уведомления', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -67,7 +69,7 @@ app.put('/api/notifications/read-all', requireAuth, async (req, res) => {
     await notifications.markAllAsRead(req.session.userId);
     res.json({ success: true, message: 'Все уведомления отмечены как прочитанные' });
   } catch (error) {
-    console.error('Ошибка обновления уведомлений:', error);
+    logger.error('Ошибка обновления уведомлений', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -79,7 +81,7 @@ app.delete('/api/notifications/:id', requireAuth, async (req, res) => {
     await notifications.remove(parseInt(id), req.session.userId);
     res.json({ success: true, message: 'Уведомление удалено' });
   } catch (error) {
-    console.error('Ошибка удаления уведомления:', error);
+    logger.error('Ошибка удаления уведомления', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -90,7 +92,7 @@ app.delete('/api/notifications', requireAuth, async (req, res) => {
     await notifications.removeAll(req.session.userId);
     res.json({ success: true, message: 'Все уведомления удалены' });
   } catch (error) {
-    console.error('Ошибка удаления уведомлений:', error);
+    logger.error('Ошибка удаления уведомлений', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
@@ -106,13 +108,13 @@ app.use(errorHandler);
 (async () => {
   try {
     await initDatabase();
-    console.log('✅ База данных инициализирована');
-    
+    logger.info('База данных инициализирована');
+
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🔔 Notification Service запущен на порту ${PORT}`);
+      logger.info(`Notification Service запущен на порту ${PORT}`);
     });
   } catch (error) {
-    console.error('❌ Ошибка инициализации:', error);
+    logger.error('Ошибка инициализации', { error: error.message });
     process.exit(1);
   }
 })();

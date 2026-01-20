@@ -8,9 +8,11 @@ const path = require('path');
 // Импортируем общие модули
 const { users: dbUsers, initDatabase } = require('../../shared/database');
 const { validateUsername, validatePassword, validateEmail, validatePhone, normalizeToE164 } = require('../../shared/utils');
+const { createLogger } = require('../../shared/logger');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const logger = createLogger('auth-service');
 
 // Middleware
 app.use(express.json({ limit: '10mb' }));
@@ -26,7 +28,7 @@ const cookieSecure = isHttps;
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'beauty-studio-secret-key-change-in-production',
-  resave: true, // Изменено на true для стабильности
+  resave: false, // Исправлено: false для консистентности с gateway
   saveUninitialized: false,
   name: 'beauty.studio.sid', // Имя cookie должно совпадать с gateway
   cookie: {
@@ -45,8 +47,14 @@ const loginLimiter = rateLimit({
   message: { success: false, message: 'Слишком много попыток входа, попробуйте позже' }
 });
 
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 час
+  max: 10, // 10 регистраций в час с одного IP
+  message: { success: false, message: 'Слишком много попыток регистрации, попробуйте позже' }
+});
+
 // API: Регистрация салона
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', registerLimiter, async (req, res) => {
   try {
     const { username, password, email, phone } = req.body;
     
@@ -87,16 +95,22 @@ app.post('/api/register', async (req, res) => {
     req.session.userId = userId;
     req.session.originalUserId = userId;
     
-    // Отправляем ответ (сессия сохранится автоматически благодаря resave: true)
-    res.status(201).json({ success: true, message: 'Регистрация успешна' });
+    // Явно сохраняем сессию перед ответом
+    req.session.save((err) => {
+      if (err) {
+        logger.error('Ошибка сохранения сессии при регистрации', { error: err.message });
+        return res.status(500).json({ success: false, message: 'Ошибка сервера при регистрации' });
+      }
+      res.status(201).json({ success: true, message: 'Регистрация успешна' });
+    });
   } catch (error) {
-    console.error('Ошибка регистрации:', error);
+    logger.error('Ошибка регистрации', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера при регистрации' });
   }
 });
 
 // API: Регистрация мастера
-app.post('/api/register/master', async (req, res) => {
+app.post('/api/register/master', registerLimiter, async (req, res) => {
   try {
     const { username, password, email, phone } = req.body;
     
@@ -131,14 +145,14 @@ app.post('/api/register/master', async (req, res) => {
     // Явно сохраняем сессию перед отправкой ответа
     req.session.save((err) => {
       if (err) {
-        console.error('Ошибка сохранения сессии:', err);
+        logger.error('Ошибка сохранения сессии при регистрации мастера', { error: err.message });
         return res.status(500).json({ success: false, message: 'Ошибка сервера при регистрации' });
       }
-      
+
       res.status(201).json({ success: true, message: 'Регистрация успешна' });
     });
   } catch (error) {
-    console.error('Ошибка регистрации мастера:', error);
+    logger.error('Ошибка регистрации мастера', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера при регистрации' });
   }
 });
@@ -146,92 +160,77 @@ app.post('/api/register/master', async (req, res) => {
 // API: Вход
 app.post('/api/login', loginLimiter, async (req, res) => {
   try {
-    console.log('[Auth] Получен запрос на вход');
+    logger.debug('Получен запрос на вход');
     const { username, password } = req.body;
-    
+
     if (!username || !password) {
-      console.log('[Auth] Отсутствуют username или password');
       return res.status(400).json({ success: false, message: 'Заполните все поля' });
     }
 
     const trimmedUsername = username.trim();
-    console.log(`[Auth] Поиск пользователя: ${trimmedUsername}`);
     const user = await dbUsers.getByUsername(trimmedUsername);
-    
+
     if (!user) {
-      console.log(`[Auth] Пользователь не найден: ${trimmedUsername}`);
+      logger.debug('Попытка входа с несуществующим логином');
       return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
     }
 
     if (user.is_active === false || user.is_active === 0) {
-      console.log(`[Auth] Аккаунт заблокирован: ${trimmedUsername}`);
+      logger.info('Попытка входа в заблокированный аккаунт', { userId: user.id });
       return res.status(403).json({ success: false, message: 'Аккаунт заблокирован администратором' });
     }
 
-    console.log(`[Auth] Проверка пароля для пользователя: ${trimmedUsername}`);
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      console.log(`[Auth] Неверный пароль для пользователя: ${trimmedUsername}`);
+      logger.debug('Неверный пароль при попытке входа');
       return res.status(401).json({ success: false, message: 'Неверный логин или пароль' });
     }
 
-    console.log(`[Auth] Пароль верный, создание сессии для пользователя: ${user.id}`);
+    logger.info('Успешная аутентификация', { userId: user.id });
 
     req.session.userId = user.id;
     req.session.originalUserId = req.session.originalUserId || user.id;
-    
-    console.log(`[Auth] Сессия установлена для userId: ${user.id}`);
-    
+
     // Сохраняем сессию ПЕРЕД отправкой ответа, чтобы избежать race condition
-    // Используем Promise с таймаутом для предотвращения зависания
     try {
       await new Promise((resolve, reject) => {
         const saveTimeout = setTimeout(() => {
-          console.error('[Auth] Таймаут сохранения сессии (5 сек)');
+          logger.error('Таймаут сохранения сессии (5 сек)');
           reject(new Error('Session save timeout'));
         }, 5000);
-        
+
         req.session.save((err) => {
           clearTimeout(saveTimeout);
-          
           if (err) {
-            console.error('[Auth] Ошибка сохранения сессии:', err);
             reject(err);
           } else {
-            console.log('[Auth] Сессия сохранена успешно');
             resolve();
           }
         });
       });
     } catch (saveError) {
-      // Если сохранение сессии не удалось, возвращаем ошибку и выходим из функции
-      console.error('[Auth] Критическая ошибка сохранения сессии:', saveError);
+      logger.error('Критическая ошибка сохранения сессии', { error: saveError.message });
       if (!res.headersSent) {
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Ошибка сервера при входе' 
+        return res.status(500).json({
+          success: false,
+          message: 'Ошибка сервера при входе'
         });
       }
-      // Если заголовки уже отправлены, просто выходим
       return;
     }
-    
-    // Отправляем ответ только после успешного сохранения сессии
-    // Проверяем, что ответ еще не был отправлен (на случай ошибки выше)
+
     if (res.headersSent) {
-      console.error('[Auth] Попытка отправить ответ после того, как заголовки уже отправлены');
       return;
     }
-    
-    console.log(`[Auth] Отправка ответа об успешном входе для пользователя: ${user.id}`);
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Вход выполнен',
       role: user.role,
-      userId: user.id // Добавляем userId для синхронизации сессии в gateway
+      userId: user.id
     });
   } catch (error) {
-    console.error('Ошибка входа:', error);
+    logger.error('Ошибка входа', { error: error.message });
     res.status(500).json({ success: false, message: 'Ошибка сервера при входе' });
   }
 });
@@ -270,7 +269,7 @@ app.use((err, req, res, next) => {
   }
   
   // Остальные ошибки
-  console.error('Ошибка:', err.message);
+  logger.error('Необработанная ошибка', { error: err.message });
   if (!res.headersSent) {
     res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
@@ -279,32 +278,29 @@ app.use((err, req, res, next) => {
 // Обработчик ошибок на уровне процесса для игнорирования "request aborted"
 process.on('uncaughtException', (err) => {
   if (err.message && (err.message.includes('request aborted') || err.message.includes('aborted'))) {
-    // Игнорируем ошибки "request aborted" - это нормально
     return;
   }
-  console.error('Необработанное исключение:', err);
+  logger.error('Необработанное исключение', { error: err.message, stack: err.stack });
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   if (reason && reason.message && (reason.message.includes('request aborted') || reason.message.includes('aborted'))) {
-    // Игнорируем ошибки "request aborted" - это нормально
     return;
   }
-  console.error('Необработанный rejection:', reason);
+  logger.error('Необработанный rejection', { reason: reason?.message || reason });
 });
 
 // Запуск сервера
 (async () => {
   try {
-    // Инициализируем БД
     await initDatabase();
-    console.log('✅ База данных инициализирована');
-    
+    logger.info('База данных инициализирована');
+
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🔐 Auth Service запущен на порту ${PORT}`);
+      logger.info(`Auth Service запущен на порту ${PORT}`);
     });
   } catch (error) {
-    console.error('❌ Ошибка инициализации:', error);
+    logger.error('Ошибка инициализации', { error: error.message });
     process.exit(1);
   }
 })();
