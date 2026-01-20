@@ -21,8 +21,7 @@ RUN npm config set fetch-retries 5 && \
 # Production образ
 FROM node:18-alpine
 
-# Устанавливаем curl для healthcheck
-RUN apk add --no-cache curl
+# wget уже включен в alpine, не нужно устанавливать дополнительно
 
 WORKDIR /app
 
@@ -47,7 +46,7 @@ WORKDIR /app/gateway
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
 
 CMD ["node", "server.js"]
 

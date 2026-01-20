@@ -18,8 +18,7 @@ RUN npm config set fetch-retries 5 && \
 # Production образ
 FROM node:18-alpine
 
-# Устанавливаем wget для healthcheck
-RUN apk add --no-cache wget
+# wget уже включен в alpine
 
 WORKDIR /app
 

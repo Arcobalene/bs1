@@ -70,8 +70,7 @@ services:
       - "3001:3001"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - LOG_LEVEL=DEBUG
-      - DEBUG=*
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - PORT=3001
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
       - BEHIND_HTTPS_PROXY=true
@@ -88,7 +87,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -104,8 +103,7 @@ services:
       - "3002:3002"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - LOG_LEVEL=DEBUG
-      - DEBUG=*
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - PORT=3002
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
       - BEHIND_HTTPS_PROXY=true
@@ -122,7 +120,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -138,8 +136,7 @@ services:
       - "3003:3003"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - LOG_LEVEL=DEBUG
-      - DEBUG=*
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - PORT=3003
       - DB_TYPE=postgres
       - DB_HOST=db
@@ -147,8 +144,6 @@ services:
       - DB_NAME=${DB_NAME:-beauty_studio}
       - DB_USER=${DB_USER:-beauty_user}
       - DB_PASSWORD=${DB_PASSWORD:-beauty_password}
-      - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
-      - BEHIND_HTTPS_PROXY=true
       - NOTIFICATION_SERVICE_URL=http://notification-service:3006
       - TELEGRAM_SERVICE_URL=http://telegram-service:3007
     networks:
@@ -160,7 +155,7 @@ services:
         condition: service_started
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3003/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -176,11 +171,8 @@ services:
       - "3004:3004"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - LOG_LEVEL=DEBUG
-      - DEBUG=*
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - PORT=3004
-      - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
-      - BEHIND_HTTPS_PROXY=true
       - DB_TYPE=postgres
       - DB_HOST=db
       - DB_PORT=5432
@@ -194,7 +186,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3004/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -210,8 +202,7 @@ services:
       - "3005:3005"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - LOG_LEVEL=DEBUG
-      - DEBUG=*
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - PORT=3005
       - DB_HOST=db
       - DB_PORT=5432
@@ -232,7 +223,7 @@ services:
         condition: service_started
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3005/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3005/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -248,11 +239,8 @@ services:
       - "3006:3006"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - LOG_LEVEL=DEBUG
-      - DEBUG=*
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - PORT=3006
-      - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
-      - BEHIND_HTTPS_PROXY=true
       - DB_TYPE=postgres
       - DB_HOST=db
       - DB_PORT=5432
@@ -266,7 +254,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3006/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3006/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -282,11 +270,8 @@ services:
       - "3007:3007"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - LOG_LEVEL=DEBUG
-      - DEBUG=*
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - PORT=3007
-      - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
-      - BEHIND_HTTPS_PROXY=true
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL:-}
       - DB_TYPE=postgres
@@ -302,7 +287,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3007/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3007/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -318,8 +303,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - LOG_LEVEL=DEBUG
-      - DEBUG=*
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - PORT=3000
       - SESSION_SECRET=${SESSION_SECRET:-beauty-studio-secret-key-change-in-production}
       - BEHIND_HTTPS_PROXY=true
@@ -356,7 +340,7 @@ services:
         condition: service_started
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 10s
       timeout: 5s
       retries: 5
