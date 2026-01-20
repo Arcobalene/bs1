@@ -33,9 +33,10 @@ function validateEnv() {
     throw new Error('DB_USER должен быть строкой');
   }
 
-  // В production требуем явно заданный пароль БД
+  // В production требуем явно заданный пароль БД (только если DB_HOST задан явно)
   const dbPassword = process.env.DB_PASSWORD;
-  if (isProduction && !dbPassword) {
+  const dbConfigured = !!process.env.DB_HOST;
+  if (isProduction && dbConfigured && !dbPassword) {
     throw new Error('DB_PASSWORD обязателен в production режиме');
   }
   const finalDbPassword = dbPassword || 'beauty_password'; // fallback только для dev
@@ -124,19 +125,23 @@ function validateEnv() {
     TELEGRAM_SERVICE_URL: validateUrl(process.env.TELEGRAM_SERVICE_URL, 'http://telegram-service:3007', 'TELEGRAM_SERVICE_URL'),
     LANDING_SERVICE_URL: validateUrl(process.env.LANDING_SERVICE_URL, 'http://landing-service:3008', 'LANDING_SERVICE_URL'),
 
-    // MinIO - в production требуем явно заданные ключи
+    // MinIO - валидация только если MINIO_ENDPOINT задан (для file-service)
     MINIO_ENDPOINT: process.env.MINIO_ENDPOINT || 'minio',
     MINIO_PORT: parseInt(process.env.MINIO_PORT || '9000', 10),
     MINIO_ACCESS_KEY: (() => {
       const key = process.env.MINIO_ACCESS_KEY;
-      if (isProduction && (!key || key === 'minioadmin')) {
+      // Валидация только если явно задан MINIO_ENDPOINT (file-service)
+      const minioConfigured = !!process.env.MINIO_ENDPOINT;
+      if (isProduction && minioConfigured && (!key || key === 'minioadmin')) {
         throw new Error('MINIO_ACCESS_KEY обязателен в production режиме');
       }
       return key || 'minioadmin';
     })(),
     MINIO_SECRET_KEY: (() => {
       const key = process.env.MINIO_SECRET_KEY;
-      if (isProduction && (!key || key === 'minioadmin')) {
+      // Валидация только если явно задан MINIO_ENDPOINT (file-service)
+      const minioConfigured = !!process.env.MINIO_ENDPOINT;
+      if (isProduction && minioConfigured && (!key || key === 'minioadmin')) {
         throw new Error('MINIO_SECRET_KEY обязателен в production режиме');
       }
       return key || 'minioadmin';
