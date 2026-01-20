@@ -712,8 +712,8 @@ app.get('/landing', (req, res) => {
 });
 
 // Статические файлы (CSS, JS, изображения) для gateway и других страниц
-// В Docker контейнере: server.js в /app/, public в /app/public/
-app.use(express.static(path.join(__dirname, 'public'), {
+// В Docker контейнере: server.js в /app/gateway/, public в /app/public/
+app.use(express.static(path.join(__dirname, '../public'), {
   maxAge: config.NODE_ENV === 'production' ? '1d' : '0',
   etag: true,
   lastModified: true
