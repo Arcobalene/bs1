@@ -209,6 +209,14 @@ async function initApp() {
   });
 }
 
+// Статические файлы (CSS, JS, изображения) - обрабатываются первыми для производительности
+// В Docker контейнере: server.js в /app/gateway/, public в /app/public/
+app.use(express.static(path.join(__dirname, '../public'), {
+  maxAge: config.NODE_ENV === 'production' ? '1d' : '0',
+  etag: true,
+  lastModified: true
+}));
+
 // Middleware для логирования состояния сессии
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/') && req.session) {
@@ -706,18 +714,10 @@ app.use('/api/bot', createProxyMiddleware({
 }));
 
 // Landing page - обслуживается напрямую из gateway
-// Статические файлы (CSS, JS) уже обслуживаются через express.static ниже
+// Статические файлы (CSS, JS) обслуживаются через express.static выше
 app.get('/landing', (req, res) => {
   res.sendFile(path.join(__dirname, '../views/landing.html'));
 });
-
-// Статические файлы (CSS, JS, изображения) для gateway и других страниц
-// В Docker контейнере: server.js в /app/gateway/, public в /app/public/
-app.use(express.static(path.join(__dirname, '../public'), {
-  maxAge: config.NODE_ENV === 'production' ? '1d' : '0',
-  etag: true,
-  lastModified: true
-}));
 
 // Централизованная обработка ошибок (должна быть последней)
 app.use(errorHandler);
